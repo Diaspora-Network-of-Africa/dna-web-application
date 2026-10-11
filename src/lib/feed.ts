@@ -11,7 +11,15 @@ import type { EventPerson, EventPresenter } from "./event-page";
 import { deliverImageUrl } from "./media";
 import { placeLine } from "./place";
 import type { LensId } from "./lens";
-import { domainOf, type EventPresenterView, type EventView, type PostView } from "./post-view";
+import {
+  cropOf,
+  domainOf,
+  focalPointOf,
+  type EventPresenterView,
+  type EventView,
+  type PostImage,
+  type PostView,
+} from "./post-view";
 import { getSupabase, type Supabase } from "./supabase";
 import { instrumentLabels } from "./vocabularies";
 import { browserZone, dateInZone, isPast, knownZone, localLine, whenLabel, whenLine } from "./when";
@@ -143,7 +151,13 @@ export async function hydratePosts(
   ]);
 
   const [media, links, events, spaces, opps, reqs, stories, instruments] = await Promise.all([
-    sb.from("post_media").select("*").in("post_id", ids).order("position"),
+    // 1707, 1709: the one post_media read carries the stored size and, through media_id, the
+    // author's framing from the media row, which is its one owner (1673). Still one query.
+    sb
+      .from("post_media")
+      .select("*, media:media_id(focal_point, crop)")
+      .in("post_id", ids)
+      .order("position"),
     sb.from("post_links").select("*").in("post_id", ids),
     eventIds.size
       ? sb
@@ -235,12 +249,20 @@ export async function hydratePosts(
   const reqMap = new Map((reqs.data ?? []).map((r) => [r.id, r]));
   const storyMap = new Map((stories.data ?? []).map((s) => [s.id, s]));
 
-  const mediaUrls = new Map<string, string[]>();
+  // H60-MEDIA Work 3: each image keeps its stored size and its framing beside the signed URL. A
+  // null media_id or null framing reads as null, and MediaBlock renders its default.
+  const mediaUrls = new Map<string, PostImage[]>();
   for (const m of media.data ?? []) {
     const url = await signedMediaUrl(m.storage_path);
     if (!url) continue;
     const list = mediaUrls.get(m.post_id) ?? [];
-    list.push(url);
+    list.push({
+      src: url,
+      width: m.width,
+      height: m.height,
+      focalPoint: focalPointOf(m.media?.focal_point),
+      crop: cropOf(m.media?.crop),
+    });
     mediaUrls.set(m.post_id, list);
   }
   const linkMap = new Map((links.data ?? []).map((l) => [l.post_id, l]));

@@ -4,7 +4,10 @@
 // kind from `type` or `t` and its images from `items` or `srcs`, and takes `p`, `h` and `gallery`
 // as other names for paragraph, heading and group; the port reads them all, as compiled, and types
 // the canonical forms that `BodyBlocks.d.ts` names. Dispositions are in
-// docs/strand-ports/v1790410319010950.md.
+// docs/strand-ports/v1790410319010950.md. At compile v1791654208929113 (H60-MEDIA, 1429, 1643) an
+// image block passes its own stored width and height to MediaBlock and loses its 16:9 default, so
+// the frame set chooses its frame; a block's own ratio still wins. The video block keeps 16:9, as
+// compiled. Record: docs/strand-ports/v1791654208929113-media.md.
 import type { CSSProperties, ReactNode } from "react";
 import { MediaBlock } from "./MediaBlock";
 
@@ -22,7 +25,11 @@ export type BodyBlock =
       src?: string | undefined;
       alt?: string | undefined;
       caption?: string | undefined;
-      /** CSS aspect-ratio form; default '16 / 9' */ ratio?: string | undefined;
+      /** the stored dimensions of the image (1429, 1643): MediaBlock picks the frame from them */
+      width?: number | undefined;
+      height?: number | undefined;
+      /** CSS aspect-ratio form; fixes the frame when given, else the frame set chooses (1643) */
+      ratio?: string | undefined;
     }
   /** the group of four: up to four images in one row of square cells */
   | { type: "group"; items?: string[] | undefined; caption?: string | undefined }
@@ -66,6 +73,8 @@ type Loose = {
   ratio?: string;
   duration?: string;
   title?: string;
+  width?: number;
+  height?: number;
 };
 
 /** Correction 30 (Part A, ask 2). One part rendering an ordered array of blocks, laid out as v5's body blocks draw it: paragraph, heading, quote, list, image, group of four, carousel, video.
@@ -197,7 +206,14 @@ export function BodyBlocks({ blocks = [], headingLevel = 2, style }: BodyBlocksP
         return has(b.src)
           ? fig(
               i,
-              <MediaBlock kind="image" src={b.src} alt={b.alt || ""} ratio={b.ratio || "16 / 9"} />,
+              <MediaBlock
+                kind="image"
+                src={b.src}
+                alt={b.alt || ""}
+                width={b.width}
+                height={b.height}
+                ratio={b.ratio}
+              />,
               b.caption,
             )
           : null;

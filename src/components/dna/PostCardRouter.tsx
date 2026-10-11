@@ -103,15 +103,26 @@ export function postCardProps(view: PostView, opts: RouterOptions = {}): PostCar
   // as a text link in Collaborate's text colour, and only when the event is linked to a Space.
   const ev = view.event;
   const cancelled = !!ev?.cancelled;
-  // 1077 through 1115: a Convene card's media measures 16:9 at every width, one image or several,
-  // through MediaBlock's `ratio`. Every other C passes none and renders as before.
-  const ratio = c === "convene" ? "16/9" : undefined;
+  // 1643, 1697, 1708: every C's card is framed by its image through the frame set, Convene's with
+  // the rest; the Feed passes no ratio (1077's 16:9 now holds for the discovery face's lane card
+  // only, which draws its own). Each image carries its stored size and the author's framing
+  // (1707, 1709); the expanded card draws a single image whole (1643 item 6).
+  const first = view.media[0];
   const media: PostCardProps["media"] = cancelled
     ? undefined
     : view.media.length > 1
-      ? { kind: "gallery", items: view.media, ratio }
-      : view.media.length === 1
-        ? { kind: "image", src: view.media[0], alt: "", ratio }
+      ? { kind: "gallery", items: view.media }
+      : first
+        ? {
+            kind: "image",
+            src: first.src,
+            alt: "",
+            width: first.width,
+            height: first.height,
+            focalPoint: first.focalPoint,
+            crop: first.crop,
+            whole: !!opts.expanded,
+          }
         : undefined;
   const title: ReactNode =
     typeof titleWords === "string" && titleWords ? (

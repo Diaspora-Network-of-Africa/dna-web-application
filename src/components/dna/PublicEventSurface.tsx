@@ -188,6 +188,11 @@ export function PublicEventSurface({ page, slug }: { page: PublicEventPage; slug
       kind="image"
       src={eventMediaUrl(slug, { position: cover.position })}
       alt=""
+      // 1548 (H60-MEDIA Work 5): below two columns the cover's stored size picks its frame from
+      // the set (1643); at two columns 1185's 21:9 still wins. No focal point: the projection
+      // returns none and no member can set one until the Reframe build.
+      width={cover.width}
+      height={cover.height}
       ratio={twoCol ? "21/9" : undefined}
     />
   ) : null;

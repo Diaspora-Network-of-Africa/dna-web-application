@@ -94,11 +94,14 @@ const CANCELLED_SURVIVES = "If you had said you were going, you were told by ema
  * bottom hairlines stay against the surface.
  */
 const PANE_COVER: CSSProperties = {
-  marginInline: "calc(-1 * var(--space-5))",
   borderRadius: 0,
   borderLeft: "none",
   borderRight: "none",
 };
+/** 1143's edge-to-edge reach, on a wrapper: MediaBlock's openable image is a button whose own
+ *  `margin: 0` follows the caller's style (compile v1791654208929113), so a margin passed in would
+ *  be reset. */
+const PANE_COVER_REACH: CSSProperties = { marginInline: "calc(-1 * var(--space-5))" };
 
 type Images = { cover?: string | undefined; avatars: Record<string, string> };
 
@@ -494,15 +497,24 @@ export function EventSurface({
         </div>
       )}
       {!ev.cancelled && images.data?.cover && (
-        <MediaBlock
+        <div
           // Keyed on the place, so a page that settles into the pane after its first render mounts
           // a fresh frame rather than patching MediaBlock's `border` shorthand with side longhands.
           key={inPane ? "pane" : "page"}
-          kind="image"
-          src={images.data.cover}
-          alt=""
-          style={inPane ? PANE_COVER : undefined}
-        />
+          style={inPane ? PANE_COVER_REACH : undefined}
+        >
+          <MediaBlock
+            kind="image"
+            src={images.data.cover}
+            alt=""
+            // 1548 (H60-MEDIA Work 5): the cover's stored size picks its frame from the set (1643),
+            // so a portrait flyer stands in 4:5 or shows whole; no ratio is passed. No focal point:
+            // event_page returns none and no member can set one until the Reframe build.
+            width={page.media[0]?.width}
+            height={page.media[0]?.height}
+            style={inPane ? PANE_COVER : undefined}
+          />
+        </div>
       )}
 
       {/* 3. Kicker and title. */}

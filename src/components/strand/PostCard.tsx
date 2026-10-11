@@ -41,6 +41,12 @@
 // (the Menu ends with a rule and `reportLabel`, default "Report", `flag` icon, danger tone) are
 // correction 29's ask 1. The ellipsis and the Menu name append a title only when it is a string,
 // because this port's title may be a node; the compile concatenates whatever it is given.
+//
+// At compile v1791654208929113 (H60-MEDIA Work 1; 1432, 1544): the feed face passes the link
+// preview its size from the post's media kind, `row` when the post also carries an image, a
+// gallery, a strip, a carousel or a video, `full` otherwise, as compiled. `media` reaches
+// MediaBlock unchanged, so its new fields (width, height, focalPoint, crop, whole, items as tiles)
+// need nothing here. Record: docs/strand-ports/v1791654208929113-media.md.
 import {
   Fragment,
   useRef,
@@ -58,6 +64,9 @@ import { IconButton } from "./IconButton";
 import { MediaBlock, type MediaBlockProps } from "./MediaBlock";
 import { Menu, type MenuProps } from "./Menu";
 import type { CardC } from "./cmeta";
+
+/** 1432, 1544: the media kinds that make a post "also carry images", so its link unfurl renders as a row rather than full. Video counts. */
+const IMAGE_KINDS = ["image", "gallery", "strip", "carousel", "video"];
 
 export type PostCardField = {
   label: string;
@@ -513,6 +522,11 @@ function FeedFace({
           domain={link.domain}
           title={link.title}
           items={link.image ? [link.image] : []}
+          size={
+            media && typeof media === "object" && IMAGE_KINDS.indexOf(media.kind || "none") >= 0
+              ? "row"
+              : "full"
+          }
         />
       )}
       {actions && <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{actions}</div>}

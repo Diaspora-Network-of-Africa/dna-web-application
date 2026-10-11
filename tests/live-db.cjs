@@ -87,6 +87,11 @@
 //                                   row under Connect that Accept settles, the view names the
 //                                   inviter to the invitee alone, and a stranger is refused before
 //                                   any row.
+//   H60-MEDIA (1709, 1673)           a fresh publish through publish_post has post_media.media_id
+//                                   set by the trigger to the author's media row for the same
+//                                   path, and null for a path no media row names; member-test reads
+//                                   the media row a visible post names and not the owner's unlinked
+//                                   one.
 //
 // Nothing here is secret: the connection string arrives from the runner and never from this file.
 const crypto = require("crypto");
@@ -444,6 +449,10 @@ async function runLiveDbArms({ record, skip }) {
       "Fix PR 10 item 9 (1638): messenger_threads_view carries invited_by_name as the inviter's name on the invited member's row and null on the inviter's",
     inviteRefused:
       "Fix PR 10 item 8 (1581): a group picking a member who is not a connection is refused with not_your_connection before any thread or row is written",
+    mediaLink:
+      "H60-MEDIA (1709): a fresh publish has post_media.media_id set by the trigger to the author's media row for the same path, and null where no media row names the path",
+    mediaRead:
+      "H60-MEDIA (1709, 141): member-test reads the media row a visible post's image names, and not an unlinked media row of another member",
     emojiAgree:
       "Fix PR 10 item 3 (1621, 1613): every message_reaction_emoji row outside the quick eight carries emojibase 17.0.0's English label capitalised as src/lib/emoji.ts capitalises it, and the eight quick rows hold positions 1 to 8",
   };
@@ -543,6 +552,8 @@ async function runLiveDbArms({ record, skip }) {
         names.url,
         names.rate,
         names.onboarded,
+        names.mediaLink,
+        names.mediaRead,
       ])
         skip(n, "owner-test and member-test are not both present");
       return;
@@ -742,6 +753,96 @@ async function runLiveDbArms({ record, skip }) {
         "ruling 439 control: an https link publishes and is stored as given",
         good.ok && stored === "https://example.com/",
         good.ok ? "stored " + JSON.stringify(stored) : good.code + " " + good.message,
+      );
+    });
+
+    // ------------------------------------------------------------------------------------------
+    // H60-MEDIA (1709). Two media rows for owner-test, written as live_arms under its fixture insert
+    // policy (no returning: live_arms holds insert alone), one named by the post and one not. The
+    // owner publishes through publish_post, the one writer of post_media, with the named path and
+    // a path no media row holds (the control: the trigger links nothing for it). member-test then
+    // reads the linked row through media_post_viewer_select and not the loose one. Rolled back.
+    // ------------------------------------------------------------------------------------------
+    await inTransaction(client, async () => {
+      await actAsSelf(client);
+      const linked = crypto.randomUUID();
+      const loose = crypto.randomUUID();
+      const named = owner.id + "/h60-arm/" + linked + ".jpg";
+      const unnamed = owner.id + "/h60-arm/" + crypto.randomUUID() + ".jpg";
+      const ins = await attempt(
+        client,
+        "insert into public.media (id, owner_id, bucket, kind, storage_path, mime, byte_size, width, height, focal_point) values " +
+          "($1, $3, 'post-media', 'post', $4, 'image/jpeg', 1024, 1200, 1600, '{\"x\": 0.5, \"y\": 0.2}'::jsonb), " +
+          "($2, $3, 'post-media', 'post', $5, 'image/jpeg', 1024, 1600, 1200, null)",
+        [linked, loose, owner.id, named, owner.id + "/h60-arm/" + loose + ".jpg"],
+      );
+      if (!ins.ok) {
+        const why = "the fixture media rows could not be written: " + ins.code + " " + ins.message;
+        skip(names.mediaLink, why);
+        skip(names.mediaRead, why);
+        return;
+      }
+      await actAs(client, owner.id);
+      const pub = await attempt(client, "select public.publish_post($1::jsonb) as id", [
+        JSON.stringify({
+          body: "H60-MEDIA media_id arm. Rolled back by the same run.",
+          author_kind: "member",
+          author_id: owner.id,
+          audience: "everyone",
+          host_context: "live-checks",
+          media: [
+            { storage_path: named, width: 1200, height: 1600, position: 0 },
+            { storage_path: unnamed, width: 1600, height: 1200, position: 1 },
+          ],
+        }),
+      ]);
+      if (!pub.ok) {
+        const why = "publish_post refused: " + pub.code + " " + pub.message;
+        skip(names.mediaLink, why);
+        skip(names.mediaRead, why);
+        return;
+      }
+      const postId = pub.rows[0].id;
+      const rows = (
+        await client.query(
+          "select storage_path, media_id from public.post_media where post_id = $1 order by position",
+          [postId],
+        )
+      ).rows;
+      const first = rows[0];
+      const second = rows[1];
+      record(
+        names.mediaLink,
+        rows.length === 2 &&
+          !!first &&
+          first.media_id === linked &&
+          !!second &&
+          second.media_id === null,
+        JSON.stringify(rows.map((r) => (r.media_id === linked ? "linked" : r.media_id))),
+      );
+      await actAs(client, member.id);
+      const seen = (
+        await client.query("select id from public.post_media where post_id = $1", [postId])
+      ).rows.length;
+      const read = (
+        await client.query("select id, focal_point from public.media where id = any($1::uuid[])", [
+          [linked, loose],
+        ])
+      ).rows;
+      const got = read.find((r) => r.id === linked);
+      record(
+        names.mediaRead,
+        seen === 2 &&
+          !!got &&
+          !!got.focal_point &&
+          Number(got.focal_point.y) === 0.2 &&
+          !read.some((r) => r.id === loose),
+        JSON.stringify({
+          postMediaSeen: seen,
+          linked: !!got,
+          focal: got ? got.focal_point : null,
+          loose: read.some((r) => r.id === loose),
+        }),
       );
     });
 
