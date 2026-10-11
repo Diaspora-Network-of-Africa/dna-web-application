@@ -91,6 +91,8 @@ Convene's lens set is five, All, Communities, For you, Curated and My network (1
 The Messenger reads emoji data only from the app's own origin and never through a library cache (1351, 1577).
 [absolute] Company email addresses come from `src/lib/contact.ts` or its Deno mirror `supabase/functions/_shared/contact.ts`, never a literal in a surface, an edge function, a document or a test; the DNA Email Directory in Notion is the source of truth for every address and where it is published; `noreply@` is retired and nothing sends from it; the app subdomain is never an email domain; every outbound sender carries Reply-To `support@` through the module's sender pairings (ruling 387, which supersedes ruling 385 in full).
 
+[absolute] Every image a member uploads, on every surface now and later, renders through Strand's image parts (`MediaBlock`, `ImageViewer`, and `Avatar` for an identity mark), framed by the frame set, and opens full size on tap (1714). Small identity marks (author photos on cards, notifications, Connect cards, the Messenger header) are the one exception: they fill their shape, centred. A raw `<img>` or `background-image` of member media outside those parts is a defect. `docs/media-sites.md` lists every image site and is kept current (1716); `bun run lint` runs `scripts/lint-media-sites.cjs` (also `bun run lint:media`), which fails on a raw `<img>` or `url(` outside `src/components/strand/` that the file does not list as an asset or as a site held for a named Strand item.
+
 ## Doctrine that affects code
 
 Every post, thread, and notification carries a C tag or the system category; the column is NOT NULL.

@@ -10,7 +10,7 @@ const { launch, makeMockDb, seedPosts, mockSupabase, signIn, record, BASE } = M;
 const FEED_EDGE_WIDTHS = [1024, 1025, 1100, 1180, 1279, 1280, 1439, 1440];
 const FEED_EDGE_HEIGHT = 900;
 
-async function session(browserType, [w, h], db) {
+async function session(browserType, [w, h], db, theme = "light") {
   const browser = await launch(browserType);
   const ctx = await browser.newContext({
     viewport: { width: w, height: h },
@@ -19,14 +19,17 @@ async function session(browserType, [w, h], db) {
     // The founder reads this on a Retina Mac and an iPhone: two device pixels per CSS pixel, so a
     // 1.5px border on a half-pixel edge is drawn as it is there.
     deviceScaleFactor: 2,
-    colorScheme: "light",
+    colorScheme: theme,
   });
   const page = await ctx.newPage();
-  await page.addInitScript(() => {
-    try {
-      localStorage.setItem("dna.theme", "light");
-    } catch {}
-  });
+  await page.addInitScript(
+    ({ theme }) => {
+      try {
+        localStorage.setItem("dna.theme", theme);
+      } catch {}
+    },
+    { theme },
+  );
   await mockSupabase(page, db);
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -95,6 +98,13 @@ function readEdge(page) {
       clip: round(clip),
       clearance: round(columnRight - r.right),
       hit: !!hit && (hit === card || card.contains(hit)),
+      // What answers the hit test half a pixel inside the right border: the card, or what covers it.
+      hitAt: hit
+        ? hit.tagName.toLowerCase() +
+          (hit.getAttribute("data-scroller")
+            ? `[data-scroller=${hit.getAttribute("data-scroller")}]`
+            : "")
+        : null,
       hitLeft: !!hitLeft && (hitLeft === card || card.contains(hitLeft)),
       within: r.right <= columnRight + 0.5 && r.right <= clip + 0.5,
       y,
@@ -135,7 +145,7 @@ const fmt = (e, px) =>
     ? `vw ${e.vw}, canvas ${e.canvasContent}, column ${e.column}, no card in view`
     : `vw ${e.vw}, canvas content ${e.canvasContent} (overflow ${e.canvasOverflow}), column ${e.column} ` +
       `right ${e.columnRight}, card ${e.cardLeft} to ${e.cardRight} (width ${e.cardWidth}, border ${e.border}), ` +
-      `clip ${e.clip}, clearance ${e.clearance}, hit ${e.hit}/${e.hitLeft}, ` +
+      `clip ${e.clip}, clearance ${e.clearance}, hit ${e.hit}/${e.hitLeft} (${e.hitAt}), ` +
       `pixels right ${px ? px.right.best : "-"} left ${px ? px.left.best : "-"} (limit ${px ? px.limit : "-"}), ` +
       `scrollTop ${e.scrollTop}`;
 
@@ -144,7 +154,18 @@ async function reading(page, bname, w, when) {
   const e = await readEdge(page);
   const px = e.card === null ? null : await paintedEdges(page, e);
   console.log(`EDGE ${bname} ${w} ${when} ${JSON.stringify({ ...e, px })}`);
-  const ok = e.card !== null && e.within && e.hit && e.hitLeft && !!px && px.right.ok && px.left.ok;
+  // Clearance is the fix's own property (Work 2): a card flush with its scroller's edge has its right
+  // border under the scroller's overlay scrollbar while the column scrolls, which the Mac port reads
+  // as a hit test that misses the card; neither Linux engine draws that scrollbar over content.
+  const ok =
+    e.card !== null &&
+    e.within &&
+    e.clearance > 0 &&
+    e.hit &&
+    e.hitLeft &&
+    !!px &&
+    px.right.ok &&
+    px.left.ok;
   return { e, px, ok };
 }
 
@@ -186,4 +207,128 @@ async function runFeedEdge(bt, bname, [w, h]) {
   }
 }
 
-module.exports = { runFeedEdge, FEED_EDGE_WIDTHS, FEED_EDGE_HEIGHT, readEdge, BASE };
+// Handoff 60-MEDIA-2 Work 3 (1714): the profile's portrait and cover open Strand's ImageViewer on
+// the master, whole, and Escape returns focus to what was tapped. Read as a visitor (the stranger
+// view of the seeded profile) and as the owner, whose change controls are their own.
+const PROFILE_CELLS = [
+  [[390, 844], "light"],
+  [[1280, 800], "dark"],
+];
+
+/** The viewer open on the image the control draws: the master's own URL, contained whole. */
+async function opensWhole(page, control, image) {
+  await page.locator(control).first().click();
+  const shown = await page
+    .waitForSelector("dialog.strand-viewer[open] img", { timeout: 8000 })
+    .then(() => true)
+    .catch(() => false);
+  const read = await page.evaluate(
+    ({ image }) => {
+      const v = document.querySelector("dialog.strand-viewer[open] img");
+      const own = document.querySelector(image);
+      return {
+        viewer: v ? v.getAttribute("src") : null,
+        master: own ? own.getAttribute("src") : null,
+        fit: v ? getComputedStyle(v).objectFit : null,
+      };
+    },
+    { image },
+  );
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(400);
+  const back = await page.evaluate(
+    (sel) => ({
+      closed: !document.querySelector("dialog.strand-viewer[open]"),
+      focus: !!document.activeElement && document.activeElement.matches(sel),
+    }),
+    control,
+  );
+  const ok = shown && !!read.master && read.viewer === read.master && read.fit === "contain";
+  return {
+    ok,
+    back: back.closed && back.focus,
+    detail: JSON.stringify({ shown, ...read, ...back }),
+  };
+}
+
+async function runProfileViewer(bt, bname, [w, h], theme) {
+  const tag = `${bname}-${w}x${h}-${theme}-profile-viewer`;
+  M.armStart(tag);
+  const sessions = [];
+  try {
+    for (const mode of ["stranger", "owner"]) {
+      const db = makeMockDb();
+      seedPosts(db, 2);
+      if (mode === "stranger") db.profile.mode = "stranger";
+      const s = await session(bt, [w, h], db, theme);
+      sessions.push(s);
+      await signIn(s.page);
+      await s.page.goto(BASE + "/m/thandiwe-dube", { waitUntil: "networkidle" });
+      await s.page.waitForSelector('[data-testid="profile"]:not([data-view="loading"])', {
+        timeout: 20000,
+      });
+      await s.page.waitForSelector('[data-testid="portrait"] img', { timeout: 15000 });
+      const who = mode === "stranger" ? "a visitor" : "the owner";
+      const portrait = await opensWhole(
+        s.page,
+        '[data-testid="portrait"]',
+        '[data-testid="portrait"] img',
+      );
+      record(
+        `${tag} ${who}: tapping the portrait opens the viewer on the master, whole (1714)`,
+        portrait.ok,
+        portrait.detail,
+      );
+      record(
+        `${tag} ${who}: Escape closes the portrait's viewer and returns focus to the portrait`,
+        portrait.back,
+        portrait.detail,
+      );
+      const cover = await opensWhole(
+        s.page,
+        '[data-testid="open-cover"]',
+        '[data-testid="open-cover"] img',
+      );
+      record(
+        `${tag} ${who}: tapping the cover opens the viewer on the master, whole (1714)`,
+        cover.ok,
+        cover.detail,
+      );
+      record(
+        `${tag} ${who}: Escape closes the cover's viewer and returns focus to the cover`,
+        cover.back,
+        cover.detail,
+      );
+      if (mode === "owner") {
+        const change = await s.page.evaluate(() => {
+          const b = document.querySelector('[data-testid="change-photo"]');
+          return {
+            present: !!b,
+            label: b ? b.getAttribute("aria-label") : null,
+            tag: b ? b.tagName : null,
+          };
+        });
+        record(
+          `${tag} the owner: changing the photo is its own control, the camera badge`,
+          change.present && change.tag === "BUTTON" && change.label === "Change your photo",
+          JSON.stringify(change),
+        );
+      }
+    }
+  } catch (e) {
+    record(tag + " flow", false, String(e).slice(0, 400));
+  } finally {
+    const errors = sessions.length ? sessions.flatMap((x) => x.errors) : ["the page never opened"];
+    record(tag + " no page errors", errors.length === 0, errors.slice(0, 3).join(" | "));
+    for (const x of sessions) await x.browser.close().catch(() => {});
+  }
+}
+
+module.exports = {
+  runFeedEdge,
+  runProfileViewer,
+  FEED_EDGE_WIDTHS,
+  FEED_EDGE_HEIGHT,
+  PROFILE_CELLS,
+  readEdge,
+};

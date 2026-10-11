@@ -9146,3 +9146,50 @@ divergence (`src/components/strand/MediaBlock.tsx`, `docs/strand-ports/v17916542
 Strand's specimen sat its frames in a flex column, where the button is stretched, so the compile's
 verifier could not see it. Closes when a compile carries the width, or when Chat rules the divergence
 standing. Owner: Strand, by Chat's brief.
+
+## G271. The profile's portrait and cover are not framed by the frame set: held for Strand item 13
+
+**Severity: medium (visible). Opened 11 October 2026 by handoff 60-MEDIA-2 Work 6, under ruling 1714.
+The number is assigned by this entry (ruling 638).**
+
+`ProfileHeader` draws the portrait as a square `Avatar` and the cover as a raw `<img>` with
+`object-fit: cover` placed by `coverFocus` (`docs/media-sites.md` rows 6 to 10), so both are cropped
+by a fixed box rather than framed: 1541's 4:5 portrait and the cover through the frame set (1643) are
+Strand item 13's (`ProfileHeader` takes frames), and the header is not restyled at the call site. The
+onboarding photo plate (row 11) draws the portrait's size and follows it. Since 60-MEDIA-2 a tap on
+either opens `ImageViewer` on the master, whole, for every viewer; only the framing is held. The
+cover could not move to `MediaBlock` now: its box is a fixed height across a variable width, at none
+of the set's ratios, and the frame's border and radius would change the hero's look. Closes when
+item 13 lands and the rows leave the Held table. Owner: Strand, by Chat's brief.
+
+## G272. The discovery face crops its cover at 16:9: held for Strand item 12
+
+**Severity: low. Opened 11 October 2026 by handoff 60-MEDIA-2 Work 6, under ruling 1714. The number is
+assigned by this entry (ruling 638).**
+
+`PostCard`'s discovery face draws its own `<img>` in a 16:9 box with `object-fit: cover`
+(`docs/media-sites.md` row 12), the lane card on Discovery, so a host's flyer is cropped rather than
+framed by the set, and a tap opens the event rather than the image. The crop is inside a Strand part
+and is not hand-fixed (1714). Closes when Strand item 12 lands. Owner: Strand, by Chat's brief.
+
+## G273. The composer's attachment tile crops a member's image: held for Strand items 10 and 11
+
+**Severity: low. Opened 11 October 2026 by handoff 60-MEDIA-2 Work 6, under ruling 1714. The number is
+assigned by this entry (ruling 638).**
+
+The composer draws an attached image in its own 72 px square `<img>` with `object-fit: cover`
+(`src/components/strand/Composer.tsx`, `docs/media-sites.md` row 13), so the member sees a crop of
+what they are about to publish and cannot open it. The tile is inside a Strand part and is not
+hand-fixed. Closes when Strand items 10 and 11 land. Owner: Strand, by Chat's brief.
+
+## G274. `MediaBlock`'s strip and carousel crop and do not open the viewer, and no Strand item names them
+
+**Severity: low (no surface renders them). Opened 11 October 2026 by handoff 60-MEDIA-2 Work 6, under
+ruling 1714. The number is assigned by this entry (ruling 638).**
+
+The strip draws square cells and the carousel fixed slides, both `object-fit: cover`, and neither
+opens `ImageViewer` (`docs/media-sites.md` rows 14 and 15). Only `BodyBlocks`' group and carousel
+blocks bind them, and `BodyBlocks` is rendered by no surface (G269), so no member sees either today.
+The handoff names Strand items for the discovery face, `ProfileHeader` and the composer's tile, and
+none for these. Closes when Chat names the item that brings them under 1714, and before any surface
+binds `BodyBlocks`. Owner: Chat.
