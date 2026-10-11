@@ -7561,6 +7561,12 @@ thumbnail, where the compile renders `<a href={src} target="_blank" rel="norefer
 `javascript:`, `data:` or relative address therefore never becomes a link. Filed because the audit lists
 every member-visible divergence; kept by 439, and closes on Chat's confirmation.
 
+**No longer a divergence, 11 October 2026 (H60-MEDIA).** Compile `v1791654208929113` carries 439 itself:
+its `LinkPreview` renders a link that is not a web address as a `div` marked `data-link="text"`, in both
+of 1432's sizes, with no anchor. The port takes the compile's form (`docs/strand-ports/v1791654208929113-media.md`),
+so the tree and the compile agree and the span of `title || src` is gone; the mount arm reads a `mailto:`
+link rendering no anchor. Closes on Chat's confirmation, as before.
+
 ---
 
 ## G185. `Composer` treats medium as touch and focuses its textarea synchronously, where the compile treats medium as pointer and defers a frame
@@ -8729,8 +8735,7 @@ locator.waitFor: Timeout 15000ms exceeded.` while waiting for `locator('[data-se
 to be visible`. The page showed `no-results`. The check behind it, `search with a During date bound
 opens the thread at the message (1338, 1347)`, and five more after it (the media notice, the image in
 the bubble, the voice note, the delete for everyone, nothing in browser storage) read `UNPROVEN (228):
-the flow ended before this check ran`. Ruling 292 flagged the extra flow check, 19 against a declared
-18. Not a crash: 0 behind G5, no core written. The re-run passed.
+the flow ended before this check ran`. Ruling 292 flagged the extra flow check, 19 against a declared 18. Not a crash: 0 behind G5, no core written. The re-run passed.
 
 The path is `messenger_search`. The step searches for a word the arm sent earlier, bounded During
 today, with today's date taken from the runner's clock. It is not #100's: that PR changed the
@@ -8756,7 +8761,7 @@ Run 528 attempt 1, on `3259dbb` (PR #100's head), `admin-arms`, job 113465879017
   its heading, and nothing else.
 - `the read log reads Settings, Your read log under Today, newest first`: the panel read its heading
   and intro line only (`Your read log What you have read in the admin and when, newest first. Opening
-  this log is itself logged.`).
+this log is itself logged.`).
 
 The path is `tests/settings.cjs`, which reads both panels as soon as Settings renders, with no wait for
 their rows: a load-timing race in the arm, not the admin. It is not #100's: the admin bundle imports
@@ -8912,7 +8917,6 @@ written by its source's write path and never by a trigger. `second_degree` alrea
 The measured plan on the founder's account is recorded in Fix PR 10's PR body by Chat at apply
 (`explain analyze` through the arm's connection), and that number is what moves this entry's
 severity. Owner: the Code queue, on the cohort's growth, not before.
-
 
 ---
 
@@ -9113,3 +9117,32 @@ against the mock and reads one call with no prop (`tests/record.cjs`). What is u
 production path end to end, GoTrue's recovery mail through `/reset/new` to the row. It is proven
 the first time a real reset completes on production after G267 closes, read by Chat from
 `surface_events` as the walk would have. Owner: Chat, at the walk that follows G267.
+
+## G269. Ruling 1455 is held: no writer of Story body image blocks exists
+
+**Severity: low. Opened 11 October 2026 by handoff H60-MEDIA Work 8. The number is assigned by this
+entry (ruling 638).**
+
+1455 asks a Story's body image blocks to carry their framing the way a post's images now do (1643,
+1709). Nothing writes a Story body image block: `BodyBlocks` is rendered by no file in `src/` outside
+its own (read at `d0ac9fe`), `public.stories` holds a title and a body of text, and no write path takes
+an image block. H60-MEDIA gives `BodyBlocks`' image block its own stored `width` and `height` and drops
+its 16:9 default, so a block that arrives carrying its size is framed by the set; that is the whole of
+what can be built. 1455 is unbuildable until a Story writer exists, and closes in the brief that builds
+it, which names the block's storage and its framing beside the media row (1673). Owner: Chat, at that
+brief.
+
+## G270. Strand's openable `MediaBlock` image is a button that does not fill its line
+
+**Severity: medium (visible). Opened 11 October 2026 during H60-MEDIA, filed under ruling 597. The
+number is assigned by this entry (ruling 638).**
+
+At compile `v1791654208929113` a single image that opens the viewer (1429) renders as a `button`, where
+the frame was a `div`. A button is not stretched to its container's width as a block `div` is: outside a
+parent that stretches it as a flex or grid item it shrinks to its content. On the member event page the
+cover's frame read 62 by 78 at 390 (the local mount arm, before the fix), and a Messenger image bubble
+takes the same path. The port sets `width: 100%` on the button and names it as its one visible
+divergence (`src/components/strand/MediaBlock.tsx`, `docs/strand-ports/v1791654208929113-media.md`).
+Strand's specimen sat its frames in a flex column, where the button is stretched, so the compile's
+verifier could not see it. Closes when a compile carries the width, or when Chat rules the divergence
+standing. Owner: Strand, by Chat's brief.

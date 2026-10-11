@@ -91,3 +91,8 @@ export * from "./Tabs";
 // and MemberCard read them from here. Record: docs/strand-ports/v1791495246160097.md.
 export * from "./IdentityMark";
 export * from "./BadgeRow";
+// Strand compile v1791654208929113 (1643, ratified 1673; W62's 1429 to 1433 and 1543 to 1549;
+// H60-MEDIA Work 1): ImageViewer, which MediaBlock opens on a tapped image, and ImageAdjust, which
+// nothing mounts yet (1710). Record: docs/strand-ports/v1791654208929113-media.md.
+export * from "./ImageViewer";
+export * from "./ImageAdjust";

@@ -631,7 +631,7 @@ export function Composer({
     fields: form ? (convTitle ? { title: convTitle } : {}) : fv,
     meta:
       form && typeof convMeta?.value === "string" && convMeta.value ? convMeta.value : undefined,
-    media: images.map((i) => i.preview),
+    media: images.map((i) => ({ src: i.preview, width: i.width, height: i.height })),
     link: link
       ? { url: link.url, domain: link.domain, title: link.title, image: link.image }
       : null,

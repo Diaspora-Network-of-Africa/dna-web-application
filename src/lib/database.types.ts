@@ -1,4 +1,14 @@
 // Regenerated from the canonical Supabase project (dgspjevjoblujcoljvkn) with the Supabase MCP
+// generate_typescript_types tool on handoff H60-MEDIA's branch, on main at d0ac9fe (the merge of
+// #106), after Chat applied 20261010180000 through execute_sql at 17:40 PDT on 10 October 2026 with
+// the recorded statement md5 equal to the file (f97d7bcef5878c8d725504f73efaf096); 113 rows in
+// schema_migrations, head 20261010180000_h60_media_post_media_id. What it changes here:
+// `post_media` gains `media_id` (Row, Insert, Update) and its `post_media_media_id_fkey`
+// relationship to `media` (1709). Nothing else moves. `export type Views` is restored by hand after
+// every regeneration (CLAUDE.md).
+//
+// Before H60-MEDIA:
+// Regenerated from the canonical Supabase project (dgspjevjoblujcoljvkn) with the Supabase MCP
 // generate_typescript_types tool on handoff 58-12C2's branch (#105, the member app's recording), on
 // main at 6ce161f (the merge of #104), after Chat applied 20261010170000 through execute_sql at 10:33
 // PDT on 10 October 2026 with the recorded statement md5 equal to the file; 112 rows in
@@ -3246,6 +3256,7 @@ export type Database = {
           created_at: string;
           height: number;
           id: string;
+          media_id: string | null;
           position: number;
           post_id: string;
           storage_path: string;
@@ -3255,6 +3266,7 @@ export type Database = {
           created_at?: string;
           height: number;
           id?: string;
+          media_id?: string | null;
           position?: number;
           post_id: string;
           storage_path: string;
@@ -3264,12 +3276,20 @@ export type Database = {
           created_at?: string;
           height?: number;
           id?: string;
+          media_id?: string | null;
           position?: number;
           post_id?: string;
           storage_path?: string;
           width?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "post_media_media_id_fkey";
+            columns: ["media_id"];
+            isOneToOne: false;
+            referencedRelation: "media";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "post_media_post_id_fkey";
             columns: ["post_id"];

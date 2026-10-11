@@ -1207,7 +1207,7 @@ export function DiscoverySurface({
           topic={topic ?? undefined}
           reason={reasonFor(lane, item.reason)}
           going={goingFor(lane, item.event_id, src)}
-          media={post.media[0]}
+          media={post.media[0]?.src}
           menu={menuFor(item, lane, src)}
           selected={paneOpen && paneId === item.event_id && (openLane ?? lane) === lane}
           onOpen={() => {

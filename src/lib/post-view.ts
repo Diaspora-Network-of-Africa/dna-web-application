@@ -3,6 +3,44 @@
 import type { Audience } from "@/components/strand/AudienceSelect";
 import type { C, CardC } from "@/components/strand/cmeta";
 import type { FieldValues } from "@/components/strand/verb-schema";
+import type { FocalPoint, MediaCrop } from "@/components/strand/MediaBlock";
+
+/** One post image as the Feed renders it (H60-MEDIA Work 3). */
+export type PostImage = {
+  src: string;
+  width?: number | null | undefined;
+  height?: number | null | undefined;
+  focalPoint?: FocalPoint | null | undefined;
+  crop?: MediaCrop | null | undefined;
+};
+
+/** A media row's `focal_point`, as ImageAdjust writes it (351): `{x, y}` in 0 to 1; null otherwise. */
+export function focalPointOf(v: unknown): FocalPoint | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const x = Number(o["x"]);
+  const y = Number(o["y"]);
+  return isFinite(x) && isFinite(y) && x >= 0 && x <= 1 && y >= 0 && y <= 1 ? { x, y } : null;
+}
+
+/** A media row's `crop`, as ImageAdjust writes it (351): `{x, y, width, height}` in 0 to 1; null otherwise. */
+export function cropOf(v: unknown): MediaCrop | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const x = Number(o["x"]);
+  const y = Number(o["y"]);
+  const width = Number(o["width"]);
+  const height = Number(o["height"]);
+  const ok =
+    [x, y, width, height].every((n) => isFinite(n)) &&
+    x >= 0 &&
+    y >= 0 &&
+    width > 0 &&
+    height > 0 &&
+    x + width <= 1.0001 &&
+    y + height <= 1.0001;
+  return ok ? { x, y, width, height } : null;
+}
 
 export type LinkView = {
   url: string;
@@ -79,8 +117,10 @@ export type PostView = {
   anchor_name?: string | undefined;
   audience: Audience;
   fields: FieldValues;
-  /** Image URLs (signed or object URLs), at most four. */
-  media: string[];
+  /** The post's images, at most four, in position order (1707, 1709): the signed or object URL,
+   *  the stored size that picks the frame (1643), and the author's framing from the media row,
+   *  null where the row or its framing is absent so MediaBlock renders its default. */
+  media: PostImage[];
   link?: LinkView | null | undefined;
   meta?: string | undefined;
   /** Present on a Convene card (created object of kind event). */

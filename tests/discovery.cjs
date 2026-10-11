@@ -3056,7 +3056,9 @@ async function runDiscoveryWidth(browserType, bname, [w, h], theme) {
           const x = el.getBoundingClientRect();
           return [r1(x.left - left), r1(right - x.right)];
         };
-        const img = ep.querySelector(':scope > div > img[src*="post-media"]');
+        // H60-MEDIA: the cover is MediaBlock's openable frame (a button carrying data-media) inside
+        // the page's own wrapper, which now holds 1143's reach; the frame is still the image's parent.
+        const img = ep.querySelector(':scope > div > [data-media] > img[src*="post-media"]');
         return {
           body: [r1(left), r1(right)],
           space5: parseFloat(
@@ -3078,9 +3080,12 @@ async function runDiscoveryWidth(browserType, bname, [w, h], theme) {
       );
     // The seeded page carries a cover (Brief 10's loaded page, `seed/loaded.jpg`); wait for it.
     await page
-      .waitForSelector('[data-pane-body] [data-event-page] > div > img[src*="post-media"]', {
-        timeout: 10000,
-      })
+      .waitForSelector(
+        '[data-pane-body] [data-event-page] > div > [data-media] > img[src*="post-media"]',
+        {
+          timeout: 10000,
+        },
+      )
       .catch(() => {});
     const insetShown = await inset();
     const open = await tracks();

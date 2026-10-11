@@ -207,6 +207,13 @@
   --glow-dia:
     0 0 0 2px #faf7f2, 0 0 0 4px #e8b830, 0 0 18px rgba(232, 184, 48, 0.45); /* DIA only. Never on any other component. */
 
+  /* Image viewer (1429). The viewer's ground is the same near-black in both themes, so its ink is named here rather than inherited from --ink, which flips. */
+  --viewer-scrim: rgba(20, 20, 18, 0.94);
+  --viewer-ink: #faf7f2;
+  --viewer-control: rgba(250, 247, 242, 0.14);
+  /* Image frames (1643). The ground an image is contained on past the ends of the frame set, and behind a frame before its file arrives: the theme's sunken neutral in both themes, never black. */
+  --media-fill: var(--bg-sunken);
+
   /* Logo palette (reference only; not used for UI) */
   --logo-green: #1e4d3a;
   --logo-red: #d64541;
@@ -275,6 +282,10 @@
   --destructive: hsl(0 65% 58%);
   --destructive-tint: #3a1a1a;
   --focus: #7dbba3;
+  --viewer-scrim: rgba(10, 10, 9, 0.96);
+  --media-fill: var(
+    --bg-sunken
+  ); /* 1643: restated here because a var() alias resolves where it is declared; without this line the dark theme would inherit the light fill */
   --glow-dia: 0 0 0 2px #141412, 0 0 0 4px #e8b830, 0 0 18px rgba(232, 184, 48, 0.4);
   /* MemberCard's portrait halo, the one value the dark theme overrides (compile v1791495246160097,
      tokens/colors.css; 1487): on the warm near-black ground an ink shadow has no delta against
@@ -428,6 +439,19 @@
   /* Public event page (G164, 1230, correction 35). The side column of the two-column public page above --tier-expanded: `var(--event-page-side-column) minmax(0,1fr)`, gap --space-8. Not --lane-card-width: one token, one meaning. */
   --event-page-side-column: 320px;
 
+  /* MediaBlock link preview and ImageViewer (1429, 1432, 1453, 1454). The Row size carries the domain as text and no favicon (1454), and the viewer carries no position mark (1453),
+     so the thumbnail is the only measure the two sizes differ by. The single image's 1429 band (a rule kept in the component) is replaced by the frame set below (1643). */
+  --link-thumb-full: 72px; /* link preview, Full: the square thumbnail (was 112 wide) */
+  --viewer-inset: var(--space-4); /* ImageViewer: the gap between the image and the window edge */
+
+  /* Image frames (1643, brief 60-IF). The set a MediaBlock image's frame is chosen from, nearest to the image's own ratio, so a frame is never further from the image than the gap
+     between two neighbours. MediaBlock mirrors the four numbers for the choice and draws the frame from the token. Past an end by more than that end's own step (taller than 16:25, wider
+     than 2.74:1) the image is contained whole on --media-fill (tokens/colors.css). A gallery takes one of the same four by its lead's orientation and its count. ImageAdjust shows the same frame. */
+  --media-frame-tall: 4 / 5; /* @kind other */ /* portrait: the tallest frame */
+  --media-frame-square: 1 / 1; /* @kind other */
+  --media-frame-photo: 4 / 3; /* @kind other */ /* the landscape phone photograph, so a group photo keeps its edges */
+  --media-frame-wide: 1.91 / 1; /* @kind other */ /* landscape: the widest frame */
+
   /* ---- Strand compile v1790885781186000 (proposals 40, rulings 1306 and 1308, ratified 1309;
      handoff 40-D item 3): the two console tokens its tokens/spacing.css adds after the event page
      token, at the compile's own values and position (604). ---- */
@@ -464,6 +488,7 @@
   --z-sheet: 60; /* @kind other */ /* sheet, and FacetRail's collapsed sheet form under 640 */
   --z-menu: 62; /* @kind other */ /* 1103: Menu, summoned from a control; above pane and sticky chrome (and a sheet it opens from), below dialog and notification */
   --z-dialog: 65; /* @kind other */ /* 606: a dialog over a sheet stacks by DOM order */
+  --z-viewer: 68; /* @kind other */ /* 1429: ImageViewer, opened from feed content; above a dialog it can be opened over, below the notification panel */
   --z-notification: 70; /* @kind other */ /* pointer notification panel, above a sheet */
   --z-toast: 80; /* @kind other */
   /* Auth head (ruling 491): the logo band's height never changes with content, and the logo is

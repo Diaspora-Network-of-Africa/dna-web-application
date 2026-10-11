@@ -444,114 +444,6 @@ function readDiscoveryCards(page, scope, ringed = null) {
   );
 }
 
-/**
- * MediaBlock's frame and images inside one card (Addendum 3 item E; 1115, 1118, 1120). The frame is
- * the images' parent; its inner box is its client box, inside the 1px edge. Answers the frame's
- * inner size and aspect-ratio, and each image's box and natural size, once every image has loaded.
- */
-async function readMedia(page, cardSel) {
-  // The frame is the first image's parent, and only its own images are read: an event page also
-  // carries avatars, which are no part of the cover.
-  await page.waitForFunction(
-    (sel) => {
-      const first = document.querySelector(sel + " img");
-      if (!first) return false;
-      const imgs = Array.from(first.parentElement.querySelectorAll(":scope > img"));
-      return imgs.every((i) => i.complete && i.naturalWidth > 0);
-    },
-    cardSel,
-    { timeout: 15000 },
-  );
-  return page.evaluate((sel) => {
-    const frame = document.querySelector(sel + " img").parentElement;
-    const imgs = Array.from(frame.querySelectorAll(":scope > img"));
-    const fr = frame.getBoundingClientRect();
-    const cs = getComputedStyle(frame);
-    const inner = {
-      left: fr.left + parseFloat(cs.borderLeftWidth),
-      top: fr.top + parseFloat(cs.borderTopWidth),
-      w: frame.clientWidth,
-      h: frame.clientHeight,
-    };
-    return {
-      ratio: cs.aspectRatio,
-      sizing: cs.boxSizing,
-      outer: { w: fr.width, h: fr.height },
-      inner,
-      imgs: imgs.map((i) => {
-        const r = i.getBoundingClientRect();
-        const s = getComputedStyle(i);
-        return {
-          x: r.left - inner.left,
-          y: r.top - inner.top,
-          w: r.width,
-          h: r.height,
-          nw: i.naturalWidth,
-          nh: i.naturalHeight,
-          fit: s.objectFit,
-          maxH: s.maxHeight,
-        };
-      }),
-    };
-  }, cardSel);
-}
-
-/**
- * The frame measures `ratio` and its images tile the area inside its 1px edge (the 2px gap aside).
- * Strand's base sizes boxes border-box, so the ratio is the frame's own box, edge included, to half
- * a pixel; inside the edge it is 2px short each way, which no arm reads as a ratio.
- */
-function fills(m, ratio) {
-  const why = [];
-  if (Math.abs(m.outer.h - m.outer.w / ratio) > 0.5)
-    why.push(`frame ${m.outer.w}x${m.outer.h} (${m.sizing})`);
-  for (const i of m.imgs) {
-    if (i.x < -0.5 || i.y < -0.5 || i.x + i.w > m.inner.w + 0.5 || i.y + i.h > m.inner.h + 0.5)
-      why.push(
-        `a tile past the edge ${Math.round(i.x)},${Math.round(i.y)} ${Math.round(i.w)}x${Math.round(i.h)}`,
-      );
-    if (i.fit !== "cover") why.push("fit " + i.fit);
-  }
-  const area = m.imgs.reduce((a, i) => a + i.w * i.h, 0);
-  if (area < m.inner.w * m.inner.h * 0.97)
-    why.push(`tiles cover ${Math.round((area / (m.inner.w * m.inner.h)) * 100)}%`);
-  return {
-    ok: why.length === 0,
-    detail: why.join(" | ") || `${m.inner.w}x${m.inner.h}, ${m.imgs.length} tile(s)`,
-  };
-}
-
-/**
- * The boxes ea35e8e's MediaBlock gives one image or two with no ratio, from its rules as written
- * there: one image is width 100% of the frame, `max-height: 420`, height from the image's own
- * aspect, and the frame declares no aspect-ratio; two images sit in a 16/10 frame, one row, each
- * tile half the inner width less the 2px gap and the full inner height.
- */
-function keepsEa35(m) {
-  const why = [];
-  if (m.imgs.length === 1) {
-    const i = m.imgs[0];
-    const h = Math.min(420, (m.inner.w * i.nh) / i.nw);
-    if (m.ratio !== "auto") why.push("aspect-ratio " + m.ratio);
-    if (i.maxH !== "420px") why.push("max-height " + i.maxH);
-    if (Math.abs(i.w - m.inner.w) > 0.5) why.push(`width ${i.w} of ${m.inner.w}`);
-    if (Math.abs(i.h - h) > 1) why.push(`height ${i.h}, ea35e8e gives ${h}`);
-    if (Math.abs(m.inner.h - i.h) > 1) why.push(`frame ${m.inner.h} for an image of ${i.h}`);
-  } else if (m.imgs.length === 2) {
-    if (m.ratio.replace(/\s/g, "") !== "16/10") why.push("aspect-ratio " + m.ratio);
-    if (Math.abs(m.outer.h - m.outer.w / 1.6) > 0.5) why.push(`frame ${m.outer.w}x${m.outer.h}`);
-    for (const i of m.imgs) {
-      if (Math.abs(i.w - (m.inner.w - 2) / 2) > 1) why.push(`tile width ${i.w}`);
-      if (Math.abs(i.h - m.inner.h) > 1) why.push(`tile height ${i.h} of ${m.inner.h}`);
-      if (Math.abs(i.y) > 0.5) why.push("a second row");
-    }
-  } else why.push(m.imgs.length + " images");
-  return {
-    ok: why.length === 0,
-    detail: why.join(" | ") || `${Math.round(m.inner.w)}x${Math.round(m.inner.h)}`,
-  };
-}
-
 // ---- The arms. ----
 
 /** Tag, gate, reads, and the page-error check recorded after the flow, whatever it did. Every
@@ -1001,8 +893,12 @@ async function runMountEvent(bt, bname, [w, h], theme) {
   );
 }
 
-/** A Convene post with `n` images, and a plain post with `n` images, for the media arms. */
-function seedMediaPost(db, key, n, c) {
+/**
+ * A post carrying images of the given stored sizes (H60-MEDIA): `sizes` is `[width, height]` per
+ * image, null for an image with no stored size; `framing` is the media row the one post_media read
+ * embeds through media_id (1709), and `link` a post_links row. A Convene post creates its event.
+ */
+function seedMediaPost(db, key, sizes, c, { framing = null, link = null } = {}) {
   const id = "media-" + key;
   const convene = c === "convene";
   const oid = convene ? eventId("media-" + key) : null;
@@ -1065,101 +961,355 @@ function seedMediaPost(db, key, n, c) {
       country: "Ghana",
     });
   }
-  for (let i = 0; i < n; i++)
-    db.post_media.push({
-      id: "m-" + key + "-" + i,
+  pushMedia(db, id, key, sizes, framing);
+  if (link)
+    db.post_links.push({
+      id: "l-media-" + key,
       post_id: id,
-      storage_path: "seed/" + key + "-" + i + ".jpg",
-      width: 1200,
-      height: 800,
-      position: i,
+      url: link.url,
+      title: link.title ?? null,
+      description: null,
+      image_url: link.image_url ?? null,
+      fetched_at: null,
+      created_at: new Date().toISOString(),
     });
   return `[data-post-id="${id}"] article`;
 }
 
+/** post_media rows for a post, each with the media row its media_id names, as the read embeds it. */
+function pushMedia(db, postId, key, sizes, framing = null) {
+  sizes.forEach((size, i) =>
+    db.post_media.push({
+      id: "m-" + key + "-" + i,
+      post_id: postId,
+      storage_path: "seed/" + key + "-" + i + ".jpg",
+      width: size ? size[0] : null,
+      height: size ? size[1] : null,
+      position: i,
+      media_id: framing ? "md-" + key + "-" + i : null,
+      media: framing,
+    }),
+  );
+}
+
+/** The frame set's ratios (tokens --media-frame-*, 1643), as the arms read a frame against them. */
+const FRAME_SET = { tall: 4 / 5, square: 1, photo: 4 / 3, wide: 1.91 };
+
 /**
- * Addendum 3 item E (755; 1077, 1115, 1118, 1120): the Feed's Convene card with one image and with
- * several measures 16:9 inside its frame's edge; a post of another C with three and with four images
- * fills its 16/10 frame; one and two images keep the boxes ea35e8e gave them.
+ * One MediaBlock frame inside a card: its `data-frame` and `data-frame-set`, its outer box, the
+ * resolved `--media-fill` beside its own background, and its first image's fit and position. A
+ * single image's frame is the element carrying `data-media`; a gallery's is the same.
+ */
+async function readFrame(page, sel) {
+  await page.waitForFunction(
+    (sel) => {
+      const f = document.querySelector(sel + " [data-media]");
+      const i = f && f.querySelector("img");
+      return !!i && i.complete && i.naturalWidth > 0;
+    },
+    sel,
+    { timeout: 15000 },
+  );
+  return page.evaluate((sel) => {
+    const f = document.querySelector(sel + " [data-media]");
+    const img = f.querySelector("img");
+    const r = f.getBoundingClientRect();
+    const probe = document.createElement("div");
+    probe.style.background = "var(--media-fill)";
+    document.body.appendChild(probe);
+    const fill = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    const s = getComputedStyle(img);
+    return {
+      tag: f.tagName,
+      media: f.getAttribute("data-media"),
+      frame: f.getAttribute("data-frame"),
+      set: f.getAttribute("data-frame-set"),
+      layout: f.getAttribute("data-gallery-layout"),
+      w: r.width,
+      h: r.height,
+      bg: getComputedStyle(f).backgroundColor,
+      fill,
+      fit: s.objectFit,
+      position: s.objectPosition,
+      imgW: img.getBoundingClientRect().width,
+    };
+  }, sel);
+}
+
+/** The frame's own box measures `ratio` to half a pixel, and the frame fills its column. */
+function framed(m, ratio) {
+  const why = [];
+  if (Math.abs(m.h - m.w / ratio) > 0.5) why.push(`frame ${m.w}x${m.h} for ${ratio.toFixed(3)}`);
+  if (m.imgW < 1) why.push("no image width");
+  return why;
+}
+
+const SIZES = {
+  "9x16": [1080, 1920],
+  "3x4": [1200, 1600],
+  "4x3": [1600, 1200],
+  "16x9": [1920, 1080],
+  "3x1": [3000, 1000],
+};
+/** What the set picks for each (EXTRACTION-60-IF §1 and §6): the case and the frame. */
+const PICKS = {
+  "9x16": ["tall", "tall"],
+  "3x4": ["near", "tall"],
+  "4x3": ["exact", "photo"],
+  "16x9": ["near", "wide"],
+  "3x1": ["wide", "wide"],
+};
+
+/**
+ * H60-MEDIA's Feed checks (1643, 1429 to 1433, 1544, 1697, 1707 to 1709). Five single images land
+ * in the frames the set picks, read from the rendered `data-frame`; an image with no stored size is
+ * `unknown`, contained on --media-fill; a stored focal point moves the image's rendered position;
+ * the expanded card draws `whole`; a tap opens the viewer and Escape returns focus to the image; a
+ * gallery's viewer steps on ArrowRight and carries no digit and no dot; a link beside an image is
+ * one line with no image and a link alone is full; a mailto: link is no anchor (439); and a
+ * Convene post's portrait flyer is framed by its image on the Feed while its lane card stays 16:9.
+ *
+ * It replaces Addendum 3 item E's arm, whose checks asserted what 1643 retires: the Feed's Convene
+ * card at 16:9 (1697 and 1708 frame it by its image), a gallery of three or four in a 16/10 frame
+ * (1643 item 4 chooses the gallery's frame from its lead), and one or two images in ea35e8e's box
+ * with its 420 cap (1429 and 1643 replace the cap with the frame set).
  */
 async function runMountMedia(bt, bname, [w, h], theme) {
   const tag = `${bname}-${w}x${h}-${theme}-mount-media`;
   const cards = {};
+  const supper = eventId("discovery-supper");
   await arm(
     tag,
     async () => {
-      const db = makeMockDb();
-      seedPosts(db, 1);
-      for (const [key, n, c] of [
-        ["plain-4", 4, "convey"],
-        ["plain-3", 3, "convey"],
-        ["plain-2", 2, "convey"],
-        ["plain-1", 1, "convey"],
-        ["convene-4", 4, "convene"],
-        ["convene-2", 2, "convene"],
-        ["convene-1", 1, "convene"],
-      ])
-        cards[key] = seedMediaPost(db, key, n, c);
+      const db = discoveryDb();
+      for (const k of Object.keys(SIZES)) cards[k] = seedMediaPost(db, k, [SIZES[k]], "convey");
+      cards.unsized = seedMediaPost(db, "unsized", [null], "convey");
+      cards.focal = seedMediaPost(db, "focal", [SIZES["16x9"]], "convey", {
+        framing: { focal_point: { x: 0.8, y: 0.14 }, crop: null },
+      });
+      cards.gallery = seedMediaPost(
+        db,
+        "gallery",
+        [
+          [1600, 1200],
+          [1200, 1600],
+          [1200, 1200],
+        ],
+        "convey",
+      );
+      cards.withLink = seedMediaPost(db, "with-link", [SIZES["4x3"]], "convey", {
+        link: {
+          url: "https://example.org/the-corridor-suppers-and-what-the-evening-taught-us",
+          title: "The Corridor Suppers and what the evening taught us about the room",
+          image_url: "/favicon.png",
+        },
+      });
+      cards.linkOnly = seedMediaPost(db, "link-only", [], "convey", {
+        link: {
+          url: "https://example.org/reading",
+          title: "A reading list",
+          image_url: "/favicon.png",
+        },
+      });
+      cards.mailto = seedMediaPost(db, "mailto", [], "convey", {
+        link: { url: "mailto:hello@example.org", title: "Write to us" },
+      });
+      // Discovery's supper event, its post carrying a portrait flyer (1697, 1708).
+      pushMedia(db, "post-d-supper", "supper", [SIZES["3x4"]]);
+      cards.convene = '[data-post-id="post-d-supper"] article';
       const s = await context(bt, [w, h], theme, db);
       await signIn(s.page);
-      await s.page.locator(cards["convene-1"]).waitFor({ timeout: 15000 });
+      await s.page.locator(cards["3x1"]).waitFor({ timeout: 15000 });
       return s;
     },
     async ({ page }) => {
-      const one = await readMedia(page, cards["convene-1"]);
-      const r1 = fills(one, 16 / 9);
+      const bad = [];
+      for (const k of Object.keys(SIZES)) {
+        const m = await readFrame(page, cards[k]);
+        const [frame, set] = PICKS[k];
+        const why = framed(m, FRAME_SET[set]);
+        if (m.frame !== frame || m.set !== set) why.push(`${m.frame}/${m.set}`);
+        if ((frame === "tall" || frame === "wide") !== (m.fit === "contain"))
+          why.push("fit " + m.fit);
+        if (why.length) bad.push(k + ": " + why.join(", "));
+      }
       record(
         tag +
-          " Feed Convene card, one image: the frame 16:9, the image filling it inside the edge (1077, 1115)",
-        r1.ok && one.ratio.replace(/\s/g, "") === "16/9",
-        one.ratio + "; " + r1.detail,
+          " a 9:16, a 3:4, a 4:3, a 16:9 and a 3:1 image land in the frames the set picks: tall, tall, photo, wide, wide (1643)",
+        bad.length === 0,
+        bad.join(" | ") || "all five",
       );
-      const two = await readMedia(page, cards["convene-2"]);
-      const four = await readMedia(page, cards["convene-4"]);
-      const r2 = fills(two, 16 / 9);
-      const r4 = fills(four, 16 / 9);
+
+      const un = await readFrame(page, cards.unsized);
+      record(
+        tag + " a feed image with no stored size renders unknown, contained on --media-fill (1643)",
+        un.frame === "unknown" &&
+          un.set === "wide" &&
+          un.fit === "contain" &&
+          un.bg === un.fill &&
+          framed(un, FRAME_SET.wide).length === 0,
+        JSON.stringify({ frame: un.frame, set: un.set, fit: un.fit, bg: un.bg, fill: un.fill }),
+      );
+
+      const plain = await readFrame(page, cards["16x9"]);
+      const focal = await readFrame(page, cards.focal);
       record(
         tag +
-          " Feed Convene card, several images: the frame 16:9, the tiles filling it inside the edge (1077)",
-        r2.ok && r4.ok,
-        "two: " + r2.detail + " / four: " + r4.detail,
+          " a stored focal_point moves the image's placement: 16:9 centred, then held to the top by a subject at y 0.14 (1643, 1709)",
+        plain.position === "50% 50%" && focal.position === "50% 0%" && focal.frame === "near",
+        `plain ${plain.position}; focal ${focal.position}`,
       );
-      for (const n of [3, 4]) {
-        const m = await readMedia(page, cards["plain-" + n]);
-        const r = fills(m, 16 / 10);
-        record(
-          tag + ` another C, ${n} images: the tiles fill the 16/10 frame (1118, 1120)`,
-          r.ok,
-          r.detail,
-        );
-      }
-      for (const n of [1, 2]) {
-        const m = await readMedia(page, cards["plain-" + n]);
-        const r = keepsEa35(m);
-        record(
-          tag + ` another C, ${n} image${n > 1 ? "s" : ""}: the box ea35e8e gave it (1118)`,
-          r.ok,
-          r.detail,
-        );
-      }
+
+      const conveneFeed = await readFrame(page, cards.convene);
+      const lane = await (async () => {
+        await openDiscovery(page, "/convene");
+        const sel = `[data-discovery-item="${supper}"] article [data-media]`;
+        await page.locator(sel).first().waitFor({ timeout: 15000 });
+        return page.evaluate((sel) => {
+          const m = document.querySelector(sel);
+          return { w: m.clientWidth, h: m.clientHeight };
+        }, sel);
+      })();
+      record(
+        tag +
+          " a Convene post's portrait flyer: framed by its image on the Feed (4:5), 16:9 on its Discovery lane card (1697, 1708)",
+        conveneFeed.set === "tall" &&
+          framed(conveneFeed, FRAME_SET.tall).length === 0 &&
+          !!lane.h &&
+          Math.abs(lane.w / lane.h - 16 / 9) <= 0.02,
+        `feed ${conveneFeed.frame}/${conveneFeed.set} ${Math.round(conveneFeed.w)}x${Math.round(conveneFeed.h)}; lane ${lane.w}x${lane.h}`,
+      );
+      await page.goto(BASE + "/feed", { waitUntil: "networkidle" });
+      await page.locator(cards["4x3"]).waitFor({ timeout: 15000 });
+
+      // The viewer: a tap opens it, Escape closes it and returns focus to the image (1429, 480).
+      const open = `${cards["4x3"]} button[data-media="image"]`;
+      await tap(page, page.locator(open));
+      const shown = await page
+        .waitForSelector("dialog.strand-viewer[open]", { timeout: 8000 })
+        .then(() => true)
+        .catch(() => false);
+      const whole = shown
+        ? await page.evaluate(() => {
+            const img = document.querySelector("dialog.strand-viewer[open] img");
+            return !!img && getComputedStyle(img).objectFit === "contain";
+          })
+        : false;
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(400);
+      const back = await page.evaluate(
+        (sel) => ({
+          closed: !document.querySelector("dialog.strand-viewer[open]"),
+          focus: !!document.activeElement && document.activeElement.matches(sel),
+        }),
+        open,
+      );
+      record(
+        tag +
+          " tapping a feed image opens the viewer on the image whole; Escape closes it and returns focus to the image (1429, 1431)",
+        shown && whole && back.closed && back.focus,
+        JSON.stringify({ shown, whole, ...back }),
+      );
+
+      // The gallery steps forward on ArrowRight, and nothing in the viewer is a digit or a dot (1452, 1453).
+      await tap(page, page.locator(`${cards.gallery} [data-media="gallery"] button`).first());
+      await page.waitForSelector("dialog.strand-viewer[open]", { timeout: 8000 }).catch(() => null);
+      const src = () =>
+        page.evaluate(() => {
+          const i = document.querySelector("dialog.strand-viewer[open] img");
+          return i ? i.getAttribute("src") : null;
+        });
+      const first = await src();
+      await page.keyboard.press("ArrowRight");
+      await page.waitForTimeout(250);
+      const second = await src();
+      const marks = await page.evaluate(() => {
+        const d = document.querySelector("dialog.strand-viewer[open]");
+        if (!d) return ["no viewer"];
+        const out = [];
+        const DOT = /[·•∙●○․]/;
+        for (const el of [d, ...d.querySelectorAll("*")]) {
+          if (el.tagName === "STYLE") continue;
+          const own = Array.from(el.childNodes)
+            .filter((n) => n.nodeType === 3)
+            .map((n) => n.textContent)
+            .join("");
+          const named = [
+            el.getAttribute("aria-label"),
+            el.getAttribute("alt"),
+            el.getAttribute("title"),
+          ]
+            .filter(Boolean)
+            .join(" ");
+          if (/\d/.test(own + " " + named) || DOT.test(own + " " + named))
+            out.push(el.tagName + ": " + (own + " " + named).trim());
+        }
+        return out;
+      });
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(300);
+      record(
+        tag +
+          " inside a gallery, ArrowRight steps the viewer forward, and no element in the viewer carries a digit or a dot (1452, 1453)",
+        !!first && !!second && first !== second && marks.length === 0,
+        JSON.stringify({ stepped: first !== second, marks: marks.slice(0, 3) }),
+      );
+
+      const links = await page.evaluate(({ withLink, linkOnly, mailto }) => {
+        const read = (sel) => {
+          const l = document.querySelector(sel + ' [data-media="link"]');
+          if (!l) return null;
+          return {
+            tag: l.tagName,
+            size: l.getAttribute("data-link-size"),
+            imgs: l.querySelectorAll("img").length,
+            h: l.getBoundingClientRect().height,
+            anchors: l.querySelectorAll("a").length + (l.closest("a") ? 1 : 0),
+          };
+        };
+        return { withLink: read(withLink), linkOnly: read(linkOnly), mailto: read(mailto) };
+      }, cards);
+      const row = links.withLink;
+      const full = links.linkOnly;
+      record(
+        tag +
+          " a post with an image and a link renders the link as one line with no image; a post with only a link renders it full (1432, 1544)",
+        !!row &&
+          row.size === "row" &&
+          row.imgs === 0 &&
+          row.h <= 46 &&
+          !!full &&
+          full.size === "full" &&
+          full.imgs === 1,
+        JSON.stringify({ row, full }),
+      );
+      const mail = links.mailto;
+      record(
+        tag + " a mailto: link renders no anchor (439)",
+        !!mail && mail.tag !== "A" && mail.anchors === 0,
+        JSON.stringify(mail),
+      );
+
+      // The expanded card draws the single image whole: its own ratio, uncropped (1643 item 6).
+      await page.goto(BASE + "/posts/media-3x4", { waitUntil: "networkidle" });
+      const ex = await readFrame(page, '[data-post-id="media-3x4"] article');
+      record(
+        tag + " the expanded card draws its image whole, at the image's own ratio (1643)",
+        ex.frame === "whole" && ex.fit === "contain" && Math.abs(ex.h - ex.w / (3 / 4)) <= 1,
+        `${ex.frame} ${ex.fit} ${Math.round(ex.w)}x${Math.round(ex.h)}`,
+      );
     },
   );
 }
 
 /**
- * Addendum 3 item D: the event pages' covers are not cards and pass no ratio, so each keeps the box
- * ea35e8e gave it, on the member page (the pane at expanded, its own route below) and on the public
- * page reached by a client navigation (tests/event.cjs's clientGo), the cover served by event-media.
- * In the pane the member page's frame is 1143's, squared and edge to edge with no side borders; the
- * image inside it keeps ea35e8e's box, which is what `keepsEa35` reads against the frame's inside.
+ * The event pages' covers follow the frame set (1548, H60-MEDIA Work 5): a cover with stored
+ * portrait dimensions renders in the portrait frame on the member page (the pane at expanded, its
+ * own route below) and on the public page below two columns; above 1024 the public page's cover
+ * keeps 1185's 21:9 across both columns. It replaces Addendum 3 item D's arm, which asserted the
+ * 420px cover of ea35e8e's box that 1429 and 1643 retire.
  */
-/** MediaBlock's frame on the public page (its 14 radius, inline): the page chrome's wordmark and
- *  avatars are images too. */
-const COVER = 'div[style*="border-radius: 14px"]';
-/** The member page's frame, which in the pane has no radius (1143): the one child of the page whose
- *  own child is an image, since the page's avatars sit deeper. */
-const MEMBER_COVER = "[data-event-page] > div:has(> img)";
-
 async function runMountCovers(bt, bname, [w, h], theme) {
   const tag = `${bname}-${w}x${h}-${theme}-mount-covers`;
   await arm(
@@ -1167,7 +1317,10 @@ async function runMountCovers(bt, bname, [w, h], theme) {
     async () => {
       const db = discoveryDb();
       seedGuest(db);
-      db.attend.publicPages[SLUG].media = [{ position: 0, width: 1200, height: 800 }];
+      db.attend.pages[eventId("loaded")].media = [
+        { position: 0, storage_path: "seed/loaded.jpg", width: 1200, height: 1600 },
+      ];
+      db.attend.publicPages[SLUG].media = [{ position: 0, width: 1200, height: 1600 }];
       const s = await context(bt, [w, h], theme, db);
       await signIn(s.page);
       return s;
@@ -1179,52 +1332,31 @@ async function runMountCovers(bt, bname, [w, h], theme) {
       await page.waitForSelector('[data-event-page][data-event-state="loaded"]', {
         timeout: 20000,
       });
-      const member = keepsEa35(await readMedia(page, MEMBER_COVER));
+      const member = await readFrame(page, "[data-event-page]");
+      const mw = framed(member, FRAME_SET.tall);
       record(
-        tag + " the member event page's cover keeps ea35e8e's box (no ratio)",
-        member.ok,
-        member.detail,
+        tag +
+          " the member event page's cover with stored portrait dimensions renders in the portrait frame (1548, 1643)",
+        member.media === "image" && member.set === "tall" && mw.length === 0,
+        `${member.frame}/${member.set} ${Math.round(member.w)}x${Math.round(member.h)}` +
+          (mw.length ? "; " + mw.join(", ") : ""),
       );
       await page.evaluate((p) => {
         window.history.pushState({}, "", p);
         window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
       }, "/e/" + SLUG);
       await page.waitForSelector(`[data-public-event="${SLUG}"]`, { timeout: 15000 });
-      const pubMedia = await readMedia(page, `[data-public-event="${SLUG}"] ` + COVER);
-      // Handoff 37-C item 8 (1185): above 1024 the public page's cover spans both columns at 21:9, so
-      // the frame declares that ratio and the one image fills it; at 1024 and below it keeps ea35e8e's
-      // box.
-      const pub =
-        w > 1024
-          ? (() => {
-              const i = pubMedia.imgs[0];
-              const why = [];
-              if (pubMedia.imgs.length !== 1) why.push(pubMedia.imgs.length + " images");
-              else {
-                if (pubMedia.ratio.replace(/\s/g, "") !== "21/9")
-                  why.push("aspect-ratio " + pubMedia.ratio);
-                if (Math.abs(i.w - pubMedia.inner.w) > 0.5)
-                  why.push(`width ${i.w} of ${pubMedia.inner.w}`);
-                if (Math.abs(i.h - pubMedia.inner.h) > 1)
-                  why.push(`height ${i.h} of ${pubMedia.inner.h}`);
-                if (Math.abs(pubMedia.outer.h - pubMedia.outer.w / (21 / 9)) > 1)
-                  why.push(`frame ${pubMedia.outer.w}x${pubMedia.outer.h}`);
-              }
-              return {
-                ok: why.length === 0,
-                detail:
-                  why.join(" | ") ||
-                  `${Math.round(pubMedia.outer.w)}x${Math.round(pubMedia.outer.h)}`,
-              };
-            })()
-          : keepsEa35(pubMedia);
+      const pub = await readFrame(page, `[data-public-event="${SLUG}"]`);
+      const two = w > 1024;
+      const pw = framed(pub, two ? 21 / 9 : FRAME_SET.tall);
       record(
         tag +
-          (w > 1024
+          (two
             ? " the public event page's cover is 21:9 across both columns (1185)"
-            : " the public event page's cover keeps ea35e8e's box (no ratio)"),
-        pub.ok,
-        pub.detail,
+            : " the public event page's cover with stored portrait dimensions renders in the portrait frame (1548)"),
+        (two ? pub.frame === "fixed" : pub.set === "tall") && pw.length === 0,
+        `${pub.frame}/${pub.set} ${Math.round(pub.w)}x${Math.round(pub.h)}` +
+          (pw.length ? "; " + pw.join(", ") : ""),
       );
     },
   );
@@ -1719,7 +1851,8 @@ async function runMount(bt, bname, vp, theme) {
   await M.drive(runMountAuth, bt, bname, vp, theme, "sign-in");
   await M.drive(runMountAuth, bt, bname, vp, theme, "reset");
   await M.drive(runMountShell, bt, bname, vp, theme);
-  // Addendum 3 item E: MediaBlock's ratio on the Feed's Convene card, and every other box kept.
+  // H60-MEDIA (1643, 1429 to 1433, 1544, 1548): the frame set, the viewer, the two link sizes and
+  // the covers, replacing Addendum 3 items D and E.
   await M.drive(runMountMedia, bt, bname, vp, theme);
   await M.drive(runMountCovers, bt, bname, vp, theme);
   // Handoff 33-D item 4 (1147): EmptyState fills its column on Discovery, the Feed and Connect.
