@@ -7621,6 +7621,13 @@ if (require.main === module)
           await drive(runMemberTheme, bt, bname, [390, 844]);
           await drive(runMemberTheme, bt, bname, [1280, 800]);
         }
+        // Handoff 60-MEDIA-2 Work 2: the Feed card's right edge either side of the expanded tier's
+        // widths, at rest and after a 2,000 px scroll (tests/media-sites.cjs).
+        if (process.env.SPECIAL.includes("edge")) {
+          const { runFeedEdge, FEED_EDGE_WIDTHS, FEED_EDGE_HEIGHT } = require("./media-sites.cjs");
+          for (const w of FEED_EDGE_WIDTHS)
+            if (!only || only[0] === w) await drive(runFeedEdge, bt, bname, [w, FEED_EDGE_HEIGHT]);
+        }
         // Handoff 41-B section 5: the Messenger media routes on the deployed URL, with the two
         // seeded accounts for real (tests/messenger-media.cjs).
         if (process.env.SPECIAL.includes("media")) {
