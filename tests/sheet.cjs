@@ -1133,4 +1133,5 @@ module.exports = {
   runSheetFocus,
   DRAWER_CELLS,
   BOTTOM_CELLS,
+  decodePngBuffer,
 };

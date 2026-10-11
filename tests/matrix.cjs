@@ -7621,6 +7621,20 @@ if (require.main === module)
           await drive(runMemberTheme, bt, bname, [390, 844]);
           await drive(runMemberTheme, bt, bname, [1280, 800]);
         }
+        // Handoff 60-MEDIA-2 Work 2: the Feed card's right edge either side of the expanded tier's
+        // widths, at rest and after a 2,000 px scroll (tests/media-sites.cjs).
+        if (process.env.SPECIAL.includes("edge")) {
+          const { runFeedEdge, FEED_EDGE_WIDTHS, FEED_EDGE_HEIGHT } = require("./media-sites.cjs");
+          for (const w of FEED_EDGE_WIDTHS)
+            if (!only || only[0] === w) await drive(runFeedEdge, bt, bname, [w, FEED_EDGE_HEIGHT]);
+        }
+        // Handoff 60-MEDIA-2 Work 3: the profile's portrait and cover open the viewer (1714).
+        if (process.env.SPECIAL.includes("viewer")) {
+          const { runProfileViewer, PROFILE_CELLS } = require("./media-sites.cjs");
+          for (const [vp, theme] of PROFILE_CELLS)
+            if (!only || (vp[0] === only[0] && vp[1] === only[1]))
+              await drive(runProfileViewer, bt, bname, vp, theme);
+        }
         // Handoff 41-B section 5: the Messenger media routes on the deployed URL, with the two
         // seeded accounts for real (tests/messenger-media.cjs).
         if (process.env.SPECIAL.includes("media")) {
@@ -7809,6 +7823,16 @@ if (require.main === module)
       // v1790212533284400 changed, read after its open gate, one cell per tier (tests/mount.cjs).
       const { runMount, MOUNT_CELLS } = require("./mount.cjs");
       for (const [vp, theme] of MOUNT_CELLS) await runMount(bt, bname, vp, theme);
+      // Handoff 60-MEDIA-2 (1714 to 1716): the Feed card's edges either side of the expanded tier's
+      // widths, at rest and after a 2,000 px scroll, and the profile's portrait and cover opening
+      // the viewer on the master (tests/media-sites.cjs).
+      {
+        const media = require("./media-sites.cjs");
+        for (const w of media.FEED_EDGE_WIDTHS)
+          await drive(media.runFeedEdge, bt, bname, [w, media.FEED_EDGE_HEIGHT]);
+        for (const [vp, theme] of media.PROFILE_CELLS)
+          await drive(media.runProfileViewer, bt, bname, vp, theme);
+      }
       // Handoff 37-B (1201): every Sheet's enter and exit, frame by frame, on both shapes
       // (tests/sheet.cjs).
       const { runSheets } = require("./sheet.cjs");

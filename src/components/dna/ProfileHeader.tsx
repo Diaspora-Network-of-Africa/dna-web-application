@@ -10,12 +10,20 @@
 // that carried them (`originCountry`, `currentPlace`, `segmentLabel`, `timeLine`) are gone rather
 // than left unpassed, because a component that still accepts a prop the doctrine forbids is a prop
 // somebody eventually passes.
-import type { CSSProperties, ReactNode } from "react";
+//
+// 1714 (handoff 60-MEDIA-2 Work 3): the portrait and the cover open Strand's ImageViewer on the
+// master, whole, for every viewer. The owner's change controls are their own: the camera badge on
+// the portrait is a button of its own where a photo is set (with none, the portrait itself still
+// asks for one), and the cover keeps its corner IconButton. Their framing (1718's square portrait and
+// 1719's cover filling its band, each placed by its focal point) is Strand item 13's and is not
+// restyled here; docs/media-sites.md holds the cover's raw <img> as that item's.
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Avatar } from "@/components/strand/Avatar";
 import { Button } from "@/components/strand/Button";
 import { Icon } from "@/components/strand/Icon";
 import { IconButton } from "@/components/strand/IconButton";
 import { IdentityMark } from "@/components/strand/IdentityMark";
+import { ImageViewer } from "@/components/strand/ImageViewer";
 import { assetBase } from "@/components/strand/cmeta";
 
 export type MastheadPattern = "kente" | "adinkra" | "mudcloth";
@@ -77,6 +85,104 @@ export function ProfileHeader({
   const stick: CSSProperties = lock
     ? { position: "sticky", top: 0, zIndex: 3 }
     : { position: "relative" };
+  // The image open in the viewer, kept through the close so the viewer fades out on it; `open`
+  // alone says whether it shows. Focus goes back to the control that opened it: Safari does not
+  // focus a button on a click, so the viewer's own restore would land on the body there.
+  const [view, setView] = useState<{ src: string; alt: string; open: boolean } | null>(null);
+  const opener = useRef<HTMLElement | null>(null);
+  const viewOpen = !!view?.open;
+  useEffect(() => {
+    if (viewOpen || !opener.current) return;
+    opener.current.focus({ preventScroll: true });
+    opener.current = null;
+  }, [viewOpen]);
+  const openView = (src: string, alt: string) => (e: { currentTarget: HTMLElement }) => {
+    opener.current = e.currentTarget;
+    setView({ src, alt, open: true });
+  };
+  const viewer = (
+    <ImageViewer
+      open={viewOpen}
+      items={view ? [view.src] : []}
+      alt={view?.alt ?? ""}
+      step={false}
+      onClose={() => setView((v) => (v ? { ...v, open: false } : v))}
+    />
+  );
+  const viewAvatar = member.avatar ? openView(member.avatar, member.name) : undefined;
+  const portraitAct = viewAvatar ?? (owner ? onAvatar : undefined);
+  const portraitLabel = viewAvatar
+    ? "Open photo of " + member.name
+    : owner
+      ? "Change your photo"
+      : member.name;
+  /** The owner's change control on the portrait: drawn as the camera badge it always was, its own
+   *  button where the portrait opens the viewer, and the portrait's aria-hidden mark otherwise. */
+  const badge = (box: number, icon: number, own: boolean) => {
+    const look: CSSProperties = {
+      position: "absolute",
+      left: -6,
+      bottom: -6,
+      width: box,
+      height: box,
+      borderRadius: 999,
+      background: "var(--surface)",
+      border: "1px solid var(--line)",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: "var(--ink-2)",
+    };
+    return own ? (
+      <button
+        type="button"
+        onClick={onAvatar}
+        aria-label="Change your photo"
+        data-testid="change-photo"
+        style={{
+          ...look,
+          appearance: "none",
+          margin: 0,
+          padding: 0,
+          font: "inherit",
+          boxSizing: "border-box",
+          cursor: "pointer",
+        }}
+      >
+        <Icon name="camera" size={icon} />
+      </button>
+    ) : (
+      <span aria-hidden="true" style={{ ...look, boxSizing: "border-box" }}>
+        <Icon name="camera" size={icon} />
+      </span>
+    );
+  };
+  /** The cover's image, a button that opens it whole; out of the tab order while condensed away. */
+  const coverImage = (img: CSSProperties, hidden?: boolean) =>
+    member.cover ? (
+      <button
+        type="button"
+        onClick={openView(member.cover, member.name + ", cover")}
+        aria-label={"Open cover of " + member.name}
+        data-testid="open-cover"
+        tabIndex={hidden ? -1 : undefined}
+        style={{
+          appearance: "none",
+          border: 0,
+          margin: 0,
+          padding: 0,
+          font: "inherit",
+          background: "none",
+          display: "block",
+          width: "100%",
+          height: "100%",
+          cursor: "zoom-in",
+          outlineOffset: "calc(-1 * var(--focus-offset))",
+        }}
+      >
+        <img src={member.cover} alt="" style={img} />
+      </button>
+    ) : null;
   const coverTools = owner && (
     <>
       {!member.cover && (
@@ -117,60 +223,43 @@ export function ProfileHeader({
     </>
   );
   const plate = (size: number, pad: number, r: number) => (
-    <button
-      type="button"
-      onClick={onAvatar}
-      aria-label={owner ? "Change your photo" : member.name}
-      disabled={!owner}
-      data-testid="portrait"
-      style={{
-        appearance: "none",
-        border: 0,
-        margin: 0,
-        font: "inherit",
-        position: "relative",
-        display: "inline-flex",
-        flex: "none",
-        padding: pad,
-        borderRadius: r,
-        background: "var(--surface)",
-        cursor: owner ? "pointer" : "default",
-      }}
-    >
-      <Avatar
-        name={member.name}
-        src={member.avatar ?? undefined}
-        size={size}
-        style={{ borderRadius: r - pad }}
-      />
-      {identified && (
-        <IdentityMark
-          size={size >= 100 ? 24 : 18}
-          style={{ position: "absolute", right: -4, bottom: -4 }}
+    <span style={{ position: "relative", display: "inline-flex", flex: "none" }}>
+      <button
+        type="button"
+        onClick={portraitAct}
+        aria-label={portraitLabel}
+        disabled={!portraitAct}
+        data-testid="portrait"
+        style={{
+          appearance: "none",
+          border: 0,
+          margin: 0,
+          font: "inherit",
+          position: "relative",
+          display: "inline-flex",
+          flex: "none",
+          padding: pad,
+          borderRadius: r,
+          background: "var(--surface)",
+          cursor: viewAvatar ? "zoom-in" : owner ? "pointer" : "default",
+        }}
+      >
+        <Avatar
+          name={member.name}
+          src={member.avatar ?? undefined}
+          size={size}
+          style={{ borderRadius: r - pad }}
         />
-      )}
-      {owner && (
-        <span
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            left: -6,
-            bottom: -6,
-            width: 28,
-            height: 28,
-            borderRadius: 999,
-            background: "var(--surface)",
-            border: "1px solid var(--line)",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "var(--ink-2)",
-          }}
-        >
-          <Icon name="camera" size={13} />
-        </span>
-      )}
-    </button>
+        {identified && (
+          <IdentityMark
+            size={size >= 100 ? 24 : 18}
+            style={{ position: "absolute", right: -4, bottom: -4 }}
+          />
+        )}
+        {owner && !viewAvatar && badge(28, 13, false)}
+      </button>
+      {owner && viewAvatar && badge(28, 13, true)}
+    </span>
   );
   const condensedRowFn = () => (
     <div
@@ -217,6 +306,7 @@ export function ProfileHeader({
             {condensedRowFn()}
           </div>
           {slot}
+          {viewer}
         </header>
       );
     return (
@@ -298,75 +388,53 @@ export function ProfileHeader({
               background: member.cover ? "var(--bg-sunken)" : "var(--bg-sunken) url(" + tile + ")",
             }}
           >
-            {member.cover && (
-              <img
-                src={member.cover}
-                alt=""
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                  objectPosition: member.coverFocus || "center 35%",
-                  display: "block",
-                }}
-              />
-            )}
+            {coverImage({
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              objectPosition: member.coverFocus || "center 35%",
+              display: "block",
+            })}
             {coverTools}
           </div>
         </div>
         {slot}
+        {viewer}
       </header>
     );
   }
 
   const avatarBtn = (
-    <button
-      type="button"
-      onClick={onAvatar}
-      aria-label={owner ? "Change your photo" : member.name}
-      disabled={!owner}
-      data-testid="portrait"
-      style={{
-        all: "unset",
-        position: "relative",
-        cursor: owner ? "pointer" : "default",
-        flex: "none",
-        borderRadius: 18,
-        boxShadow: hero ? "none" : "0 0 0 4px var(--bg)",
-        background: "var(--bg)",
-      }}
-    >
-      <Avatar
-        name={member.name}
-        src={member.avatar ?? undefined}
-        size={avatarSize}
-        style={{ borderRadius: 18 }}
-      />
-      {identified && (
-        <IdentityMark size={24} style={{ position: "absolute", right: -6, bottom: -6 }} />
-      )}
-      {owner && (
-        <span
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            left: -6,
-            bottom: -6,
-            width: 30,
-            height: 30,
-            borderRadius: 999,
-            background: "var(--surface)",
-            border: "1px solid var(--line)",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "var(--ink-2)",
-          }}
-        >
-          <Icon name="camera" size={14} />
-        </span>
-      )}
-    </button>
+    <span style={{ position: "relative", display: "inline-flex", flex: "none" }}>
+      <button
+        type="button"
+        onClick={portraitAct}
+        aria-label={portraitLabel}
+        disabled={!portraitAct}
+        data-testid="portrait"
+        style={{
+          all: "unset",
+          position: "relative",
+          cursor: viewAvatar ? "zoom-in" : owner ? "pointer" : "default",
+          flex: "none",
+          borderRadius: 18,
+          boxShadow: hero ? "none" : "0 0 0 4px var(--bg)",
+          background: "var(--bg)",
+        }}
+      >
+        <Avatar
+          name={member.name}
+          src={member.avatar ?? undefined}
+          size={avatarSize}
+          style={{ borderRadius: 18 }}
+        />
+        {identified && (
+          <IdentityMark size={24} style={{ position: "absolute", right: -6, bottom: -6 }} />
+        )}
+        {owner && !viewAvatar && badge(30, 14, false)}
+      </button>
+      {owner && viewAvatar && badge(30, 14, true)}
+    </span>
   );
 
   return (
@@ -410,18 +478,15 @@ export function ProfileHeader({
               transition: "height var(--dur-default) var(--ease)",
             }}
           >
-            {member.cover && (
-              <img
-                src={member.cover}
-                alt=""
-                style={{
-                  width: "100%",
-                  height: coverHeight,
-                  objectFit: "cover",
-                  objectPosition: member.coverFocus || "center 35%",
-                  display: "block",
-                }}
-              />
+            {coverImage(
+              {
+                width: "100%",
+                height: coverHeight,
+                objectFit: "cover",
+                objectPosition: member.coverFocus || "center 35%",
+                display: "block",
+              },
+              condensed,
             )}
             {!condensed && coverTools}
           </div>
@@ -505,19 +570,13 @@ export function ProfileHeader({
             boxSizing: "border-box",
           }}
         >
-          {member.cover && (
-            <img
-              src={member.cover}
-              alt=""
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                objectPosition: member.coverFocus || "center 35%",
-                display: "block",
-              }}
-            />
-          )}
+          {coverImage({
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            objectPosition: member.coverFocus || "center 35%",
+            display: "block",
+          })}
           {owner && !member.cover && (
             <div
               style={{
@@ -603,6 +662,7 @@ export function ProfileHeader({
         </div>
       )}
       {hero ? slot : <div style={{ padding: "0 16px" }}>{actions || children}</div>}
+      {viewer}
     </header>
   );
 }

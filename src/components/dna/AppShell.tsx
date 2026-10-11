@@ -275,6 +275,9 @@ export function AppShell({
   const bottomPad = compact
     ? "calc(112px + env(safe-area-inset-bottom))"
     : "calc(96px + env(safe-area-inset-bottom))";
+  /** H60-MEDIA-2: the expanded Feed column's clearance between a card and its scroller's edge. */
+  const FEED_EDGE = 16;
+  const feedEdge = feedView && !inset ? FEED_EDGE : 0;
   // Scroll anchoring is off on every column: the pinned block toggles position on the greeting's
   // visibility, and Chrome's anchoring would otherwise walk scrollTop back across the threshold.
   const column = {
@@ -521,9 +524,13 @@ export function AppShell({
               margin: "0 auto",
               boxSizing: "border-box",
               display: "grid",
+              // H60-MEDIA-2 Work 2: the column's 680 minimum yields where the canvas cannot hold it
+              // beside the rail and the gap (1025 to 1027, where it overran the content box by up to
+              // 3), rather than spilling into the padding the canvas clips at. From 1440 the three
+              // tracks always fit.
               gridTemplateColumns: wide
                 ? "260px minmax(680px, 760px) 320px"
-                : "260px minmax(680px, 760px)",
+                : "260px minmax(min(680px, 100% - 284px), 760px)",
               gap: 24,
               justifyContent: "center",
               alignItems: "stretch",
@@ -551,7 +558,13 @@ export function AppShell({
                 // No top padding of its own: the composer control's wrapper carries it (SPEC 3.0).
                 // The bottom pad keeps a short list able to hold the pinned block's scroll position.
                 // An inset surface (Connect) carries its own padding: 0 24 48 (Connect SPEC 2).
-                padding: inset ? "0 24px 48px" : "0 0 calc(100dvh - 240px)",
+                // H60-MEDIA-2 Work 2: on the Feed the scroller runs FEED_EDGE into the gaps either side
+                // and pads it back, so a card keeps its width and its border stands clear of the
+                // scroller's edge, where the Mac's overlay scrollbar draws while the column scrolls.
+                // Flush, the card's right border was under it after any scroll at every expanded
+                // width. Other surfaces on this grid (Profile measures its own bleed) are unchanged.
+                margin: feedEdge ? "0 -" + feedEdge + "px" : undefined,
+                padding: inset ? "0 24px 48px" : "0 " + feedEdge + "px calc(100dvh - 240px)",
               }}
             >
               {children}
