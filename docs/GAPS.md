@@ -9147,20 +9147,19 @@ Strand's specimen sat its frames in a flex column, where the button is stretched
 verifier could not see it. Closes when a compile carries the width, or when Chat rules the divergence
 standing. Owner: Strand, by Chat's brief.
 
-## G271. The profile's portrait and cover are not framed by the frame set: held for Strand item 13
+## G271. The profile's portrait and cover are not placed by their focal points: held for Strand item 13
 
 **Severity: medium (visible). Opened 11 October 2026 by handoff 60-MEDIA-2 Work 6, under ruling 1714.
 The number is assigned by this entry (ruling 638).**
 
 `ProfileHeader` draws the portrait as a square `Avatar` and the cover as a raw `<img>` with
-`object-fit: cover` placed by `coverFocus` (`docs/media-sites.md` rows 6 to 10), so both are cropped
-by a fixed box rather than framed: 1541's 4:5 portrait and the cover through the frame set (1643) are
-Strand item 13's (`ProfileHeader` takes frames), and the header is not restyled at the call site. The
-onboarding photo plate (row 11) draws the portrait's size and follows it. Since 60-MEDIA-2 a tap on
-either opens `ImageViewer` on the master, whole, for every viewer; only the framing is held. The
-cover could not move to `MediaBlock` now: its box is a fixed height across a variable width, at none
-of the set's ratios, and the frame's border and radius would change the hero's look. Closes when
-item 13 lands and the rows leave the Held table. Owner: Strand, by Chat's brief.
+`object-fit: cover` placed by `coverFocus` (`docs/media-sites.md` rows 6 to 10). The framings owed are
+1718's and 1719's: the portrait stays in its approved square, placed by the member's focal point, and
+the cover always fills its band, placed by its focal point. Both land with Strand item 13
+(`ProfileHeader` takes frames), and the header is not restyled at the call site. The onboarding photo
+plate (row 11) draws the portrait's square and follows it. Since 60-MEDIA-2 a tap on either opens
+`ImageViewer` on the master, whole, for every viewer; only the framing is held. Closes when item 13
+lands and the cover's row leaves the Held table. Owner: Strand, by Chat's brief.
 
 ## G272. The discovery face crops its cover at 16:9: held for Strand item 12
 

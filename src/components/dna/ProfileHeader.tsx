@@ -14,9 +14,9 @@
 // 1714 (handoff 60-MEDIA-2 Work 3): the portrait and the cover open Strand's ImageViewer on the
 // master, whole, for every viewer. The owner's change controls are their own: the camera badge on
 // the portrait is a button of its own where a photo is set (with none, the portrait itself still
-// asks for one), and the cover keeps its corner IconButton. Their framing (1541's 4:5 portrait, the
-// cover through the frame set) is Strand item 13's and is not restyled here; docs/media-sites.md
-// holds the cover's raw <img> as that item's.
+// asks for one), and the cover keeps its corner IconButton. Their framing (1718's square portrait and
+// 1719's cover filling its band, each placed by its focal point) is Strand item 13's and is not
+// restyled here; docs/media-sites.md holds the cover's raw <img> as that item's.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Avatar } from "@/components/strand/Avatar";
 import { Button } from "@/components/strand/Button";
