@@ -6,6 +6,14 @@ const M = require("./matrix.cjs");
 
 const { launch, makeMockDb, seedPosts, mockSupabase, signIn, record, BASE } = M;
 
+/** As tests/mount.cjs reads them (ruling 357): WebKit's refusal of a mocked fetch the page cancelled
+ *  on navigation, the sandbox's and never the app's. Feed requests in flight when an arm leaves the
+ *  Feed for a profile end this way, at a timing the run decides. */
+const SB_RE = M.SB.replace(/\./g, "\\.");
+const CANCELLED_MOCK_FETCH = new RegExp(
+  `(?:^|[\\s/])${SB_RE}\\S*\\s+due to access control checks\\.?$`,
+);
+
 /** Work 2's widths: either side of 1024's tier line, of 1280 and of 1440's right column. */
 const FEED_EDGE_WIDTHS = [1024, 1025, 1100, 1180, 1279, 1280, 1439, 1440];
 const FEED_EDGE_HEIGHT = 900;
@@ -32,7 +40,10 @@ async function session(browserType, [w, h], db, theme = "light") {
   );
   await mockSupabase(page, db);
   const errors = [];
-  page.on("pageerror", (e) => errors.push(String(e)));
+  page.on("pageerror", (e) => {
+    const text = String(e);
+    if (!CANCELLED_MOCK_FETCH.test(text)) errors.push(text);
+  });
   return { browser, page, errors };
 }
 
