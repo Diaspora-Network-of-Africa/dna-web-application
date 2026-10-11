@@ -86,6 +86,20 @@ function readEdge(page) {
     const hit = document.elementFromPoint(r.right - bw / 2, y);
     const hitLeft = document.elementFromPoint(r.left + bw / 2, y);
     const columnRight = sr.left + scroller.clientLeft + scroller.clientWidth;
+    // Where the right-border hit misses, how wide the missed band is (scanned leftward a pixel at a
+    // time from the border until the card answers) and what is stacked at the border, so a miss can
+    // be told apart: the scroller's own scrollbar hit area, or something painted over the card.
+    let band = 0;
+    if (!(hit && (hit === card || card.contains(hit))))
+      for (let dx = 1; dx <= 80; dx++) {
+        const h = document.elementFromPoint(r.right - bw / 2 - dx, y);
+        band = dx;
+        if (h && (h === card || card.contains(h))) break;
+      }
+    const stack = document
+      .elementsFromPoint(r.right - bw / 2, y)
+      .slice(0, 4)
+      .map((el) => el.tagName.toLowerCase() + (el === card ? "(card)" : ""));
     return {
       ...base,
       columnRight: round(columnRight),
@@ -97,6 +111,9 @@ function readEdge(page) {
       surface: cs.backgroundColor,
       clip: round(clip),
       clearance: round(columnRight - r.right),
+      band,
+      stack,
+      scrollbar: scroller.offsetWidth - scroller.clientWidth - scroller.clientLeft * 2,
       hit: !!hit && (hit === card || card.contains(hit)),
       // What answers the hit test half a pixel inside the right border: the card, or what covers it.
       hitAt: hit
