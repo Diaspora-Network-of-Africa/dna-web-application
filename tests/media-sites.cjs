@@ -171,14 +171,18 @@ async function reading(page, bname, w, when) {
   const e = await readEdge(page);
   const px = e.card === null ? null : await paintedEdges(page, e);
   console.log(`EDGE ${bname} ${w} ${when} ${JSON.stringify({ ...e, px })}`);
-  // Clearance is the fix's own property (Work 2): a card flush with its scroller's edge has its right
-  // border under the scroller's overlay scrollbar while the column scrolls, which the Mac port reads
-  // as a hit test that misses the card; neither Linux engine draws that scrollbar over content.
+  // Clearance is the fix's own property (Work 2): the card's border stands clear of its scroller's edge.
+  // The right border is judged by its painted pixels, not by a hit test (60-MEDIA-2, the founder's
+  // ruling on run 94): on the macOS gate, after a programmatic scroll, the point 0.75 px inside the
+  // right border answers `main[data-scroller=feed]` itself, a 1 px band with nothing stacked over the
+  // card and a 0 px scrollbar, while the pixels there read the border's own colour, and the founder's
+  // Safari walk of d3112b8e (ruling 358) saw the border drawn at every width. A hit test that the
+  // scroller's own box catches measures hit-testing, not paint, so it is printed (`hit`, `band`,
+  // `stack`) and not asserted. The left border's hit test still is, as it always answered the card.
   const ok =
     e.card !== null &&
     e.within &&
     e.clearance > 0 &&
-    e.hit &&
     e.hitLeft &&
     !!px &&
     px.right.ok &&
