@@ -9251,3 +9251,16 @@ is approved: SPEC-56 approves the landing page's strings and none for the email.
 therefore ends the plain-text body with the bare URL on its own line after a blank line, and no
 words around it. Owed: the line's copy, under 387 and 1035's plain-text rule until Design draws a
 template. Owner: Chat, with Design.
+
+## G279. `matrix.yml` still names the macOS gate as `pages.yml`'s job
+
+**Severity: low. Opened 12 October 2026 by handoff 61-CI. The number is assigned by this entry
+(ruling 638).**
+
+Ruling 1735 moved `webkit-macos` from `pages.yml` to its own workflow, `webkit-macos.yml`, so that it
+runs from the `pull_request` event on a ready head only. The handoff held every job in `matrix.yml`
+unchanged, so two lines there still say "as pages.yml's webkit-macos job does": the `runner` input's
+description at line 73 and the comment at line 178. Both describe what the macOS runner lacks (no
+apt, no cores, no gdb), which is still true of the job where it now lives, so nothing reads them
+wrongly but a reader looking for the job. Owed: both lines name `webkit-macos.yml`. Owner: Code, on
+the next change that touches `matrix.yml`.

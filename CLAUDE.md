@@ -203,13 +203,18 @@ crashed is ever counted as passed (228). Ruling 832's one-arm stand-down is gone
 crash no retry proved exits 1. `CRASH_PROBE=<arm tag>` is the harness probe that proves the retry, off
 by default and never set by a workflow.
 
-The WebKit result that gates a merge is `pages.yml`'s `webkit-macos` job (ruling 1235): Playwright's
+The WebKit result that gates a merge is `webkit-macos.yml`'s `webkit-macos` job (ruling 1235): Playwright's
 WebKit on a macOS runner, the Mac port, which lacks G5's compositor, running `SPECIAL=gate`'s twenty-four
 arms (the sheets, the event page, the composer, sign-in, the Messenger composer's `.mov` under 1550, and the Messenger's reactions arm at both cells under 56-41E) at the deployment's own URL. The Linux
 `matrix (webkit)` job keeps running in full, and a crash there alone does not block a merge, because
 G5 is a Linux WPE compositor defect that Safari does not run (1234). This repository has no branch
 protection to encode that; Chat reads it here under 1114, and the founder's device check (61) stays
-the exit criterion.
+the exit criterion. The gate runs only on a head that is ready for review (1735): from the
+`pull_request` event, on every push to an open pull request that is not a draft and once when one is
+marked ready, against the deployment `pages.yml`'s push run uploaded for that head, found on Cloudflare
+by its SHA and branch at its own URL (1141), never a merge ref or the alias. On a draft's push, on a
+branch with no pull request and on `main` it reads as skipped, with its reason in the run's summary.
+So Chat reads it under 1114 on the ready head's run, never on a draft's.
 
 A diagnostic step that cannot fail the job announces its own degradation in the job summary (ruling
 850). `continue-on-error` is right for a step whose charter is to observe rather than to judge, and it

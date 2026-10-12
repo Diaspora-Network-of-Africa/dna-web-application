@@ -6,19 +6,22 @@
 #   push      pages.yml: the deployment the same run uploaded, at its own URL,
 #             https://<id>.dna-web-application.pages.dev.
 #   dispatch  matrix.yml and webkit-crash.yml: the base_url the dispatch names, which is required.
+#   pr        webkit-macos.yml (ruling 1735): the deployment pages.yml's push run uploaded for the
+#             pull request's head, at its own URL, found by scripts/gate-deployment.sh. HEAD_SHA
+#             names that head, because on a pull_request event GITHUB_SHA is the merge ref's commit.
 # Nothing here builds a host from the branch name. The one host a branch name gives is its alias, a
 # pointer Cloudflare moves between deployments, and on run 361 it answered 404 on every route for
 # about ninety minutes, across two deployments of one build, then cleared with nothing done. So an
 # empty BASE fails by name and is never a guess: on a push it means the deploy job returned no URL,
 # and on a dispatch it refuses the run.
 #
-# Usage: BASE=<url> KIND=push|dispatch scripts/host-tested.sh
+# Usage: BASE=<url> KIND=push|dispatch|pr [HEAD_SHA=<sha>] scripts/host-tested.sh
 # Writes url=<BASE without a trailing slash> to the step's GITHUB_OUTPUT.
 set -uo pipefail
 
 BASE="${BASE:-}"
 BASE="${BASE%/}"
-SHA="${GITHUB_SHA:-unknown}"
+SHA="${HEAD_SHA:-${GITHUB_SHA:-unknown}}"
 SUMMARY="${GITHUB_STEP_SUMMARY:-/dev/null}"
 
 case "${KIND:-}" in
@@ -30,8 +33,12 @@ case "${KIND:-}" in
     from="from the dispatch's \`base_url\`, read by the tests at \`$SHA\`"
     missing="this dispatch names no \`base_url\`, and no host is built from the branch name. Dispatch again with \`base_url\` set to the deployment's own URL, \`https://<id>.dna-web-application.pages.dev\`, which the Host tested block of the push run that uploaded it names."
     ;;
+  pr)
+    from="the deployment pages.yml's push run uploaded for this pull request's head, built from \`$SHA\`"
+    missing="no deployment of this pull request's head was found, so there is nothing to test."
+    ;;
   *)
-    echo "::error::scripts/host-tested.sh: KIND is push or dispatch, not '${KIND:-}'"
+    echo "::error::scripts/host-tested.sh: KIND is push, dispatch or pr, not '${KIND:-}'"
     exit 1
     ;;
 esac
