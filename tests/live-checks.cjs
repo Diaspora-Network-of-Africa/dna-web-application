@@ -1683,6 +1683,62 @@ async function get(url, headers = {}) {
   // pg client over LIVE_DB_URL as live_arms (ruling 382). tests/live-db.cjs builds every fixture
   // and rolls every transaction back; without the connection string each arm reports unproven.
   // -----------------------------------------------------------------------------------------
+  // Handoff 60-NC (G245, 1529; RFC 8058): the one-click route on the deployment itself. A GET is
+  // sent on to the landing page with the token and changes nothing; a POST with RFC 8058's body and
+  // a token no mint returned asks the database and answers expired (the database's own word for an
+  // unknown token, so the route and the function are both reached); a POST without the body is
+  // refused before the database is asked. The token-to-done path is the database arm in
+  // tests/live-db.cjs, because a live token exists only inside a rolled-back transaction (269).
+  {
+    const name =
+      "Handoff 60-NC (G245, 1529): /api/email/unsubscribe on the deployment redirects a GET to /email/unsubscribed with the token, answers expired to a one-click POST with an unknown token, and refuses a POST without RFC 8058's body";
+    try {
+      const unknown = "0".repeat(64);
+      const at = BASE + "/api/email/unsubscribe?token=" + unknown;
+      const g = await get(at);
+      const post = async (body) => {
+        const res = await fetch(at, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body,
+          redirect: "manual",
+        });
+        let state = null;
+        try {
+          state = (await res.json()).state;
+        } catch {
+          state = null;
+        }
+        return { status: res.status, state };
+      };
+      const one = await post("List-Unsubscribe=One-Click");
+      const bare = await post("");
+      record(
+        name,
+        g.status === 303 &&
+          g.headers.get("location") === "/email/unsubscribed?token=" + unknown &&
+          one.status === 200 &&
+          one.state === "expired" &&
+          bare.status === 400 &&
+          bare.state === "refused",
+        "GET " +
+          g.status +
+          " " +
+          g.headers.get("location") +
+          ", POST " +
+          one.status +
+          " " +
+          one.state +
+          ", bare POST " +
+          bare.status +
+          " " +
+          bare.state,
+      );
+    } catch (e) {
+      record(name, false, String(e && e.message ? e.message : e));
+    }
+  }
+
   await runLiveDbArms({ record, skip });
 
   const fails = results.filter((r) => !r.ok);

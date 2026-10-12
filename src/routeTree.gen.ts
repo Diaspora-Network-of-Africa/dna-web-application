@@ -26,9 +26,11 @@ import { Route as ESlugRouteImport } from './routes/e.$slug'
 import { Route as ResetNewRouteImport } from './routes/reset_.new'
 import { Route as XCodeRouteImport } from './routes/x.$code'
 import { Route as ShellConveneLensRouteImport } from './routes/_shell/convene.$lens'
+import { Route as ShellEmailUnsubscribedRouteImport } from './routes/_shell/email.unsubscribed'
 import { Route as ShellMHandleRouteImport } from './routes/_shell/m.$handle'
 import { Route as ShellMessagesThreadRouteImport } from './routes/_shell/messages.$thread'
 import { Route as ShellPostsIdRouteImport } from './routes/_shell/posts.$id'
+import { Route as ApiEmailUnsubscribeRouteImport } from './routes/api/email/unsubscribe'
 import { Route as ApiMessagesMediaRouteImport } from './routes/api/messages/media'
 import { Route as ShellConveneEventsIdRouteImport } from './routes/_shell/convene.events.$id'
 import { Route as ApiMessagesMediaIdRouteImport } from './routes/api/messages/media_.$id'
@@ -117,6 +119,11 @@ const ShellConveneLensRoute = ShellConveneLensRouteImport.update({
   path: '/$lens',
   getParentRoute: () => ShellConveneRoute,
 } as any)
+const ShellEmailUnsubscribedRoute = ShellEmailUnsubscribedRouteImport.update({
+  id: '/email/unsubscribed',
+  path: '/email/unsubscribed',
+  getParentRoute: () => ShellRoute,
+} as any)
 const ShellMHandleRoute = ShellMHandleRouteImport.update({
   id: '/m/$handle',
   path: '/m/$handle',
@@ -131,6 +138,11 @@ const ShellPostsIdRoute = ShellPostsIdRouteImport.update({
   id: '/posts/$id',
   path: '/posts/$id',
   getParentRoute: () => ShellRoute,
+} as any)
+const ApiEmailUnsubscribeRoute = ApiEmailUnsubscribeRouteImport.update({
+  id: '/api/email/unsubscribe',
+  path: '/api/email/unsubscribe',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMessagesMediaRoute = ApiMessagesMediaRouteImport.update({
   id: '/api/messages/media',
@@ -165,9 +177,11 @@ export interface FileRoutesByFullPath {
   '/reset/new': typeof ResetNewRoute
   '/x/$code': typeof XCodeRoute
   '/convene/$lens': typeof ShellConveneLensRoute
+  '/email/unsubscribed': typeof ShellEmailUnsubscribedRoute
   '/m/$handle': typeof ShellMHandleRoute
   '/messages/$thread': typeof ShellMessagesThreadRoute
   '/posts/$id': typeof ShellPostsIdRoute
+  '/api/email/unsubscribe': typeof ApiEmailUnsubscribeRoute
   '/api/messages/media': typeof ApiMessagesMediaRoute
   '/convene/events/$id': typeof ShellConveneEventsIdRoute
   '/api/messages/media/$id': typeof ApiMessagesMediaIdRoute
@@ -189,9 +203,11 @@ export interface FileRoutesByTo {
   '/reset/new': typeof ResetNewRoute
   '/x/$code': typeof XCodeRoute
   '/convene/$lens': typeof ShellConveneLensRoute
+  '/email/unsubscribed': typeof ShellEmailUnsubscribedRoute
   '/m/$handle': typeof ShellMHandleRoute
   '/messages/$thread': typeof ShellMessagesThreadRoute
   '/posts/$id': typeof ShellPostsIdRoute
+  '/api/email/unsubscribe': typeof ApiEmailUnsubscribeRoute
   '/api/messages/media': typeof ApiMessagesMediaRoute
   '/convene/events/$id': typeof ShellConveneEventsIdRoute
   '/api/messages/media/$id': typeof ApiMessagesMediaIdRoute
@@ -215,9 +231,11 @@ export interface FileRoutesById {
   '/reset_/new': typeof ResetNewRoute
   '/x/$code': typeof XCodeRoute
   '/_shell/convene/$lens': typeof ShellConveneLensRoute
+  '/_shell/email/unsubscribed': typeof ShellEmailUnsubscribedRoute
   '/_shell/m/$handle': typeof ShellMHandleRoute
   '/_shell/messages/$thread': typeof ShellMessagesThreadRoute
   '/_shell/posts/$id': typeof ShellPostsIdRoute
+  '/api/email/unsubscribe': typeof ApiEmailUnsubscribeRoute
   '/api/messages/media': typeof ApiMessagesMediaRoute
   '/_shell/convene/events/$id': typeof ShellConveneEventsIdRoute
   '/api/messages/media_/$id': typeof ApiMessagesMediaIdRoute
@@ -241,9 +259,11 @@ export interface FileRouteTypes {
     | '/reset/new'
     | '/x/$code'
     | '/convene/$lens'
+    | '/email/unsubscribed'
     | '/m/$handle'
     | '/messages/$thread'
     | '/posts/$id'
+    | '/api/email/unsubscribe'
     | '/api/messages/media'
     | '/convene/events/$id'
     | '/api/messages/media/$id'
@@ -265,9 +285,11 @@ export interface FileRouteTypes {
     | '/reset/new'
     | '/x/$code'
     | '/convene/$lens'
+    | '/email/unsubscribed'
     | '/m/$handle'
     | '/messages/$thread'
     | '/posts/$id'
+    | '/api/email/unsubscribe'
     | '/api/messages/media'
     | '/convene/events/$id'
     | '/api/messages/media/$id'
@@ -290,9 +312,11 @@ export interface FileRouteTypes {
     | '/reset_/new'
     | '/x/$code'
     | '/_shell/convene/$lens'
+    | '/_shell/email/unsubscribed'
     | '/_shell/m/$handle'
     | '/_shell/messages/$thread'
     | '/_shell/posts/$id'
+    | '/api/email/unsubscribe'
     | '/api/messages/media'
     | '/_shell/convene/events/$id'
     | '/api/messages/media_/$id'
@@ -309,6 +333,7 @@ export interface RootRouteChildren {
   ESlugRoute: typeof ESlugRoute
   ResetNewRoute: typeof ResetNewRoute
   XCodeRoute: typeof XCodeRoute
+  ApiEmailUnsubscribeRoute: typeof ApiEmailUnsubscribeRoute
   ApiMessagesMediaRoute: typeof ApiMessagesMediaRoute
   ApiMessagesMediaIdRoute: typeof ApiMessagesMediaIdRoute
 }
@@ -434,6 +459,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellConveneLensRouteImport
       parentRoute: typeof ShellConveneRoute
     }
+    '/_shell/email/unsubscribed': {
+      id: '/_shell/email/unsubscribed'
+      path: '/email/unsubscribed'
+      fullPath: '/email/unsubscribed'
+      preLoaderRoute: typeof ShellEmailUnsubscribedRouteImport
+      parentRoute: typeof ShellRoute
+    }
     '/_shell/m/$handle': {
       id: '/_shell/m/$handle'
       path: '/m/$handle'
@@ -454,6 +486,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/posts/$id'
       preLoaderRoute: typeof ShellPostsIdRouteImport
       parentRoute: typeof ShellRoute
+    }
+    '/api/email/unsubscribe': {
+      id: '/api/email/unsubscribe'
+      path: '/api/email/unsubscribe'
+      fullPath: '/api/email/unsubscribe'
+      preLoaderRoute: typeof ApiEmailUnsubscribeRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/messages/media': {
       id: '/api/messages/media'
@@ -512,6 +551,7 @@ interface ShellRouteChildren {
   ShellFeedRoute: typeof ShellFeedRoute
   ShellMessagesRoute: typeof ShellMessagesRouteWithChildren
   ShellPasswordRoute: typeof ShellPasswordRoute
+  ShellEmailUnsubscribedRoute: typeof ShellEmailUnsubscribedRoute
   ShellMHandleRoute: typeof ShellMHandleRoute
   ShellPostsIdRoute: typeof ShellPostsIdRoute
 }
@@ -523,6 +563,7 @@ const ShellRouteChildren: ShellRouteChildren = {
   ShellFeedRoute: ShellFeedRoute,
   ShellMessagesRoute: ShellMessagesRouteWithChildren,
   ShellPasswordRoute: ShellPasswordRoute,
+  ShellEmailUnsubscribedRoute: ShellEmailUnsubscribedRoute,
   ShellMHandleRoute: ShellMHandleRoute,
   ShellPostsIdRoute: ShellPostsIdRoute,
 }
@@ -540,6 +581,7 @@ const rootRouteChildren: RootRouteChildren = {
   ESlugRoute: ESlugRoute,
   ResetNewRoute: ResetNewRoute,
   XCodeRoute: XCodeRoute,
+  ApiEmailUnsubscribeRoute: ApiEmailUnsubscribeRoute,
   ApiMessagesMediaRoute: ApiMessagesMediaRoute,
   ApiMessagesMediaIdRoute: ApiMessagesMediaIdRoute,
 }

@@ -83,6 +83,22 @@ export function AppShell({
   const [theme, setTheme] = useTheme();
   const [account, setAccount] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const closeAccount = useCallback(() => setAccount(false), []);
+  // Handoff 60-NC (1557, SPEC 6.4): `?notifications=email`, validated by the shell route, opens the
+  // panel on its email view once; the panel calls back when it has, and the parameter is replaced
+  // away so a reload or a Back does not open it again.
+  const notificationsTo = useLocation({
+    select: (l) =>
+      (l.search as { notifications?: unknown }).notifications === "email" ? "email" : undefined,
+  });
+  const clearNotificationsTo = useCallback(() => {
+    const loc = router.state.location;
+    const rest = { ...(loc.search as Record<string, unknown>) };
+    delete rest["notifications"];
+    router.history.replace(
+      loc.pathname + router.options.stringifySearch(rest) + (loc.hash ? "#" + loc.hash : ""),
+    );
+  }, [router]);
   const composer = useComposerState();
   const leftRail = useLeftRail();
   const rightRail = useRightRail();
@@ -353,9 +369,11 @@ export function AppShell({
             <NotificationPanel
               member={member}
               tier={tier}
-              onOpen={() => setAccount(false)}
+              onOpen={closeAccount}
               onChange={setNotifOpen}
               closeKey={closeKey}
+              openTo={notificationsTo}
+              onOpenedTo={clearNotificationsTo}
             />
           </AppHeader>
         )}

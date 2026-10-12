@@ -419,6 +419,20 @@ const VOCAB = {
       renders: false,
     },
   ],
+  // Handoff 60-NC (1554, 1555): the two email vocabularies as 20261012120000 seeds them.
+  notification_email_modes: [
+    { value: "off", label: "Off" },
+    { value: "immediate", label: "Right away" },
+    { value: "digest", label: "Daily digest" },
+  ],
+  notification_categories: [
+    { value: "connect", label: "Connect" },
+    { value: "convene", label: "Convene" },
+    { value: "collaborate", label: "Collaborate" },
+    { value: "contribute", label: "Contribute" },
+    { value: "convey", label: "Convey" },
+    { value: "system", label: "Account" },
+  ],
 };
 
 /** The projection's ten lanes, in convene_lanes order (1092, 1105; 1124 adds Filling up, 1172 withdraws Browse). */
@@ -878,6 +892,21 @@ function makeMockDb() {
     post_media: [],
     post_links: [],
     notifications: [],
+    // Handoff 60-NC: the email view's answer as notification_email_view() gives it (no category
+    // carries copy, as today), the member's modes, and the forced failures the arms set.
+    notify: {
+      view: ["connect", "convene", "collaborate", "contribute", "convey", "system"].map((c) => ({
+        c,
+        has_copy: false,
+        mode: null,
+        email_default: null,
+      })),
+      saves: [],
+      markAll: 0,
+      failMarkAll: false,
+      failSave: false,
+      emptyEmailVocab: false,
+    },
     // Handoff 55-A: members a read by id answers, keyed by id (see the members table below).
     membersById: {},
     saves: [],
@@ -2035,6 +2064,32 @@ async function mockSupabase(page, db, opts = {}) {
       });
       return json(null, 204);
     }
+    // Handoff 60-NC (1556, 1553, 1552): Mark all read, the email view's read and a row's save, as
+    // the migrations answer them; a forced failure answers as PostgREST does.
+    if (p === "/rest/v1/rpc/notifications_mark_all_read") {
+      db.notify.markAll++;
+      await new Promise((r) => setTimeout(r, 150));
+      if (db.notify.failMarkAll)
+        return json({ code: "XX000", message: "forced failure", details: null, hint: null }, 500);
+      const at = new Date().toISOString();
+      db.notifications.forEach((n) => {
+        if (!n.read_at) n.read_at = at;
+      });
+      return json(null, 204);
+    }
+    if (p === "/rest/v1/rpc/notification_email_view") return json(db.notify.view);
+    if (p === "/rest/v1/rpc/set_notification_preference") {
+      const b = req.postDataJSON() || {};
+      await new Promise((r) => setTimeout(r, 150));
+      if (db.notify.failSave)
+        return json({ code: "XX000", message: "forced failure", details: null, hint: null }, 500);
+      if (!VOCAB.notification_email_modes.some((m) => m.value === b.p_mode))
+        return json({ code: "22023", message: "refused", details: null, hint: null }, 400);
+      db.notify.saves.push(b);
+      const row = db.notify.view.find((v) => v.c === b.p_c);
+      if (row) row.mode = b.p_mode;
+      return json(null, 204);
+    }
     if (p === "/rest/v1/rpc/connect_requests_pending") return json(db.connect.pending === true);
     if (p === "/rest/v1/rpc/mark_surface_seen") {
       const b = req.postDataJSON() || {};
@@ -2048,7 +2103,9 @@ async function mockSupabase(page, db, opts = {}) {
             { code: "PGRST", message: "forced vocabulary failure", details: null, hint: null },
             500,
           )
-        : json(VOCAB);
+        : db.notify.emptyEmailVocab
+          ? json({ ...VOCAB, notification_email_modes: [], notification_categories: [] })
+          : json(VOCAB);
     if (p === "/rest/v1/rpc/public_attestations") return json(ATTESTATIONS);
     if (p === "/rest/v1/rpc/save_profile_section") {
       const body = req.postDataJSON() || {};
@@ -7503,6 +7560,17 @@ if (require.main === module)
           for (const vp of process.env.ONLY ? [JSON.parse(process.env.ONLY)] : VIEWPORTS)
             for (const theme of process.env.THEME ? [process.env.THEME] : THEMES)
               await drive(runNotifyDots, bt, bname, vp, theme);
+          // Handoff 60-NC: the panel's controls at every cell, its flows and the landing page on
+          // the three tiers' representative cells.
+          const nc = require("./notify-controls.cjs");
+          for (const vp of process.env.ONLY ? [JSON.parse(process.env.ONLY)] : VIEWPORTS)
+            for (const theme of process.env.THEME ? [process.env.THEME] : THEMES)
+              await drive(nc.runNotifyControls, bt, bname, vp, theme);
+          for (const vp of process.env.ONLY ? [JSON.parse(process.env.ONLY)] : nc.FLOW_CELLS)
+            for (const theme of process.env.THEME ? [process.env.THEME] : THEMES) {
+              await drive(nc.runNotifyFlows, bt, bname, vp, theme);
+              await drive(nc.runUnsubscribed, bt, bname, vp, theme);
+            }
         }
         // Handoff 32-A item 5: the mount arms, one cell per tier (tests/mount.cjs).
         if (process.env.SPECIAL.includes("mount")) {
@@ -7718,6 +7786,16 @@ if (require.main === module)
       const { runNotifyDots } = require("./notify-dots.cjs");
       for (const vp of VIEWPORTS)
         for (const theme of THEMES) await drive(runNotifyDots, bt, bname, vp, theme);
+      // Handoff 60-NC: the panel's controls at every cell (61), its flows and the unsubscribe
+      // landing page on the compact, medium and expanded cells.
+      const nc = require("./notify-controls.cjs");
+      for (const vp of VIEWPORTS)
+        for (const theme of THEMES) await drive(nc.runNotifyControls, bt, bname, vp, theme);
+      for (const vp of nc.FLOW_CELLS)
+        for (const theme of THEMES) {
+          await drive(nc.runNotifyFlows, bt, bname, vp, theme);
+          await drive(nc.runUnsubscribed, bt, bname, vp, theme);
+        }
       // Brief 10 (handoff 30-C item 13): the member's event page at every cell, its flows on the
       // two representative layouts.
       const {

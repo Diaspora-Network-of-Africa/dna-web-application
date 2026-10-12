@@ -455,6 +455,15 @@ async function runLiveDbArms({ record, skip }) {
       "H60-MEDIA (1709, 141): member-test reads the media row a visible post's image names, and not an unlinked media row of another member",
     emojiAgree:
       "Fix PR 10 item 3 (1621, 1613): every message_reaction_emoji row outside the quick eight carries emojibase 17.0.0's English label capitalised as src/lib/emoji.ts capitalises it, and the eight quick rows hold positions 1 to 8",
+    nc: "Handoff 60-NC (1554, Finding 1): set_notification_preference refuses a mode outside notification_email_modes with 22023 and takes one inside it, and the two check constraints are foreign keys to the vocabulary",
+    ncCategories:
+      "Handoff 60-NC (1555, Finding 2): notification_categories' keys are c_category's labels, every one, in the enum's order, and vocabularies() serves both email vocabularies",
+    ncView:
+      "Handoff 60-NC (1553, 1560): with connection_request given copy, notification_email_view answers Connect with copy and the shared default off and no other category with copy, and a mode saved through set_notification_preference reads back",
+    ncToken:
+      "Handoff 60-NC (G245, 1529, 1572): a token email_unsubscribe_mint returns for the outbox row a notification enqueued turns every category off for its member on email_unsubscribe as anon, and the same token a second time answers expired and changes nothing",
+    ncTokenAged:
+      "Handoff 60-NC (G245, 1572): a token 61 days old answers expired and leaves the member's modes as they were",
   };
   // G143: a block that opens with a presence probe carries every arm it holds in `names`, under one key
   // prefix, so a probe that fails reports each of them UNPROVEN and the job's total does not fall with
@@ -6753,6 +6762,292 @@ async function runLiveDbArms({ record, skip }) {
               unreadBefore +
               " then " +
               unreadLeft,
+          );
+        });
+      }
+    }
+    // ------------------------------------------------------------------------------------------
+    // Handoff 60-NC (20261012120000): the email vocabularies, the email view's read, and the
+    // one-click token from mint to use. One presence probe for the block, so before the apply every
+    // arm reports UNPROVEN (G143, 228). Every arm is its own rolled-back transaction (269); the
+    // fixtures go through the canonical paths: copy on connection_request through live_arms' column
+    // grant, the member's mode through set_notification_preference, the notification and its outbox
+    // row through send_introduction and private.notify, the token through email_unsubscribe_mint.
+    // ------------------------------------------------------------------------------------------
+    {
+      const cfmt = (r) => (r.ok ? "answered" : r.code + " " + r.message);
+      await actAsSelf(client);
+      const present = await client.query(
+        "select to_regprocedure('public.email_unsubscribe(text)') is not null and exists (select 1 from supabase_migrations.schema_migrations where version = '20261012120000') as ok",
+      );
+      if (!present.rows[0] || present.rows[0].ok !== true) {
+        for (const n of armsOf("nc"))
+          skip(
+            n,
+            "20261012120000 is not on the project yet (Chat applies it before the enforcing run)",
+          );
+      } else {
+        const strangers =
+          "the two test accounts are not strangers, so send_introduction refuses by design";
+        const giveCopy = async () => {
+          await actAsSelf(client);
+          return attempt(
+            client,
+            "update public.notification_kinds set email_subject = 'Live arm subject', email_line = 'Live arm line.' where kind = 'connection_request'",
+          );
+        };
+        const setMode = async (c, mode) => {
+          await actAs(client, member.id);
+          return attempt(client, "select public.set_notification_preference($1, 'email', $2)", [
+            c,
+            mode,
+          ]);
+        };
+        const modesOf = async () => {
+          await actAs(client, member.id);
+          const r = await attempt(
+            client,
+            "select c::text as c, mode from public.notification_preferences where member_id = $1::uuid and channel = 'email' order by c",
+            [member.id],
+          );
+          return r.ok ? Object.fromEntries(r.rows.map((x) => [x.c, x.mode])) : null;
+        };
+        /** The member's connect mode immediate, then owner-test's introduction: one outbox row. */
+        const enqueue = async () => {
+          const copy = await giveCopy();
+          const mode = await setMode("connect", "immediate");
+          await actAs(client, owner.id);
+          const intro = await attempt(client, "select public.send_introduction($1, $2) as id", [
+            member.id,
+            "Handoff 60-NC live arm. Rolled back by the same run.",
+          ]);
+          if (!copy.ok || !mode.ok || !intro.ok) return { ok: false, copy, mode, intro };
+          await actAsSelf(client);
+          const row = await attempt(
+            client,
+            "select o.id from private.notification_outbox o where o.member_id = $1::uuid and o.mode = 'immediate' order by o.id limit 1",
+            [member.id],
+          );
+          return row.ok && row.rows[0]
+            ? { ok: true, outbox: row.rows[0].id }
+            : { ok: false, copy, mode, intro, row };
+        };
+        const mint = async (outbox) => {
+          await actAsSelf(client);
+          return attempt(client, "select public.email_unsubscribe_mint($1::uuid) as t", [outbox]);
+        };
+        const consume = async (token) => {
+          await actAsSelf(client);
+          await client.query("set local role anon");
+          const r = await attempt(client, "select public.email_unsubscribe($1) as s", [token]);
+          await actAsSelf(client);
+          return r;
+        };
+        const enqueueWhy = (e) =>
+          e.intro && !e.intro.ok && /not available/.test(e.intro.message || "")
+            ? strangers
+            : "fixture: copy " +
+              cfmt(e.copy) +
+              ", mode " +
+              cfmt(e.mode) +
+              ", introduction " +
+              cfmt(e.intro) +
+              (e.row ? ", outbox " + (e.row.ok ? "no row" : cfmt(e.row)) : "");
+
+        // 1. One owner of the mode set (Finding 1).
+        await inTransaction(client, async () => {
+          const bad = await setMode("connect", "weekly");
+          const good = await setMode("connect", "digest");
+          const after = await modesOf();
+          await actAsSelf(client);
+          const keys = await attempt(
+            client,
+            "select conname::text as n from pg_constraint where conname in ('notification_preferences_mode_check', 'notification_kinds_email_default_check', 'notification_preferences_mode_fkey', 'notification_kinds_email_default_fkey') order by 1",
+          );
+          const found = keys.ok ? keys.rows.map((x) => x.n) : [];
+          record(
+            names.nc,
+            !bad.ok &&
+              bad.code === "22023" &&
+              good.ok &&
+              after &&
+              after.connect === "digest" &&
+              found.join() ===
+                "notification_kinds_email_default_fkey,notification_preferences_mode_fkey",
+            "weekly " +
+              cfmt(bad) +
+              ", digest " +
+              cfmt(good) +
+              ", constraints " +
+              JSON.stringify(found),
+          );
+        });
+
+        // 2. The categories are the enum (Finding 2), and vocabularies() serves both.
+        await inTransaction(client, async () => {
+          await actAs(client, member.id);
+          const r = await attempt(
+            client,
+            "select (select array_agg(c.value::text order by c.position) from public.notification_categories c) as keys, (select array_agg(x::text order by x) from unnest(enum_range(null::public.c_category)) x) as labels, (select count(*)::int from public.notification_categories c where c.value::text not in (select unnest(enum_range(null::public.c_category))::text)) as outside, public.vocabularies() -> 'notification_email_modes' as modes, public.vocabularies() -> 'notification_categories' as cats",
+          );
+          const row = r.ok ? r.rows[0] : {};
+          record(
+            names.ncCategories,
+            r.ok &&
+              JSON.stringify(row.keys) === JSON.stringify(row.labels) &&
+              row.outside === 0 &&
+              Array.isArray(row.modes) &&
+              row.modes.map((m) => m.value).join() === "off,immediate,digest" &&
+              Array.isArray(row.cats) &&
+              row.cats.map((m) => m.value).join() === (row.labels || []).join(),
+            r.ok
+              ? "keys " +
+                  JSON.stringify(row.keys) +
+                  ", enum " +
+                  JSON.stringify(row.labels) +
+                  ", outside " +
+                  row.outside +
+                  ", modes " +
+                  JSON.stringify((row.modes || []).map((m) => m.label))
+              : cfmt(r),
+          );
+        });
+
+        // 3. The email view's one read and its write read back (1553, 1560, 1552).
+        await inTransaction(client, async () => {
+          await actAs(client, member.id);
+          const before = await attempt(client, "select public.notification_email_view() as v");
+          const copy = await giveCopy();
+          await actAs(client, member.id);
+          const seeded = await attempt(client, "select public.notification_email_view() as v");
+          const saved = await setMode("connect", "digest");
+          await actAs(client, member.id);
+          const after = await attempt(client, "select public.notification_email_view() as v");
+          await client.query("set local role anon");
+          const anon = await attempt(client, "select public.notification_email_view() as v");
+          await actAsSelf(client);
+          const byC = (r) =>
+            r.ok && Array.isArray(r.rows[0].v)
+              ? Object.fromEntries(r.rows[0].v.map((e) => [e.c, e]))
+              : {};
+          const b = byC(before);
+          const s1 = byC(seeded);
+          const a = byC(after);
+          const withCopy = (m) =>
+            Object.values(m)
+              .filter((e) => e.has_copy)
+              .map((e) => e.c);
+          record(
+            names.ncView,
+            copy.ok &&
+              Object.keys(s1).length === 6 &&
+              withCopy(b).length === 0 &&
+              withCopy(s1).join() === "connect" &&
+              s1.connect.email_default === "off" &&
+              s1.connect.mode === null &&
+              saved.ok &&
+              a.connect &&
+              a.connect.mode === "digest" &&
+              !anon.ok &&
+              anon.code === "42501",
+            "before " +
+              JSON.stringify(withCopy(b)) +
+              ", seeded " +
+              JSON.stringify(s1.connect || null) +
+              ", saved " +
+              cfmt(saved) +
+              ", after " +
+              JSON.stringify(a.connect || null) +
+              ", anon " +
+              cfmt(anon),
+          );
+        });
+
+        // 4. Mint, use, use again.
+        await inTransaction(client, async () => {
+          const e = await enqueue();
+          if (!e.ok) return skip(names.ncToken, enqueueWhy(e));
+          const m = await mint(e.outbox);
+          const token = m.ok ? m.rows[0].t : null;
+          const first = token ? await consume(token) : null;
+          const modes = await modesOf();
+          const second = token ? await consume(token) : null;
+          const after = await modesOf();
+          await actAsSelf(client);
+          const row = await attempt(
+            client,
+            "select used_at is not null as used, expires_at = created_at + interval '60 days' as sixty from private.email_unsubscribe_tokens where outbox_id = $1::uuid",
+            [e.outbox],
+          );
+          const allOff =
+            !!modes &&
+            ["collaborate", "connect", "contribute", "convene", "convey", "system"].every(
+              (c) => modes[c] === "off",
+            );
+          record(
+            names.ncToken,
+            !!token &&
+              /^[0-9a-f]{64}$/.test(token) &&
+              first &&
+              first.ok &&
+              first.rows[0].s === "done" &&
+              allOff &&
+              second &&
+              second.ok &&
+              second.rows[0].s === "expired" &&
+              JSON.stringify(after) === JSON.stringify(modes) &&
+              row.ok &&
+              row.rows[0] &&
+              row.rows[0].used === true &&
+              row.rows[0].sixty === true,
+            "mint " +
+              cfmt(m) +
+              ", first " +
+              (first ? (first.ok ? first.rows[0].s : cfmt(first)) : "none") +
+              ", modes " +
+              JSON.stringify(modes) +
+              ", second " +
+              (second ? (second.ok ? second.rows[0].s : cfmt(second)) : "none") +
+              ", row " +
+              JSON.stringify(row.ok ? row.rows[0] : cfmt(row)),
+          );
+        });
+
+        // 5. A token 61 days old, the negative control for 4 (270).
+        await inTransaction(client, async () => {
+          const e = await enqueue();
+          if (!e.ok) return skip(names.ncTokenAged, enqueueWhy(e));
+          const m = await mint(e.outbox);
+          const token = m.ok ? m.rows[0].t : null;
+          await actAsSelf(client);
+          const aged = await attempt(
+            client,
+            "update private.email_unsubscribe_tokens set created_at = now() - interval '61 days', expires_at = now() - interval '1 day' where outbox_id = $1::uuid",
+            [e.outbox],
+          );
+          const before = await modesOf();
+          const r = token ? await consume(token) : null;
+          const after = await modesOf();
+          record(
+            names.ncTokenAged,
+            !!token &&
+              aged.ok &&
+              r &&
+              r.ok &&
+              r.rows[0].s === "expired" &&
+              before &&
+              before.connect === "immediate" &&
+              JSON.stringify(after) === JSON.stringify(before),
+            "mint " +
+              cfmt(m) +
+              ", age " +
+              cfmt(aged) +
+              ", answer " +
+              (r ? (r.ok ? r.rows[0].s : cfmt(r)) : "none") +
+              ", modes " +
+              JSON.stringify(before) +
+              " then " +
+              JSON.stringify(after),
           );
         });
       }

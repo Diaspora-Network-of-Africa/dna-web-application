@@ -42,7 +42,11 @@ function ShellLayout() {
   // its own signed-out chrome, as does the owner's "View as public" (?as=public), so the shell steps
   // aside for both instead of redirecting to sign-in.
   const profilePath = pathname.startsWith("/m/");
-  const bare = profilePath && (!member || search.as === "public");
+  // Handoff 60-NC (1557): /email/unsubscribed is reached from an email, signed out as often as in.
+  // Signed out it renders its own system page outside the chrome; signed in it is a shell route.
+  const unsubscribedPath = pathname === "/email/unsubscribed";
+  const bare =
+    (profilePath && (!member || search.as === "public")) || (unsubscribedPath && !member);
   const tier = useTier();
   const { seed } = useComposerState();
   const [toast, setToast] = useState<string | null>(null);
@@ -52,8 +56,9 @@ function ShellLayout() {
   // redirect, which would drop the search the first one carried (?join=1).
   const leavingShell = pathname === "/sign-in";
   useEffect(() => {
-    if (ready && !member && !profilePath && !leavingShell) void navigate({ to: "/sign-in" });
-  }, [ready, member, profilePath, leavingShell, navigate]);
+    if (ready && !member && !profilePath && !unsubscribedPath && !leavingShell)
+      void navigate({ to: "/sign-in" });
+  }, [ready, member, profilePath, unsubscribedPath, leavingShell, navigate]);
 
   // Publishing returns to Feed on All and toasts for 2.6s (SPEC section 3); the composer itself
   // never navigates (ruling 52), the shell does.

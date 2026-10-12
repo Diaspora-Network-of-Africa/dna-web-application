@@ -36,18 +36,27 @@ import {
   type Provider,
 } from "@/lib/auth-flow";
 import { recoveryPending } from "@/lib/recovery";
+import { readSignInNext, type SignInNext } from "@/lib/sign-in-next";
 import { getSupabase } from "@/lib/supabase";
 import { useTheme } from "@/lib/tier";
+
+export type SignInSearch = { join?: boolean; email?: string; next?: SignInNext };
 
 export const Route = createFileRoute("/sign-in")({
   // ?join=1 opens the form in its sign-up state (the public profile's "Join DNA", Brief 3).
   // ?email= prefills the address (handoff 30-D item 8.5: the guest's "Create an account" arrives
   // here, on the one sign-up path, with the address the link named).
-  validateSearch: (search: Record<string, unknown>): { join?: boolean; email?: string } => {
-    const out: { join?: boolean; email?: string } = {};
+  // ?next=email-preferences (handoff 60-NC, 1557): after sign-in the member lands on the
+  // notification panel's email view. That exact word is the only value kept and it maps to one
+  // destination (src/lib/sign-in-next.ts); the parameter never carries a URL, so it cannot redirect
+  // off the app.
+  validateSearch: (search: Record<string, unknown>): SignInSearch => {
+    const out: SignInSearch = {};
     if (search["join"] === true || search["join"] === "1" || search["join"] === 1) out.join = true;
     const email = typeof search["email"] === "string" ? search["email"].trim() : "";
     if (email && email.length <= 254 && email.includes("@")) out.email = email;
+    const next = readSignInNext(search["next"]);
+    if (next) out.next = next;
     return out;
   },
   component: SignIn,
@@ -56,7 +65,7 @@ export const Route = createFileRoute("/sign-in")({
 function SignIn() {
   const { ready, member } = useAuth();
   const navigate = useNavigate();
-  const { join, email: prefill } = Route.useSearch();
+  const { join, email: prefill, next } = Route.useSearch();
   useTheme();
   const [mode, setMode] = useState<"in" | "up">(join ? "up" : "in");
   // The form's state, in the shared hook: email, password, the alert and status lines, the field
@@ -83,8 +92,13 @@ function SignIn() {
   // Ruling 240: a recovery session is held at /reset/new by the gate in the root route, so this
   // route must not race it to the Feed.
   useEffect(() => {
-    if (ready && member && !recoveryPending()) void navigate({ to: "/feed", search: {} });
-  }, [ready, member, navigate]);
+    if (!ready || !member || recoveryPending()) return;
+    void navigate(
+      next === "email-preferences"
+        ? { to: "/feed", search: { notifications: "email" } }
+        : { to: "/feed", search: {} },
+    );
+  }, [ready, member, navigate, next]);
 
   const onProvider = async (p: Provider) => {
     clear();

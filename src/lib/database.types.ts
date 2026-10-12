@@ -1,4 +1,16 @@
 // Regenerated from the canonical Supabase project (dgspjevjoblujcoljvkn) with the Supabase MCP
+// generate_typescript_types tool on handoff H60-NC's branch, on main at bff0906 (the merge of #108),
+// after the founder applied 20261012120000 by SQL Editor paste and Chat read it back at 20:47 PDT on
+// 11 October 2026 with the recorded drift md5 equal to the file (c1eb7f559903792583938a29c403f950);
+// 114 rows in schema_migrations, head 20261012120000_h60_nc_notification_controls. What it changes
+// here: `notification_categories` and `notification_email_modes` (Row, Insert, Update);
+// `notification_kinds` and `notification_preferences` each gain the foreign key to
+// `notification_email_modes`; `email_unsubscribe`, `email_unsubscribe_mint` and
+// `notification_email_view` join Functions. Nothing else moves. `export type Views` is restored by
+// hand after every regeneration (CLAUDE.md).
+//
+// Before H60-NC:
+// Regenerated from the canonical Supabase project (dgspjevjoblujcoljvkn) with the Supabase MCP
 // generate_typescript_types tool on handoff H60-MEDIA's branch, on main at d0ac9fe (the merge of
 // #106), after Chat applied 20261010180000 through execute_sql at 17:40 PDT on 10 October 2026 with
 // the recorded statement md5 equal to the file (f97d7bcef5878c8d725504f73efaf096); 113 rows in
@@ -2786,6 +2798,42 @@ export type Database = {
         };
         Relationships: [];
       };
+      notification_categories: {
+        Row: {
+          label: string;
+          position: number;
+          value: Database["public"]["Enums"]["c_category"];
+        };
+        Insert: {
+          label: string;
+          position: number;
+          value: Database["public"]["Enums"]["c_category"];
+        };
+        Update: {
+          label?: string;
+          position?: number;
+          value?: Database["public"]["Enums"]["c_category"];
+        };
+        Relationships: [];
+      };
+      notification_email_modes: {
+        Row: {
+          label: string;
+          position: number;
+          value: string;
+        };
+        Insert: {
+          label: string;
+          position: number;
+          value: string;
+        };
+        Update: {
+          label?: string;
+          position?: number;
+          value?: string;
+        };
+        Relationships: [];
+      };
       notification_kinds: {
         Row: {
           c: Database["public"]["Enums"]["c_category"] | null;
@@ -2829,7 +2877,15 @@ export type Database = {
           renders?: boolean;
           transactional?: boolean;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "notification_kinds_email_default_fkey";
+            columns: ["email_default"];
+            isOneToOne: false;
+            referencedRelation: "notification_email_modes";
+            referencedColumns: ["value"];
+          },
+        ];
       };
       notification_preferences: {
         Row: {
@@ -2853,7 +2909,15 @@ export type Database = {
           mode?: string;
           updated_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_mode_fkey";
+            columns: ["mode"];
+            isOneToOne: false;
+            referencedRelation: "notification_email_modes";
+            referencedColumns: ["value"];
+          },
+        ];
       };
       notifications: {
         Row: {
@@ -4300,6 +4364,8 @@ export type Database = {
         Returns: undefined;
       };
       dismiss_suggestion: { Args: { p_target: string }; Returns: undefined };
+      email_unsubscribe: { Args: { p_token: string }; Returns: string };
+      email_unsubscribe_mint: { Args: { p_outbox_id: string }; Returns: string };
       event_alias_check: {
         Args: { p_alias: string; p_event: string };
         Returns: string;
@@ -4649,6 +4715,7 @@ export type Database = {
         Args: { p_act: string; p_lane: string };
         Returns: undefined;
       };
+      notification_email_view: { Args: never; Returns: Json };
       notifications_dot: { Args: never; Returns: boolean };
       notifications_mark_all_read: { Args: never; Returns: undefined };
       notifications_mark_seen: { Args: never; Returns: undefined };
