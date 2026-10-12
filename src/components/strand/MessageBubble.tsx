@@ -12,7 +12,9 @@
 // touch a 450 ms long press opens the menu on the bubble and the tap that follows is swallowed
 // (src/lib/long-press.ts). `focused` draws the 2px ring a search result or the pinned strip lands on.
 // A pressed glyph, and the glyph that lands in the reaction row, pop once (`b14-pop`, nothing under
-// reduced motion). The bar scrolls sideways at 390 to reach More (1586) and never wraps.
+// reduced motion). The bar scrolls sideways at 390 to reach More (1586) and never wraps. The
+// caller closes the bar (1739): the hover cluster's React carries `data-react-toggle` so a press on
+// it toggles rather than counting as a tap outside.
 import { Fragment, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Button } from "./Button";
 import { IconButton } from "./IconButton";
@@ -398,7 +400,7 @@ export function MessageBubble({
           </Button>
         )}
         {onReact && (
-          <Button variant="ghost" size="sm" onClick={onReact}>
+          <Button variant="ghost" size="sm" onClick={onReact} data-react-toggle>
             React
           </Button>
         )}
