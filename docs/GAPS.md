@@ -8619,7 +8619,7 @@ handoff, which says it is later and wins where the two differ. Owed: the contrac
 
 ---
 
-## G245. No one-click unsubscribe endpoint exists, so a digest is never sent
+## G245. No one-click unsubscribe endpoint exists, so a digest is never sent — closed (handoff 60-NC)
 
 **Severity: moderate once copy ships. Opened 8 October 2026 during handoff 55-A. The number is
 assigned by this entry (ruling 638).**
@@ -8629,6 +8629,18 @@ must name an HTTPS endpoint that unsubscribes on one POST. None exists, so `noti
 digest row `skipped` with `no_one_click_unsubscribe` rather than send it without the pair;
 `sendMail` already takes headers. Owed: a ruling on what one click turns off (the C's email, or all
 digest mail), a signed per-member link, the endpoint, and the header on digests.
+
+**Closed 11 October 2026 by handoff 60-NC (#109), in the commit that writes this paragraph.**
+Ruling 1529 settled what one click turns off: every non-transactional email, every category to
+off. `20261012120000` adds `private.email_unsubscribe_tokens` (a sha256 of the token, the member,
+the outbox row, a 60-day expiry, row security on and no client grants), `email_unsubscribe_mint`
+(service role) and `email_unsubscribe` (the publishable key). `/api/email/unsubscribe` answers RFC
+8058's POST and changes nothing on a GET, and `/email/unsubscribed` sends the same POST on load.
+`notify-deliver` mints before `sendMail` and passes `List-Unsubscribe` and `List-Unsubscribe-Post`
+on every non-transactional email, immediate or digest, and neither on transactional mail (477), so
+a digest is no longer settled `skipped` with `no_one_click_unsubscribe`. Delivery itself is not
+proven: W96 (Resend SMTP 535) is parked, and the header arm reads the call to `sendMail`, never a
+sent message. G275 to G278 record what this left open.
 
 ---
 
@@ -9192,3 +9204,50 @@ blocks bind them, and `BodyBlocks` is rendered by no surface (G269), so no membe
 The handoff names Strand items for the discovery face, `ProfileHeader` and the composer's tile, and
 none for these. Closes when Chat names the item that brings them under 1714, and before any surface
 binds `BodyBlocks`. Owner: Chat.
+
+## G275. A digest is one message per notification: no copy is approved for a combined digest
+
+**Severity: low while no kind carries copy (1520). Opened 11 October 2026 by handoff 60-NC Work 6.
+The number is assigned by this entry (ruling 638).**
+
+Closing G245 stopped `notify-deliver` skipping digest rows. Each digest row now goes at its due time
+(the member's next 08:00) as its own message with its kind's own subject and line, because there is
+no approved subject or framing for a message that gathers a member's day into one. A member on Daily
+digest with five rows due gets five emails at 08:00. Owed: Design's copy for the combined digest,
+then `deliver.ts` groups a member's due digest rows into one message carrying one token. Owner:
+Chat, with Design.
+
+## G276. Sign-in through Google or LinkedIn drops `next=email-preferences`
+
+**Severity: low. Opened 11 October 2026 by handoff 60-NC Work 5. The number is assigned by this
+entry (ruling 638).**
+
+`/sign-in` maps `next=email-preferences` to the notification panel's email view when the member signs
+in with an email and password, because the route itself navigates on the session. A provider round
+trip leaves the page and returns to `/feed` through `startProvider`'s own redirect, which carries no
+`next`, so a member who follows the unsubscribe page's link and signs in with a provider lands on the
+Feed without the panel open. Closes when the provider redirect carries the same one-word value, or
+when Settings takes the control over (1552) and the destination is a route. Owner: Code, by Chat's
+brief.
+
+## G277. Nothing purges `private.email_unsubscribe_tokens`
+
+**Severity: low. Opened 11 October 2026 by handoff 60-NC. The number is assigned by this entry
+(ruling 638).**
+
+A token row stays after its 60-day expiry and after use. It goes only by cascade, when its outbox
+row goes with its notification under the 180-day read purge (1324), so a token for a notification
+that is never read is never removed. The row holds a hash and no address, and an expired token
+answers `expired`, so nothing it holds is usable; the cost is growth. Owed: a retention ruling and a
+purge beside `dna_notifications_purge_daily`. Owner: Chat.
+
+## G278. The unsubscribe link in an email's body has no approved words
+
+**Severity: low while no kind carries copy (1520). Opened 11 October 2026 by handoff 60-NC Work 6.
+The number is assigned by this entry (ruling 638).**
+
+The handoff asks that the body link to `/email/unsubscribed` with the token, and no sentence for it
+is approved: SPEC-56 approves the landing page's strings and none for the email. `deliver.ts`
+therefore ends the plain-text body with the bare URL on its own line after a blank line, and no
+words around it. Owed: the line's copy, under 387 and 1035's plain-text rule until Design draws a
+template. Owner: Chat, with Design.

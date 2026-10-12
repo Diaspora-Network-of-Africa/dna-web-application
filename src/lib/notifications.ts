@@ -7,7 +7,7 @@
 // each kind's C and destination, are the notification_kinds vocabulary's (1318).
 import { hasSentence } from "@/components/strand/NotificationListItem";
 import { C_ORDER, type C } from "@/components/strand/cmeta";
-import type { Tables } from "./database.types";
+import type { Database, Tables } from "./database.types";
 import { getSupabase } from "./supabase";
 import { loadVocabularies, type NotificationKindRow } from "./vocabularies";
 import { whenLabel } from "./when";
@@ -234,5 +234,66 @@ export async function markRead(id: string): Promise<void> {
     .update({ read_at: new Date().toISOString() })
     .eq("id", id)
     .is("read_at", null);
+  if (error) throw error;
+}
+
+/**
+ * Mark all read (1556): the caller's unread rows become read through notifications_mark_all_read(),
+ * which takes no member. Throws on a refusal so the panel can keep the rows' weight and say so.
+ */
+export async function markAllRead(): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) throw new Error("no client");
+  const { error } = await sb.rpc("notifications_mark_all_read");
+  if (error) throw error;
+}
+
+/**
+ * One email category as notification_email_view() answers it for the caller (1553, 1560): whether a
+ * non-transactional kind with a fixed C carries copy, the member's own mode, and the default that
+ * every such kind shares (null when they differ or there are none). Labels are never here; they are
+ * the notification_categories and notification_email_modes vocabularies' (1554, 1555).
+ */
+export type EmailCategory = {
+  c: string;
+  hasCopy: boolean;
+  mode: string | null;
+  emailDefault: string | null;
+};
+
+/** The email view's one read (1553). Throws on a failed read; a malformed entry is dropped. */
+export async function loadEmailView(): Promise<EmailCategory[]> {
+  const sb = getSupabase();
+  if (!sb) throw new Error("no client");
+  const { data, error } = await sb.rpc("notification_email_view");
+  if (error) throw error;
+  if (!Array.isArray(data)) return [];
+  const out: EmailCategory[] = [];
+  for (const v of data) {
+    if (!v || typeof v !== "object" || Array.isArray(v)) continue;
+    const r = v as Record<string, unknown>;
+    if (typeof r["c"] !== "string") continue;
+    out.push({
+      c: r["c"],
+      hasCopy: r["has_copy"] === true,
+      mode: typeof r["mode"] === "string" ? r["mode"] : null,
+      emailDefault: typeof r["email_default"] === "string" ? r["email_default"] : null,
+    });
+  }
+  return out;
+}
+
+/** The one query key the email view's read and its saves share. */
+export const emailViewKey = (memberId: string) => ["notification-email", memberId] as const;
+
+/** One row's save (1552): the caller's mode for one category on the email channel. */
+export async function setEmailMode(c: string, mode: string): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) throw new Error("no client");
+  const { error } = await sb.rpc("set_notification_preference", {
+    p_c: c as Database["public"]["Enums"]["c_category"],
+    p_channel: "email",
+    p_mode: mode,
+  });
   if (error) throw error;
 }

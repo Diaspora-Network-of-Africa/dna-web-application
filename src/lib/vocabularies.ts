@@ -82,6 +82,16 @@ export type Vocabularies = {
    * kind map; the row's C and its destination line come from here.
    */
   notification_kinds: NotificationKindRow[];
+  /**
+   * Handoff 60-NC (1554): the email modes in the order the email view's Segment shows them. The one
+   * owner of the mode set; no component keeps a mode label.
+   */
+  notification_email_modes: { value: string; label: string }[];
+  /**
+   * Handoff 60-NC (1555): the email categories, the five Cs then system, keyed by c_category. The
+   * email view's row labels come from here.
+   */
+  notification_categories: { value: string; label: string }[];
 };
 
 /**
