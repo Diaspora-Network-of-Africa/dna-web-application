@@ -27,6 +27,14 @@ const ACTOR = {
 };
 const TOKEN = "a".repeat(64);
 
+/** As tests/mount.cjs reads them (ruling 357): WebKit's refusal of a mocked fetch the page cancelled
+ *  on navigation, the sandbox's and never the app's. The landing page arm leaves the Feed for
+ *  /email/unsubscribed and back while the Feed's reads are in flight, and those end this way. */
+const SB_RE = M.SB.replace(/\./g, "\\.");
+const CANCELLED_MOCK_FETCH = new RegExp(
+  `(?:^|[\\s/])${SB_RE}\\S*\\s+due to access control checks\\.?$`,
+);
+
 const row = (id, kind, minutes) => ({
   id,
   recipient_member_id: M.UID,
@@ -79,7 +87,10 @@ async function open(browserType, [w, h], theme) {
     { theme },
   );
   const errors = [];
-  page.on("pageerror", (e) => errors.push(String(e.message || e)));
+  page.on("pageerror", (e) => {
+    const text = String(e.message || e);
+    if (!CANCELLED_MOCK_FETCH.test(text)) errors.push(text);
+  });
   return { browser, page, errors };
 }
 
