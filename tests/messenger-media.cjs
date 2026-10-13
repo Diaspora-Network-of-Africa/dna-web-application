@@ -429,7 +429,12 @@ async function runMessengerMedia(browserType, bname) {
       early ? await describe(early) : "no WebM id",
     );
 
-    // 12. Mark both through messenger_delete, then DELETE each.
+    // 12. Mark and DELETE one row at a time: messenger_delete the JPEG, DELETE it, then the same
+    //     for the WebM. Never both marks first: every DELETE sweeps up to twenty older marked rows
+    //     (F4), so once the project's backlog is short the JPEG's sweep would take the WebM's row
+    //     before the WebM's own DELETE asked for it, and that DELETE would read 404 (G280's drain
+    //     did exactly that on run 589, `removed: 2` then `not_found`). A row the arm has not yet
+    //     marked is one the sweep cannot reach.
     const sentWebm = webmId
       ? await rpc(owner.token, "messenger_send", {
           p_thread: thread,
@@ -444,11 +449,11 @@ async function runMessengerMedia(browserType, bname) {
     const delJpegMsg = jpegMessage
       ? await rpc(owner.token, "messenger_delete", { p_message: jpegMessage })
       : { status: 0, body: null, text: "no JPEG message" };
+    const rmJpeg = await media(owner.token, "DELETE", `/api/messages/media/${jpegId}`);
+    const rmJpegBody = await rmJpeg.json().catch(() => null);
     const delWebmMsg = webmMessage
       ? await rpc(owner.token, "messenger_delete", { p_message: webmMessage })
       : { status: 0, body: null, text: "no WebM message" };
-    const rmJpeg = await media(owner.token, "DELETE", `/api/messages/media/${jpegId}`);
-    const rmJpegBody = await rmJpeg.json().catch(() => null);
     const rmWebm = webmId
       ? await media(owner.token, "DELETE", `/api/messages/media/${webmId}`)
       : null;
