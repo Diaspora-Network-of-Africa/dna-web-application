@@ -97,7 +97,26 @@ function isSelfRow(qual) {
   return /^[\s()]*SELF(?:[\s()]*OR[\s()]*SELF)*[\s()]*$/.test(t);
 }
 
+/**
+ * A Postgres array as a list. pg parses text[] and leaves other array types (name[] among them) as
+ * their literal, "{members,posts}", so every array the arm reads is cast to text[] in SQL and read
+ * through this as well; run 38472224778 iterated "{members,posts}" one character at a time.
+ */
+function asList(v) {
+  if (Array.isArray(v)) return v;
+  if (v == null) return [];
+  const t = String(v).trim();
+  if (t === "{}" || t === "") return [];
+  if (t.startsWith("{") && t.endsWith("}"))
+    return t
+      .slice(1, -1)
+      .split(",")
+      .map((x) => x.replace(/^"|"$/g, ""));
+  return [t];
+}
+
 function appliesTo(roles) {
+  roles = asList(roles);
   return roles.includes("anon") || roles.includes("authenticated") || roles.includes("public");
 }
 
@@ -134,7 +153,7 @@ async function readCatalog(client) {
     `select c.relname as name,
             coalesce((select o.option_value in ('true', 'on') from pg_options_to_table(c.reloptions) o
                        where o.option_name = 'security_invoker'), false) as invoker,
-            (select array_agg(distinct r.relname order by r.relname)
+            (select array_agg(distinct r.relname order by r.relname)::text[]
                from pg_rewrite rw
                join pg_depend d on d.objid = rw.oid
                 and d.classid = 'pg_rewrite'::regclass and d.refclassid = 'pg_class'::regclass
@@ -261,8 +280,7 @@ async function runVisibilityConformance({ client, record, skip }) {
     /^p_member uuid, p_section (public\.)?profile_section$/.test(p.args) &&
     p.secdef === true &&
     p.volatility === "s" &&
-    Array.isArray(p.config) &&
-    p.config.some((c) => /^search_path=/.test(c));
+    asList(p.config).some((c) => /^search_path=/.test(c));
   checks++;
   record(
     CHECKS.shape,
@@ -393,7 +411,7 @@ async function runVisibilityConformance({ client, record, skip }) {
         }
       } else if (o.entry.class === "invoker") {
         if (secdef) classProblems.invoker.push(label + " is security definer");
-        const reads = o.kind === "function" ? relRead(src) : d.reads || [];
+        const reads = o.kind === "function" ? relRead(src) : asList(d.reads);
         for (const t of reads) {
           const verdict = tableVerdict(t);
           if (verdict) classProblems.invoker.push(label + " reads " + t + ": " + verdict);
@@ -469,7 +487,7 @@ async function runVisibilityConformance({ client, record, skip }) {
   return { fails: fails.length, checks, unproven, counts };
 }
 
-module.exports = { runVisibilityConformance, CHECKS, isSelfRow, reach, directCalls };
+module.exports = { runVisibilityConformance, CHECKS, isSelfRow, reach, directCalls, asList };
 
 if (require.main === module) {
   (async () => {
