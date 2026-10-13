@@ -1687,14 +1687,18 @@ async function runMountShell(bt, bname, [w, h], theme) {
         const st = await shellScrolled(page);
         // At expanded the header never takes a lens (AppShell's own guard), so the check says so.
         // Connect registers its bar since Fix PR 08 (1467), so below expanded the header holds it.
-        const docks = path === "/connect" && !expanded;
+        // Handoff 61-S1: /password redirects into the Account drawer over the Feed, and the Feed
+        // registers its bar, so below expanded the header holds the Feed's once scrolled.
+        const docks = (path === "/connect" || path === "/password") && !expanded;
         record(
           tag +
             (expanded
               ? ` ${path}: the shell scrolled, the header holds no LensBar at expanded`
-              : docks
-                ? ` ${path}: the shell scrolled, the header holds Connect's LensBar (1467)`
-                : ` ${path}: the shell scrolled, the header holds no LensBar (no surface registers one)`),
+              : path === "/password" && docks
+                ? ` ${path}: the shell scrolled, the header holds the Feed's LensBar under the drawer (61-S1)`
+                : docks
+                  ? ` ${path}: the shell scrolled, the header holds Connect's LensBar (1467)`
+                  : ` ${path}: the shell scrolled, the header holds no LensBar (no surface registers one)`),
           n === (docks ? 1 : 0) && st.scrolled,
           `${n} bar(s); ${st.detail}`,
         );

@@ -709,6 +709,8 @@ async function runAccountSessionGone(browserType, bname, vp, theme) {
     ac.sessionGone = true;
     await page.goto(M.BASE + "/feed", { waitUntil: "domcontentloaded" });
     await page.waitForURL("**/sign-in**", { timeout: 15000 });
+    // The sign-in form is read once it has hydrated, not at the instant the URL changed.
+    await page.waitForSelector('input[type="email"]', { timeout: 15000 });
     const stored = await page.evaluate(() =>
       Object.keys(localStorage).some((k) => /^sb-.*-auth-token$/.test(k)),
     );
