@@ -9267,18 +9267,38 @@ the next change that touches `matrix.yml`.
 
 ## G280. `live`'s 41-B F4 arm: `messenger_media_marked` lists nothing after a delete-for-everyone
 
-**Severity: medium; `live` is red on every branch. Opened 12 October 2026 by handoff 61-CI. The
-number is assigned by this entry (ruling 638).**
+**Severity: medium; `live` is red on every branch. Opened 12 October 2026 by handoff 61-CI. Cause
+read 13 October by S61 H61-PURGE; the fix is H61-PURGE-FIX's migration `20261013140000`.**
 
-The arm "Brief 14 41-B (1343, F4): a delete-for-everyone marks the row, messenger_media_marked lists
-it, messenger_media_forget drops it once and not twice" fails at step 8 of the `live` job. The send
-and the delete both answer, then `marked` reads 0 where it should read 1. Because nothing is marked,
-`messenger_media_forget` answers `false`. It is red on `main` at `5328568` (run 575) and on #110's
-head `bae3cde` (run 576), with the same readings and the same totals (254 of 255 checks passed, 4
-unproven), and #110 touches no database, Edge Function or Messenger code. The cause is not read:
-either the delete no longer writes the mark `messenger_media_marked` reads, or the projection no
-longer selects it on the canonical project. Owed: a reading of both functions against the arm, and
-the fix in whichever is wrong. Owner: Code, by Chat's brief.
+The arm fails at step 8 of the `live` job: the send and the delete answer, `forget` answers true, and
+`marked` reads 0 where it should read 1. The delete writes the mark and the projection selects it.
+The row is cut off by the cap: `private.message_media_marked` orders every marked Messenger row
+oldest first and applies `limit … 100` inside the function (`20261002150000:226-231`), and the arm
+filters `where media_id = $1` outside it (`tests/live-db.cjs:4815`). 166 rows are marked on the
+project, all older than the arm's, so the arm's row is never in the page. The arm went red at the
+run after the backlog passed 100 and stays red until it is under 100 at the moment the arm runs.
+
+The backlog exists because the delete route's sweep has never run. `public.messenger_media_marked`
+is declared `stable` (`:259-263`) and calls `private.require_uid()` (`:267`), which is `volatile` and
+inserts the member's `member_messaging_settings` row (`20261002130500:279`, `20261002130200:66-68`).
+PostgREST runs a STABLE function's RPC in a read-only transaction, so every call from
+`src/routes/api/messages/media_.$id.ts` failed with `25006 cannot execute INSERT in a read-only
+transaction`; the handler swallowed the error and answered 200 `{ removed: 1 }` having forgotten
+only its own row. The project's Postgres log carries that error, with this context, for each DELETE
+the matrix made on run 581. The 166 rows are one test owner's: `tests/messenger.cjs`'s live-arm
+uploads (the 759-byte `arm.jpg` and the synthetic-microphone voice notes), marked by its cleanup at
+`:2296-2302`, which calls `messenger_delete` and never the route.
+
+`public.messenger_recent_reactions` (`20261008150300`) carries the same `stable` plus `require_uid`
+fault and fails the same way on the deployment, so the picker's Recent row read an error that the
+mock arms could not show.
+
+Owed: `20261013140000_h61_purge_fix_read_write.sql` redeclares both functions `volatile`, bodies
+unchanged, applied by Chat under 963; after it the sweep drains the backlog twenty rows a call and
+this arm's listing finds its row again once the count is under 100. The route now answers
+`sweep: "failed"` beside `removed` when the listing errors, so the next such failure is visible. The
+arm's shape, which filters a capped listing by id, is G288. Owner: Code, by Chat's
+brief.
 
 ## G281. Four matrix arms pass and fail on the same app code
 
@@ -9371,3 +9391,65 @@ accounts Signed-in devices lists hundreds of rows, and the count grows by two or
 Owed: a ruling on whether the live arms sign their sessions out at the end of a run (a `logout` with
 scope `local` per token), and a one-time purge of the rows already there, by the founder on the
 project. Owner: Chat.
+
+## G286. `messenger_media_marked` and `messenger_media_forget` are unscoped
+
+**Severity: low; invite-boundary under prototype posture (140). Opened 13 October 2026 by H61-PURGE.
+The number is assigned by this entry (ruling 638).**
+
+`public.messenger_media_marked` is granted to `authenticated` (`20261002150000:272`) and
+`private.message_media_marked` (`:220-231`) carries no owner predicate, so any signed-in member can
+list up to one hundred of every member's marked `storage_path` values (thread id, member id, object
+id). `public.messenger_media_forget` (`:276-286`) likewise deletes any marked row by id with no owner
+check. Neither hands out bytes: the GET route still asks `messenger_media_access`, and a marked row
+already answers `allowed false`. The sweep was built this way on purpose, so one member's
+delete-for-everyone could drain rows the matrix left behind, because Pages has no cron (`:214-218`).
+Owed, when ruled: scope the listing and the forget to `owner_id = auth.uid()` for `authenticated`,
+and move the cross-member sweep behind `service_role` on a Worker cron, which the migration's own
+comment already names as the invite-boundary gate. Owner: Chat rules, then Code.
+
+## G287. A preview deployment's sweep forgets production rows after a no-op delete on the preview bucket
+
+**Severity: low today, medium once production holds a real delete-for-everyone; invite-boundary
+under prototype posture (140). Opened 13 October 2026 by H61-PURGE. The number is assigned by this
+entry (ruling 638).**
+
+The sweep in `src/routes/api/messages/media_.$id.ts` deletes each listed key from whichever bucket
+the deployment binds: `dna-message-media` on production and `dna-message-media-preview` on every
+preview (`wrangler.jsonc`). R2 treats a delete of an absent key as success, so a preview deployment
+sweeping a row marked on production deletes nothing, forgets the row, and the production object
+outlives it with nothing left to find it by. Today every marked row is a preview upload, so nothing
+is orphaned yet; the first production delete-for-everyone that a preview's sweep reaches first makes
+it real. Owed: the sweep runs only where the binding matches the row's bucket, which means either a
+bucket name on the row or the sweep moving to a production-only Worker cron (G286's remedy covers
+both). Owner: Chat rules, then Code.
+
+## G288. `live-db.cjs`'s F4 arm filters a capped listing by id
+
+**Severity: low. Opened 13 October 2026 by H61-PURGE. The number is assigned by this entry (ruling
+638).**
+
+`tests/live-db.cjs:4803-4817` reads `messenger_media_marked(100) where media_id = $1` before and
+after the mark. The function pages the hundred oldest marked rows and the filter runs outside it, so
+once more than a hundred rows are marked the arm's own row, the newest, is never in the page and the
+arm is red for a reason that is not the function's. G280 is the first time it happened and the
+backlog's drain under H61-PURGE-FIX turns it green again, but the shape stays. Owed: an assertion
+that holds whatever the backlog, either a listing scoped to the caller once G286 and G287 are
+ruled, or a filter inside the function (`p_media` or an owner argument) that the arm can call.
+Owner: Code, with the ruling on G286.
+
+## G289. Two `live` jobs on different branches collide on the shared fixtures
+
+**Severity: low; non-crash failures a merge reads. Opened 13 October 2026 by H61-PURGE-FIX. The
+number is assigned by this entry (ruling 638).**
+
+`pages.yml`'s `live` job runs on every push of every branch, and every run drives the same two
+seeded accounts on the canonical project (218). Two pushes within a minute of each other run two
+`live` jobs at once: on 13 October #112's job (run 38384486141, `725ac44`) set the F2 fixture at
+10:39:04 and #113's job (run 38384420062, `ccb8e6b`) read F2b at 10:39:05 and failed both F2b
+checks, while #112's own job failed the block arm and read `40P01 deadlock detected` in the 41-A
+receipts arm. Neither diff touched either arm. The jobs share `member_visibility`, the block rows,
+the pair's thread and the messaging settings, so whichever job reads between the other's fixture
+and its restore reads the other's state. Owed: either a concurrency group on `live` across
+branches (a queue, never a cancel, so a run whose result is cited still finishes), or fixtures the
+arms own per run. Owner: Code, by Chat's brief.
