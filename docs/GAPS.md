@@ -9308,6 +9308,14 @@ page section for section" in `tests/profile.cjs`. On run 580 (#110's head `9edd6
 profile-owner cell. The arm reads `sectionIds` after a fixed 400 ms wait once the banner appears, so
 it is the same fixed-wait class as the three above. The same owed item applies.
 
+**Addendum, 13 October 2026 (handoff 61-S1, run 585).** A fifth arm: `webkit-1280x800-dark-vocab-served`,
+check "Profile stance section title" at `tests/vocabulary.cjs` line 123, on `matrix (webkit)` of
+Pages run 585 (head `08a52df`). The arm reads the stance `h2`'s text the moment the heading attaches,
+and the text is the label the vocabulary read supplies, so it is empty until that read answers
+(G64 names the empty heading). Three of the four cells passed and Chromium passed both themes; the
+PR touches nothing on that path. The same owed item applies: a wait on the vocabulary's answer rather
+than on the heading's attachment.
+
 ## G282. Cancel the change (A6) is held out of the email change
 
 **Severity: low. Opened 13 October 2026 by handoff 61-S1 under ruling 1745. The number is assigned
