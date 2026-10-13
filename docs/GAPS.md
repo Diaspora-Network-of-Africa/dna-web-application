@@ -2310,6 +2310,23 @@ touches F3, F4 or B4A. Overlap is the whole of it, which is why the two re-runs 
 `place-resolve` redeploy at 16:08 UTC were fired one after the other, PR 2's first and PR 3's only
 once PR 2's had finished, and both came back green.
 
+**Third and fourth sightings, 13 October 2026 (H61-PURGE-FIX; first filed as G289, withdrawn as this
+gap's duplicate).** Two `live` jobs again: #112's run 38384486141 on `725ac44` set the F2 fixture at
+10:39:04 UTC and #113's run 38384420062 on `ccb8e6b` read F2b at 10:39:05 and failed both F2b checks
+(`profile_view.member` and the Connect card carrying origin, place and stance for a stranger), while
+#112's own job failed the block arm (`B4A section 4`, `viewer_blocked null`) and read `40P01 deadlock
+detected` in the 41-A receipts arm. Neither diff touched any of those arms; #113's re-run alone read
+F2b green. Then the matrix, which this gap had not yet named: `main`'s run 588 on `868b235` (#112's
+merge) ran 15:42 to 17:05 and #113's run 589 on `e6d0970` ran 15:44 to 17:05, so both drove
+`tests/messenger.cjs`'s `messenger-live` arm against the deployment with the same two accounts in the
+same minutes. Run 589 failed the search wait for `[data-search-result]` on both engines (Chromium
+16:59, WebKit 17:05) and `member-test's Messages control carries the dot while the message is unread`
+on WebKit, on app code byte-identical to a head that had passed them twice. So the shared-account
+window is not the `live` job's alone: every arm that signs the two accounts in against a deployment
+(`messenger-live`, `messenger-media`, `messenger-composer-video`) is in it, and a concurrency group
+that serialises only `live` leaves the matrix's overlap standing. The fixture-per-run shape, or a
+group that covers the matrix jobs as well, is what closes it.
+
 ## G34. The draft-restore check in `tests/matrix.cjs` waits a fixed 300 ms after `Continue your draft`, not on the restore
 
 **Severity: low, a harness gap in G29's shape. Not a merge blocker. Opened 16 September 2026 during
@@ -9440,16 +9457,4 @@ Owner: Code, with the ruling on G286.
 
 ## G289. Two `live` jobs on different branches collide on the shared fixtures
 
-**Severity: low; non-crash failures a merge reads. Opened 13 October 2026 by H61-PURGE-FIX. The
-number is assigned by this entry (ruling 638).**
-
-`pages.yml`'s `live` job runs on every push of every branch, and every run drives the same two
-seeded accounts on the canonical project (218). Two pushes within a minute of each other run two
-`live` jobs at once: on 13 October #112's job (run 38384486141, `725ac44`) set the F2 fixture at
-10:39:04 and #113's job (run 38384420062, `ccb8e6b`) read F2b at 10:39:05 and failed both F2b
-checks, while #112's own job failed the block arm and read `40P01 deadlock detected` in the 41-A
-receipts arm. Neither diff touched either arm. The jobs share `member_visibility`, the block rows,
-the pair's thread and the messaging settings, so whichever job reads between the other's fixture
-and its restore reads the other's state. Owed: either a concurrency group on `live` across
-branches (a queue, never a cancel, so a run whose result is cited still finishes), or fixtures the
-arms own per run. Owner: Code, by Chat's brief.
+Withdrawn: duplicate of G33.
