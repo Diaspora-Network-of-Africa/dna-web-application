@@ -23,6 +23,8 @@
 //   the row with no toast and no edge write (198, 211) and leaves the EmptyState; the Notifications
 //   row and panel draw once a category carries copy (1552); no page errors.
 //
+// runAccountSessionGone, at the same three cells, both themes (four checks): ruling 1746, below.
+//
 // Usage: BASE=https://<id>.dna-web-application.pages.dev SPECIAL=account node tests/matrix.cjs
 const M = require("./matrix.cjs");
 
@@ -682,4 +684,73 @@ async function runAccountFlows(browserType, bname, vp, theme) {
   }
 }
 
-module.exports = { runAccountDrawer, runAccountFlows, FLOW_CELLS };
+// Ruling 1746 (D1848): a session revoked elsewhere signs this device out. The app asks /auth/v1/user
+// on every page load and whenever the tab regains focus; the server's 403 session_not_found signs
+// the page out locally and lands on /sign-in, and a failed network call does not (the negative
+// control, 270). Four checks: on load, the network failure, on focus, no page errors.
+async function runAccountSessionGone(browserType, bname, vp, theme) {
+  const [w, h] = vp;
+  const tag = `${bname} ${w}x${h} ${theme} account-session`;
+  M.armStart(tag);
+  const { browser, page, errors } = await open(browserType, vp, theme);
+  const db = makeMockDb();
+  seedPosts(db, 1);
+  await mockSupabase(page, db);
+  const ac = db.account;
+  const wake = () =>
+    page.evaluate(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("focus"));
+    });
+  try {
+    await signIn(page);
+
+    // 1. On load: the server says the session is gone, the page lands on /sign-in.
+    ac.sessionGone = true;
+    await page.goto(M.BASE + "/feed", { waitUntil: "domcontentloaded" });
+    await page.waitForURL("**/sign-in**", { timeout: 15000 });
+    const stored = await page.evaluate(() =>
+      Object.keys(localStorage).some((k) => /^sb-.*-auth-token$/.test(k)),
+    );
+    record(
+      tag +
+        ": a 403 session_not_found from /auth/v1/user on load signs the device out and lands on /sign-in (1746)",
+      pathOf(page) === "/sign-in" &&
+        !stored &&
+        (await page.locator('input[type="email"]').count()) === 1,
+      JSON.stringify({ path: pathOf(page), stored }),
+    );
+
+    // 2. A failed network call is not a sign-out.
+    ac.sessionGone = false;
+    await signIn(page);
+    ac.userFail = "network";
+    await wake();
+    await page.waitForTimeout(1200);
+    record(
+      tag + ": a network failure on the focus check signs nothing out (1746; 270)",
+      pathOf(page) === "/feed" && (await page.locator('[data-testid="avatar"]').count()) === 1,
+      pathOf(page),
+    );
+
+    // 3. On focus: the server's answer signs the device out.
+    ac.userFail = null;
+    ac.sessionGone = true;
+    await wake();
+    await page.waitForURL("**/sign-in**", { timeout: 15000 });
+    record(
+      tag +
+        ": a 403 session_not_found when the tab regains focus signs the device out and lands on /sign-in (1746)",
+      pathOf(page) === "/sign-in" && (await page.locator('[data-testid="avatar"]').count()) === 0,
+      pathOf(page),
+    );
+    record(tag + ": no page errors", errors.length === 0, errors.slice(0, 3).join(" | "));
+  } catch (e) {
+    record(tag + ": flow completed", false, String(e && e.message ? e.message : e).slice(0, 300));
+    await shot(page, `${tag.replace(/ /g, "-")}-failed`).catch(() => undefined);
+  } finally {
+    await browser.close();
+  }
+}
+
+module.exports = { runAccountDrawer, runAccountFlows, runAccountSessionGone, FLOW_CELLS };

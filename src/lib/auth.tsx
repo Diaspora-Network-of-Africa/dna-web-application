@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import type { Session, SupabaseClient, User } from "@supabase/supabase-js";
 import type { Database } from "./database.types";
 import { getSupabase } from "./supabase";
@@ -84,8 +85,57 @@ async function withProfile(session: Session | null): Promise<Member | null> {
 
 type AuthCore = Omit<AuthState, "refreshMember">;
 
+/**
+ * Ruling 1746 (D1848; handoff 61-S1, S13): a session revoked elsewhere, by `session_revoke` from
+ * another device or by Supabase itself, must sign this device out, and the access token alone cannot
+ * say so: it stays valid until it expires and nothing in the app checked it against the server. So
+ * the one check lives here, beside the one place the session is held: on every page load and
+ * whenever the tab regains focus, `getUser()` asks `/auth/v1/user`. auth-js maps the server's 403
+ * `session_not_found` to `AuthSessionMissingError`, removes the local session itself and raises
+ * SIGNED_OUT, which the listener below turns into no member; this device then lands on /sign-in.
+ * A failed network call is not a sign-out: it comes back as `AuthRetryableFetchError` and changes
+ * nothing, and so does any other refusal. Only the server's answer that the session is gone does.
+ */
+export const SESSION_GONE = "AuthSessionMissingError";
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthCore>({ ready: false, session: null, member: null });
+  const navigate = useNavigate();
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) return;
+    let inflight = false;
+    let active = true;
+    const check = async () => {
+      if (inflight) return;
+      inflight = true;
+      try {
+        const { data } = await sb.auth.getSession();
+        // No local session: nothing to verify, and getUser() would answer the same error offline.
+        if (!data.session) return;
+        const { error } = await sb.auth.getUser();
+        if (!active || !error || error.name !== SESSION_GONE) return;
+        setState({ ready: true, session: null, member: null });
+        void navigate({ to: "/sign-in", replace: true });
+      } catch {
+        /* a thrown fetch failure is not the server's answer */
+      } finally {
+        inflight = false;
+      }
+    };
+    void check();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void check();
+    };
+    const onFocus = () => void check();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      active = false;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [navigate]);
   // The account the claim has run for on this page load; a sign-out clears it so the next sign-in
   // claims again. Keyed by user rather than by token, because a refresh is not a new sign-in.
   const claimedFor = useRef<string | null>(null);
@@ -103,6 +153,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (active) claimOnce(data.session);
       const member = await withProfile(data.session);
       if (!active) return;
+      // Ruling 1746: the session check below can remove the session while this profile read is in
+      // flight, and SIGNED_OUT has then already cleared the state; writing the session read before
+      // it back would sign the device in again on a dead session. Write only what the client holds.
+      const { data: now } = await sb.auth.getSession();
+      if ((now.session?.access_token ?? null) !== (data.session?.access_token ?? null)) return;
       setState({ ready: true, session: data.session, member });
     });
     const { data: sub } = sb.auth.onAuthStateChange((event, session) => {

@@ -1399,6 +1399,26 @@ async function get(url, headers = {}) {
                     body: JSON.stringify({ refresh_token: second.refresh_token }),
                   },
                 ).catch(() => ({ status: 0 }));
+                // Ruling 1746 (D1848): the revoked session's own access token, still unexpired, is
+                // refused by /auth/v1/user with 403 session_not_found, which is what the app's
+                // load-and-focus check reads. Printed whatever it answers (930).
+                const userRes = await fetch(SUPABASE_URL + "/auth/v1/user", {
+                  headers: { apikey: KEY, Authorization: "Bearer " + token2 },
+                }).catch(() => null);
+                const userBody = userRes ? await userRes.json().catch(() => null) : null;
+                const userStatus = userRes ? userRes.status : 0;
+                const userCode = userBody && (userBody.error_code || userBody.code || null);
+                console.log(
+                  "61-S1 (1746): /auth/v1/user with the revoked session's access token -> status " +
+                    userStatus +
+                    ", error_code " +
+                    String(userCode),
+                );
+                record(
+                  "61-S1 (1746): /auth/v1/user refuses the revoked session's still-valid access token with 403 session_not_found",
+                  userStatus === 403 && userCode === "session_not_found",
+                  "status " + userStatus + " error_code " + String(userCode),
+                );
                 record(
                   "61-S1: the owner revokes a second session of their own, the list no longer carries it, and its refresh token no longer refreshes (the cascade)",
                   secondRow.id !== ownerCurrent.id &&

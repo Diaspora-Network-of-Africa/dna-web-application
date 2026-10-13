@@ -9350,3 +9350,16 @@ as `/settings/notifications` and changes nothing in the panel, so the parameter,
 the drawer. Both entries reach the same rows (1552), so nothing is lost; what is owed is the one
 destination 1552 names: the parameter and `next` resolve to `/settings/notifications`, which also
 closes G276's provider half once the destination is a route. Owner: Code, by Chat's brief.
+
+## G285. The two test accounts hold hundreds of `auth.sessions` rows
+
+**Severity: low; test accounts only. Opened 13 October 2026 by handoff 61-S1, from run 584's live
+job. The number is assigned by this entry (ruling 638).**
+
+Every CI run signs the two ruling 218 accounts in over REST and never signs them out, and Supabase
+Auth keeps a session row until it is revoked or expires, so `sessions_list()` answered 885 rows for
+owner-test and 508 for member-test on 13 October. No real member is affected, but on those two
+accounts Signed-in devices lists hundreds of rows, and the count grows by two or more on every run.
+Owed: a ruling on whether the live arms sign their sessions out at the end of a run (a `logout` with
+scope `local` per token), and a one-time purge of the rows already there, by the founder on the
+project. Owner: Chat.

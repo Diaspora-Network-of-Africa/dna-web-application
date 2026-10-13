@@ -926,6 +926,9 @@ function makeMockDb() {
         },
       ],
       newEmail: null,
+      // Ruling 1746: /auth/v1/user answers 403 session_not_found, or fails at the network.
+      sessionGone: false,
+      userFail: null,
       updateCalls: [],
       updateFail: null,
       weakPassword: false,
@@ -1235,7 +1238,21 @@ async function mockSupabase(page, db, opts = {}) {
       }
       return json(accountUser());
     }
-    if (p === "/auth/v1/user") return json(accountUser());
+    if (p === "/auth/v1/user") {
+      // Ruling 1746 (tests/account.cjs): the server's answer that this session is gone, as GoTrue
+      // writes it, and a network failure, which is no answer at all.
+      if (ac.userFail === "network") return route.abort("connectionfailed");
+      if (ac.sessionGone)
+        return json(
+          {
+            code: 403,
+            error_code: "session_not_found",
+            msg: "Session from session_id claim in JWT does not exist",
+          },
+          403,
+        );
+      return json(accountUser());
+    }
     if (p.startsWith("/auth/v1/user/identities/") && method === "DELETE") {
       const id = p.slice("/auth/v1/user/identities/".length);
       ac.unlinkCalls.push(id);
@@ -7733,8 +7750,10 @@ if (require.main === module)
             for (const theme of process.env.THEME ? [process.env.THEME] : THEMES)
               await drive(ac.runAccountDrawer, bt, bname, vp, theme);
           for (const vp of process.env.ONLY ? [JSON.parse(process.env.ONLY)] : ac.FLOW_CELLS)
-            for (const theme of process.env.THEME ? [process.env.THEME] : THEMES)
+            for (const theme of process.env.THEME ? [process.env.THEME] : THEMES) {
               await drive(ac.runAccountFlows, bt, bname, vp, theme);
+              await drive(ac.runAccountSessionGone, bt, bname, vp, theme);
+            }
         }
         // Handoff 32-A item 5: the mount arms, one cell per tier (tests/mount.cjs).
         if (process.env.SPECIAL.includes("mount")) {
@@ -7966,7 +7985,10 @@ if (require.main === module)
       for (const vp of VIEWPORTS)
         for (const theme of THEMES) await drive(ac.runAccountDrawer, bt, bname, vp, theme);
       for (const vp of ac.FLOW_CELLS)
-        for (const theme of THEMES) await drive(ac.runAccountFlows, bt, bname, vp, theme);
+        for (const theme of THEMES) {
+          await drive(ac.runAccountFlows, bt, bname, vp, theme);
+          await drive(ac.runAccountSessionGone, bt, bname, vp, theme);
+        }
       // Brief 10 (handoff 30-C item 13): the member's event page at every cell, its flows on the
       // two representative layouts.
       const {
