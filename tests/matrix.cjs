@@ -7596,7 +7596,7 @@ if (require.main === module)
               ])
             await drive(runRecord, bt, bname, vp, process.env.THEME || "light");
         }
-        // Ruling 1235 (handoff 37-F item 3): the macOS WebKit gate, pages.yml's `webkit-macos` job.
+        // Ruling 1235 (handoff 37-F item 3): the macOS WebKit gate, webkit-macos.yml's `webkit-macos` job (1735).
         // Small by design, because macOS minutes bill at a multiple of Linux: the nine sheet arms
         // (1236's stepped method is the point of the gate) and the sheet-focus arm (1484), the member event page and its blocks at
         // the two representative cells with its flows (the arm G5 hit on run 419 among them), the

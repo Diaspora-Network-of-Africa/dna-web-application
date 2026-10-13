@@ -1,0 +1,177 @@
+# Ruling 1735 (handoff 61-CI): the WebKit merge gate (1235) runs only on a head that is ready for
+# review. It moved here from pages.yml, where it ran on every push, because macOS minutes bill at
+# roughly ten times Linux and the gate only has to decide merges, which are only asked of a ready
+# head (1114, 1227).
+#
+# A push event does not say whether its branch's pull request is a draft, and asking the API needs
+# `pull-requests: read`, which no job's token holds (the default token reads contents, metadata and
+# packages). A pull_request event carries the pull request itself, so this workflow reads the draft
+# flag and the head's SHA from the event and widens nothing:
+#   opened, reopened, synchronize  a push to an open pull request; the gate runs if it is not a draft.
+#   ready_for_review                marking the pull request ready runs the gate once on its head.
+#   converted_to_draft              cancels a gate in flight through the concurrency group below.
+#   push                            any branch, main among them; the gate never runs on it, and the
+#                                   job reads as skipped with its reason.
+# The event uploads nothing and a merge ref is never deployed. The head was deployed by pages.yml's
+# own push run, and scripts/gate-deployment.sh finds that deployment on Cloudflare by the head's SHA
+# and branch and answers its own URL (1141, 1155), never the alias.
+#
+# Every job in pages.yml and matrix.yml is as it was; this file holds the one job that left.
+name: WebKit macOS gate
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, converted_to_draft]
+  push:
+    branches: ["**"]
+
+# One gate per pull request, so a later push or a return to draft cancels the run in flight. A push
+# event keys on its ref, so it never cancels a pull request's gate.
+concurrency:
+  group: webkit-macos-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Decides whether the gate runs and, when it does not, says why in one line in the run's summary,
+  # because a skipped job runs no step and so writes nothing of its own (Outcome 4 of 61-CI). When it
+  # does run, finds the head's deployment here on Linux so the macOS runner never waits on a deploy.
+  gate-head:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+      url: ${{ steps.find.outputs.url }}
+    steps:
+      - name: Is this head ready for review (ruling 1735)
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -uo pipefail
+          reason=""
+          if [ "$EVENT" != "pull_request" ]; then
+            reason="a push alone never runs the gate; it runs from its pull request's event, on a head that is ready for review."
+          elif [ "$DRAFT" = "true" ]; then
+            reason="the head \`$HEAD_SHA\` belongs to draft pull request #$NUMBER; the gate runs when it is marked ready for review."
+          fi
+          if [ -n "$reason" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=webkit-macos skipped::${reason//\`/}"
+            echo "**webkit-macos skipped (ruling 1735):** $reason" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "webkit-macos runs on pull request #$NUMBER's head $HEAD_SHA ($ACTION)."
+            echo "**webkit-macos runs (ruling 1735):** pull request #$NUMBER is ready for review, and its head is \`$HEAD_SHA\` ($ACTION)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/checkout@v4
+        if: ${{ steps.decide.outputs.run == 'true' }}
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: The head's own deployment (rulings 1141, 1735)
+        id: find
+        if: ${{ steps.decide.outputs.run == 'true' }}
+        env:
+          SHA: ${{ github.event.pull_request.head.sha }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          PROJECT: dna-web-application
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: scripts/gate-deployment.sh
+
+  # Ruling 1235 (handoff 37-F item 3): the WebKit result that gates a merge, on a macOS runner.
+  #
+  # G5 is a Linux WPE compositor defect that Safari does not run (1234), so pages.yml's Linux `matrix
+  # (webkit)` job cannot tell a product failure from that defect: it keeps running in full and
+  # its crashes are retried once and named (1237), but a crash there alone does not block a merge.
+  # This job runs Playwright's WebKit on macOS, the Mac port, which lacks G5's compositor and is the
+  # closest thing to Safari a runner can drive; it is not Safari itself, so the founder's device
+  # check (ruling 61) stays the exit criterion. It reads the head's own deployment at its own URL
+  # (1141), the one pages.yml's `live` and `matrix` jobs read, and it runs only WebKit on the four surfaces 1235 names,
+  # through the `gate` token in tests/matrix.cjs: the nine sheet arms, read by 1236's stepped
+  # method, and the sheet-focus arm (1484, Fix PR 08); the member event page, its blocks and its flows at 390 light and 1280 dark; the composer
+  # as its publish flow at 390 light and its guards at 1280 dark; sign-in's layout at both cells and
+  # its flows at 390 light; and, under ruling 1550, the .mov through the composer's own video input
+  # (tests/messenger-composer-video.cjs), because Linux WebKit's <video> could not read its fixture on
+  # run 523; and, under handoff 56-41E, the reactions arm at both cells (the drawn glyphs, the
+  # picker's Sheet and the portrait player differ on Safari). Twenty-four arms, because macOS minutes bill at a multiple of Linux and 1238
+  # made the repository private, so every minute is paid. No apt, no core dumps and no gdb: those
+  # are the Linux job's, and the scripts this job calls run under macOS's bash 3.2 as written.
+  webkit-macos:
+    needs: gate-head
+    if: ${{ needs.gate-head.outputs.run == 'true' }}
+    runs-on: macos-latest
+    timeout-minutes: 40
+    env:
+      # Ruling 1141: the deployment pages.yml's push run uploaded for this head, at its own URL.
+      BASE: ${{ needs.gate-head.outputs.url }}
+    steps:
+      # The pull request's head, never the merge ref a pull_request event checks out by default:
+      # the tests are the ones the deployment was built beside.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: The host this job tests (ruling 1141)
+        env:
+          KIND: pr
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: scripts/host-tested.sh
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: scripts/retry.sh 3 bun install --frozen-lockfile
+      - name: The deployment serves every path the suites open (ruling 217)
+        run: scripts/deployment-serves.sh
+      # Ruling 217: the browser download is a third party this gate does not test. The Mac port
+      # needs no system packages, so there is no --with-deps here.
+      - name: Install WebKit, the Mac port
+        run: scripts/retry.sh 3 bunx playwright install webkit
+      - name: Run the gate (webkit, macOS; rulings 1235, 1236, 1237)
+        env:
+          ENGINE: webkit
+          SPECIAL: gate
+          OUT: ${{ github.workspace }}/matrix-out
+          # Ruling 1550: the composer-video arm signs owner-test in for real (218); without these it
+          # reports every check unproven (228), which is what a fork PR gets.
+          OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
+          OWNER_PASSWORD: ${{ secrets.OWNER_PASSWORD }}
+        run: |
+          set -o pipefail
+          mkdir -p "$OUT"
+          node tests/matrix.cjs 2>&1 | tee "$OUT/matrix.log"
+      # Rulings 267, 274, 292, 1237: the per-arm accounting, the tiers, the crash classification and
+      # any retried arm, lifted into the job summary so the gate's result is readable without the log.
+      - name: Arms, tiers, retries and the crash classification, in the tail (rulings 267, 274, 292, 1237)
+        if: always()
+        env:
+          OUT: ${{ github.workspace }}/matrix-out
+        run: |
+          set -uo pipefail
+          log="$OUT/matrix.log"
+          if [ ! -s "$log" ]; then
+            echo "The gate step produced no output; it did not reach tests/matrix.cjs."
+            exit 0
+          fi
+          tail=$(sed -n '/=== arms by tier/,$p' "$log")
+          [ -n "$tail" ] || tail=$(tail -80 "$log")
+          echo "=== webkit on macOS: the gate's summary, re-emitted (ruling 267) ==="
+          printf '%s\n' "$tail"
+          {
+            echo "### webkit on macOS, the merge gate (rulings 1235, 292: arms, not a total)"
+            echo '```'
+            printf '%s\n' "$tail"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload screenshots and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-webkit-macos-run-${{ github.run_number }}
+          path: matrix-out
+          if-no-files-found: warn

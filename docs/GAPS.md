@@ -9251,3 +9251,51 @@ is approved: SPEC-56 approves the landing page's strings and none for the email.
 therefore ends the plain-text body with the bare URL on its own line after a blank line, and no
 words around it. Owed: the line's copy, under 387 and 1035's plain-text rule until Design draws a
 template. Owner: Chat, with Design.
+
+## G279. `matrix.yml` still names the macOS gate as `pages.yml`'s job
+
+**Severity: low. Opened 12 October 2026 by handoff 61-CI. The number is assigned by this entry
+(ruling 638).**
+
+Ruling 1735 moved `webkit-macos` from `pages.yml` to its own workflow, `webkit-macos.yml`, so that it
+runs from the `pull_request` event on a ready head only. The handoff held every job in `matrix.yml`
+unchanged, so two lines there still say "as pages.yml's webkit-macos job does": the `runner` input's
+description at line 73 and the comment at line 178. Both describe what the macOS runner lacks (no
+apt, no cores, no gdb), which is still true of the job where it now lives, so nothing reads them
+wrongly but a reader looking for the job. Owed: both lines name `webkit-macos.yml`. Owner: Code, on
+the next change that touches `matrix.yml`.
+
+## G280. `live`'s 41-B F4 arm: `messenger_media_marked` lists nothing after a delete-for-everyone
+
+**Severity: medium; `live` is red on every branch. Opened 12 October 2026 by handoff 61-CI. The
+number is assigned by this entry (ruling 638).**
+
+The arm "Brief 14 41-B (1343, F4): a delete-for-everyone marks the row, messenger_media_marked lists
+it, messenger_media_forget drops it once and not twice" fails at step 8 of the `live` job. The send
+and the delete both answer, then `marked` reads 0 where it should read 1. Because nothing is marked,
+`messenger_media_forget` answers `false`. It is red on `main` at `5328568` (run 575) and on #110's
+head `bae3cde` (run 576), with the same readings and the same totals (254 of 255 checks passed, 4
+unproven), and #110 touches no database, Edge Function or Messenger code. The cause is not read:
+either the delete no longer writes the mark `messenger_media_marked` reads, or the projection no
+longer selects it on the canonical project. Owed: a reading of both functions against the arm, and
+the fix in whichever is wrong. Owner: Code, by Chat's brief.
+
+## G281. Three matrix arms pass and fail on the same app code
+
+**Severity: low; non-crash failures in Linux matrix jobs that a merge reads. Opened 12 October 2026
+by handoff 61-CI. The number is assigned by this entry (ruling 638).**
+
+Run 574 (#109's head `30e266b`) and run 576 (#110's head `bae3cde`) ran the same app and test code.
+#110 differs only in CI workflows, two scripts, docs and one comment line in `tests/matrix.cjs`. Four
+checks, in three arms, passed on 574 and failed on 576, none of them behind a crash:
+
+- `chromium-390x844-light-sheet-focus`: Tab from the Notifications title stays on the `h2`
+  (`tests/sheet.cjs`, 1484). The mocked panel is empty, and the arm reads focus 150 ms after Tab.
+- `webkit-390x844-light-mount-feed`: "header LensBar once scrolled: five tabs, no trailing seat, the
+  52 track" read 0 bars.
+- `webkit-1280x800-dark-messenger flows`: the click on the picker's "Folded hands" button timed out
+  at 30 s, so the arm emitted 24 checks against its declared 23 (ruling 292).
+
+Each reads a state that settles asynchronously, so the lead is a wait that ends before the state
+does. That lead is not measured. Owed: per arm, a wait on the state itself rather than on time, or a
+named cause if the product is at fault. Owner: Code.
