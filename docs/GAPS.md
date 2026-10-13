@@ -9280,7 +9280,7 @@ either the delete no longer writes the mark `messenger_media_marked` reads, or t
 longer selects it on the canonical project. Owed: a reading of both functions against the arm, and
 the fix in whichever is wrong. Owner: Code, by Chat's brief.
 
-## G281. Three matrix arms pass and fail on the same app code
+## G281. Four matrix arms pass and fail on the same app code
 
 **Severity: low; non-crash failures in Linux matrix jobs that a merge reads. Opened 12 October 2026
 by handoff 61-CI. The number is assigned by this entry (ruling 638).**
@@ -9299,3 +9299,11 @@ checks, in three arms, passed on 574 and failed on 576, none of them behind a cr
 Each reads a state that settles asynchronously, so the lead is a wait that ends before the state
 does. That lead is not measured. Owed: per arm, a wait on the state itself rather than on time, or a
 named cause if the product is at fault. Owner: Code.
+
+**Addendum, 13 October 2026 (handoff 61-S1).** A fourth arm, from #110's PR comment of 22:53 PDT on
+12 October: `chromium-1366x1024-dark profile owner`, check 5, "View as public matches the signed-out
+page section for section" in `tests/profile.cjs`. On run 580 (#110's head `9edd660`, rebased on
+`588a12b`) the owner's View as public listed no sections where the signed-out page listed ten; on
+`main`'s run 579, the same app code, the check passed, and in run 580 itself it passed at every other
+profile-owner cell. The arm reads `sectionIds` after a fixed 400 ms wait once the banner appears, so
+it is the same fixed-wait class as the three above. The same owed item applies.
