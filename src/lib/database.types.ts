@@ -1,9 +1,12 @@
-// Handoff 61-S1 (the Account drawer): `sessions_list` and `session_revoke` are added to Functions by
-// hand from the committed 20261013120000_h61_s1_sessions.sql, in the shape the generator writes,
-// because the file holds a `delete` and reaches the project by the founder's SQL Editor paste (1528)
-// after this commit (225). The next regeneration after that paste replaces this hand edit with the
-// generator's own; nothing else moves. `export type Views` is restored by hand after every
-// regeneration (CLAUDE.md).
+// Regenerated from the canonical Supabase project (dgspjevjoblujcoljvkn) with the Supabase MCP
+// generate_typescript_types tool on handoff H61-S1's branch (#112, the Account drawer), on main at
+// 3725471 (the merge of #110), after the founder applied 20261013120000 by SQL Editor paste under
+// 1528 and Chat read it back at 01:20 PDT on 13 October 2026 with the recorded drift md5 equal to the
+// file (4dcf1a5c5fb56f35e3f99a0de6b11430); 115 rows in schema_migrations, head
+// 20261013120000_h61_s1_sessions. What it changes here: `sessions_list` and `session_revoke` join
+// Functions in the generator's own shape, replacing the hand edit the branch carried before the
+// paste, and `PostgrestVersion` reads what the project reports. Nothing else moves. `export type
+// Views` is restored by hand after every regeneration (CLAUDE.md).
 //
 // Before H61-S1:
 // Regenerated from the canonical Supabase project (dgspjevjoblujcoljvkn) with the Supabase MCP
@@ -201,7 +204,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5";
+    PostgrestVersion: "14.17";
   };
   public: {
     Tables: {
@@ -4824,9 +4827,9 @@ export type Database = {
         Args: never;
         Returns: {
           id: string;
-          user_agent: string;
-          last_active_at: string;
           is_current: boolean;
+          last_active_at: string;
+          user_agent: string;
         }[];
       };
       set_follow: {
