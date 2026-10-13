@@ -210,7 +210,7 @@ function LinkPreview({ preview }: { preview: Json }) {
  * only when either is missing, object-fit contain, no duration label and no poster (the poster frame
  * is held: nothing stores one, G entry in docs/GAPS.md). A fetch the route refused or an `error` on
  * the element draws the failed block, M1 and M2; Try again refetches and remounts the player. An
- * image keeps MediaBlock.
+ * image keeps MediaBlock, at its own ratio (1738).
  */
 function MessageMedia({
   mediaId,
@@ -290,7 +290,9 @@ function MessageMedia({
       />
     );
   }
-  return <MediaBlock kind="image" src={media.url} alt="" />;
+  // 1738: the row stores no image dimensions, so the set's `unknown` frame (1.91:1 contained on the
+  // fill) must not apply; the image takes the bubble's media width at its own ratio, up to 420 tall.
+  return <MediaBlock kind="image" src={media.url} alt="" natural={420} />;
 }
 
 function VoiceNote({ mediaId, own }: { mediaId: string; own: boolean }) {
@@ -652,6 +654,71 @@ export function MessengerThread({ member, threadId }: { member: Member; threadId
     return size ?? {};
   };
   const [picker, setPicker] = useState<string | null>(null);
+  // 1739: the open bar closes on a pointerdown or touch outside that message's bar, its inline panel
+  // and its own React toggle, and on Escape. Nothing is prevented, so the outside tap still does what
+  // it would have done, and the close waits for that tap's click: closing on the pointerdown itself
+  // lifts every row under the bar before the pointer is released, and the click then lands on
+  // whatever moved under it, or nowhere (another message's React at 1280). No click, as for a
+  // scroll or a drag, closes it on pointercancel or 400 ms after the release. Each close names the
+  // message it was armed for, so a tap that opens another message's bar is not undone by it. The
+  // touch Sheet of the full picker keeps its own close: while it is open nothing here listens, so
+  // neither a tap in it nor Escape counts against the bar. Another message's bar opening closes this
+  // one because there is one `picker`.
+  const sheetOpen = more !== null && mode === "touch";
+  useEffect(() => {
+    if (!picker || sheetOpen) return;
+    const id = picker;
+    const inside = (t: EventTarget | null) => {
+      if (!(t instanceof Element)) return false;
+      const row = t.closest("[data-msg]");
+      if (!row || row.getAttribute("data-msg") !== id) return false;
+      return !!t.closest("[data-picker], [data-picker-panel], [data-react-toggle]");
+    };
+    // Closing the bar closes the pointer inline panel with it.
+    const close = () => {
+      setPicker((p) => (p === id ? null : p));
+      setMore((m) => (m === id ? null : m));
+    };
+    let armed = false;
+    let timer = 0;
+    const settle = (ms: number) => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(close, ms);
+    };
+    const down = (e: Event) => {
+      if (!inside(e.target)) armed = true;
+    };
+    const up = () => {
+      if (armed) settle(400);
+    };
+    const landed = () => {
+      if (armed) settle(0);
+    };
+    // Captured and prevented, so the Pane's own Escape (which skips a prevented one) leaves the
+    // thread open: one Escape closes the innermost layer, the bar.
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      close();
+    };
+    document.addEventListener("pointerdown", down, true);
+    document.addEventListener("touchstart", down, { capture: true, passive: true });
+    document.addEventListener("pointerup", up, true);
+    document.addEventListener("touchend", up, true);
+    document.addEventListener("click", landed, true);
+    document.addEventListener("pointercancel", landed, true);
+    document.addEventListener("keydown", key, true);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("pointerdown", down, true);
+      document.removeEventListener("touchstart", down, true);
+      document.removeEventListener("pointerup", up, true);
+      document.removeEventListener("touchend", up, true);
+      document.removeEventListener("click", landed, true);
+      document.removeEventListener("pointercancel", landed, true);
+      document.removeEventListener("keydown", key, true);
+    };
+  }, [picker, sheetOpen]);
   const [expandedBlocked, setExpandedBlocked] = useState<Record<string, boolean>>({});
   const [sheet, setSheet] = useState<
     | { kind: "info"; row: MessageView }
@@ -859,7 +926,8 @@ export function MessengerThread({ member, threadId }: { member: Member; threadId
   };
 
   // 2.1, 1590: one reaction per member; a press on the member's own glyph removes it, another
-  // replaces it. The bar closes --dur-slow after the press so the pop is seen (2.2).
+  // replaces it. The bar, and the pointer panel with it, closes --dur-slow after the press so the
+  // pop is seen (2.2, 1739a).
   const toggleReaction = (row: MessageView, emoji: string) => {
     const mine = reactionsOf(row).find((r) => r.own);
     void act(async () => {
@@ -870,7 +938,10 @@ export function MessengerThread({ member, threadId }: { member: Member; threadId
       void qc.invalidateQueries({ queryKey: ["messenger", "recent", member.id] });
     });
     setMore(null);
-    window.setTimeout(() => setPicker((p) => (p === row.message_id ? null : p)), 300);
+    window.setTimeout(() => {
+      setPicker((p) => (p === row.message_id ? null : p));
+      setMore((m) => (m === row.message_id ? null : m));
+    }, 300);
   };
 
   const reactionsOf = (row: MessageView): MessageReaction[] => {

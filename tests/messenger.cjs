@@ -1031,7 +1031,18 @@ const REACT_CHECKS = [
   "an invited thread's row reads Invited by the inviter and its log reads the inviter's line; after Accept neither, and the dot clears (1638)",
   "nothing the Messenger holds is in localStorage or sessionStorage (1351)",
   "no page error (316)",
+  "a press on a quick glyph pops in the bar, and the bar, with the pointer panel, is gone once the pop has shown, a real tap on touch (1739a)",
+  "a press inside the bar, on More or inside the panel or the touch Sheet keeps the bar; a tap outside closes it, panel and all, and still lands, the message field taking focus (1739b)",
+  "Escape closes the bar and the pointer panel, and the thread stays open (1739c)",
+  "opening another message's bar closes the first: one bar, on the second message (1739d)",
+  "a message image fills the bubble's media width at its own ratio up to 420 tall, cropped from its centre, in the 14 radius 1px --line frame with no fill beside it, data-frame natural, and a tap opens ImageViewer (1738, 1429)",
 ];
+
+/** 1738: a portrait the row stores no size for, 600 by 900, painted edge to edge in one colour. */
+const IMAGE_MEDIA = "33333333-3333-4333-8333-333333333002";
+const PORTRAIT_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="900" viewBox="0 0 600 900">' +
+  '<rect width="600" height="900" fill="#d0021b"/></svg>';
 
 async function runMessengerReactions(browserType, bname, vp, theme) {
   const [w, h] = vp;
@@ -1652,6 +1663,222 @@ async function runMessengerReactions(browserType, bname, vp, theme) {
         failedText.includes("Try again") &&
         remounted,
       JSON.stringify({ failedText, remounted }),
+    );
+
+    // 20 to 23. The bar's dismissal (1739), on Kofi's thread. A press is a real tap on touch, so
+    // WebKit's touch path is what the gate's two cells read, and a click on pointer.
+    const tapOrClick = (loc) => (touch ? loc.tap() : loc.click());
+    const barState = () =>
+      page.evaluate(() => ({
+        bars: [...document.querySelectorAll("[data-picker]")].map(
+          (b) => b.closest("[data-msg]")?.getAttribute("data-msg") || "",
+        ),
+        panel: document.querySelectorAll("[data-reaction-panel]").length,
+        sheet: document.querySelectorAll('[data-testid="react-sheet"]').length,
+        pop: document.querySelectorAll("[data-picker] .b14-pop").length,
+        focus: document.activeElement?.getAttribute("data-testid") || "",
+      }));
+    await page.goto(BASE + "/messages/" + Mx.ids.kofi, { waitUntil: "networkidle" });
+    await page.waitForSelector("[data-messenger-thread] [data-msg]", { timeout: 10000 });
+    const kofiId = await kofiFirst.getAttribute("data-msg");
+    const openPanel = async () => {
+      await tapOrClick(page.locator("[data-picker] [data-more]"));
+      await page.waitForSelector(touch ? '[data-testid="react-sheet"]' : "[data-reaction-panel]", {
+        timeout: 8000,
+      });
+    };
+
+    // 20 (a): pressed, the glyph pops in the bar; 700 ms on, the bar and the panel are gone.
+    await openBar();
+    if (!touch) await openPanel();
+    const withPanel = await barState();
+    await tapOrClick(page.locator('[data-picker] button[aria-label="Heart"]'));
+    const atPress = await barState();
+    await page.waitForTimeout(700);
+    const afterPick = await barState();
+    check(
+      REACT_CHECKS[20],
+      (touch || withPanel.panel === 1) &&
+        atPress.bars.length === 1 &&
+        atPress.pop >= 1 &&
+        afterPick.bars.length === 0 &&
+        afterPick.panel === 0,
+      JSON.stringify({ withPanel, atPress, afterPick }),
+    );
+
+    // 21 (b): inside keeps it; outside closes it and the tap still lands.
+    await openBar();
+    await openPanel();
+    const searchIn = touch
+      ? '[data-testid="react-sheet"] [data-emoji-search]'
+      : "[data-reaction-panel] [data-emoji-search]";
+    await tapOrClick(page.locator(searchIn).first());
+    await page.waitForTimeout(200);
+    const inPanel = await barState();
+    if (touch) {
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(500);
+    }
+    const sheetClosed = await barState();
+    // The bar's own ground, between its glyphs: a pointerdown there is inside.
+    await page.locator("[data-picker]").dispatchEvent("pointerdown", {
+      button: 0,
+      pointerType: touch ? "touch" : "mouse",
+      isPrimary: true,
+    });
+    await page.waitForTimeout(100);
+    const onBar = await barState();
+    await tapOrClick(page.locator('[data-testid="message-field"]'));
+    await page.waitForTimeout(200);
+    const outside = await barState();
+    check(
+      REACT_CHECKS[21],
+      inPanel.bars.length === 1 &&
+        (touch ? inPanel.sheet === 1 : inPanel.panel === 1) &&
+        sheetClosed.bars.length === 1 &&
+        sheetClosed.sheet === 0 &&
+        onBar.bars.length === 1 &&
+        outside.bars.length === 0 &&
+        outside.panel === 0 &&
+        outside.focus === "message-field",
+      JSON.stringify({ inPanel, sheetClosed, onBar, outside }),
+    );
+
+    // 22 (c): Escape.
+    await openBar();
+    if (!touch) await openPanel();
+    const beforeEsc = await barState();
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
+    const afterEsc = await barState();
+    const threadOpen = await kofiFirst.isVisible();
+    check(
+      REACT_CHECKS[22],
+      beforeEsc.bars.length === 1 &&
+        (touch || beforeEsc.panel === 1) &&
+        afterEsc.bars.length === 0 &&
+        afterEsc.panel === 0 &&
+        threadOpen,
+      JSON.stringify({ beforeEsc, afterEsc, threadOpen }),
+    );
+
+    // 23 (d): another message's bar.
+    await openBar();
+    const otherId = await page.evaluate(
+      (first) =>
+        [...document.querySelectorAll("[data-messenger-thread] [data-msg]")]
+          .filter((m) => !m.hasAttribute("data-deleted") && m.querySelector("[data-bubble]"))
+          .map((m) => m.getAttribute("data-msg"))
+          .find((id) => id && id !== first) || "",
+      kofiId,
+    );
+    const other = page.locator(`[data-msg="${otherId}"]`);
+    if (touch) {
+      await openMenu(page, other, true, "");
+      await pick(page, "React");
+    } else {
+      await other.hover();
+      await other.locator("[data-cluster] [data-react-toggle]").click();
+    }
+    await page.waitForTimeout(200);
+    const otherBar = await barState();
+    check(
+      REACT_CHECKS[23],
+      !!otherId && otherBar.bars.length === 1 && otherBar.bars[0] === otherId,
+      JSON.stringify({ kofiId, otherId, otherBar }),
+    );
+    await page.keyboard.press("Escape");
+
+    // 24. The message image (1738): a 600 by 900 portrait with no stored size, on Nana's thread.
+    await page.route(`**/api/messages/media/${IMAGE_MEDIA}`, (route) =>
+      route.fulfill({
+        status: 200,
+        headers: { "content-type": "image/svg+xml", "access-control-allow-origin": "*" },
+        body: PORTRAIT_SVG,
+      }),
+    );
+    const nanaMsgs = Mx.messages[Mx.ids.nana];
+    const imageRow = {
+      ...nanaMsgs[0],
+      message_id: "22222222-2222-4222-8222-222222222738",
+      seq: nanaMsgs.length + 1,
+      body: null,
+      kind: "media",
+      media_id: IMAGE_MEDIA,
+      media_word: "Image",
+      media_width: null,
+      media_height: null,
+      reactions: [],
+      created_at: new Date().toISOString(),
+    };
+    nanaMsgs.push(imageRow);
+    await page.goto(BASE + "/messages/" + Mx.ids.nana, { waitUntil: "networkidle" });
+    const frameSel = `[data-msg="${imageRow.message_id}"] [data-media="image"]`;
+    await page.waitForFunction(
+      (sel) => {
+        const img = document.querySelector(sel + " img");
+        return !!img && img.complete && img.naturalWidth > 0;
+      },
+      frameSel,
+      { timeout: 15000 },
+    );
+    const im = await page.evaluate((sel) => {
+      const f = document.querySelector(sel);
+      const img = f.querySelector("img");
+      const wrap = f.parentElement;
+      const fr = f.getBoundingClientRect();
+      const ir = img.getBoundingClientRect();
+      const cs = getComputedStyle(f);
+      const is = getComputedStyle(img);
+      const probe = document.createElement("span");
+      probe.style.color = "var(--line)";
+      document.body.appendChild(probe);
+      const line = getComputedStyle(probe).color;
+      probe.remove();
+      const bw = parseFloat(cs.borderLeftWidth);
+      return {
+        frame: f.getAttribute("data-frame"),
+        fw: fr.width,
+        wrapW: wrap.getBoundingClientRect().width,
+        inner: { l: fr.left + bw, r: fr.right - bw, t: fr.top + bw, b: fr.bottom - bw },
+        img: { l: ir.left, r: ir.right, t: ir.top, b: ir.bottom, w: ir.width, h: ir.height },
+        radius: cs.borderTopLeftRadius,
+        border: cs.borderTopWidth + " " + cs.borderTopStyle + " " + cs.borderTopColor,
+        line,
+        bg: cs.backgroundColor,
+        fit: is.objectFit,
+        pos: is.objectPosition,
+      };
+    }, frameSel);
+    const near = (a, b) => Math.abs(a - b) <= 0.75;
+    const wantH = Math.min(im.img.w * 1.5, 420);
+    const filled =
+      near(im.img.l, im.inner.l) &&
+      near(im.img.r, im.inner.r) &&
+      near(im.img.t, im.inner.t) &&
+      near(im.img.b, im.inner.b) &&
+      /rgba\(0, 0, 0, 0\)|transparent/.test(im.bg);
+    await tapOrClick(page.locator(frameSel));
+    const viewer = await page
+      .waitForSelector("dialog.strand-viewer[open] img", { timeout: 8000 })
+      .then(() => true)
+      .catch(() => false);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    Mx.messages[Mx.ids.nana] = nanaMsgs.filter((m) => m.message_id !== imageRow.message_id);
+    check(
+      REACT_CHECKS[24],
+      im.frame === "natural" &&
+        near(im.fw, im.wrapW) &&
+        im.fw <= 320.5 &&
+        near(im.img.h, wantH) &&
+        filled &&
+        im.radius === "14px" &&
+        im.border === "1px solid " + im.line &&
+        im.fit === "cover" &&
+        im.pos === "50% 50%" &&
+        viewer,
+      JSON.stringify({ ...im, wantH, filled, viewer }),
     );
 
     const keys = await messengerStorage(page);

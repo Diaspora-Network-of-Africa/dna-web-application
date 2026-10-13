@@ -14,10 +14,13 @@
 // image or tile opens ImageViewer on the master, whole; `openable={false}` returns the plain
 // frame. 1432 and 1544: the link preview has two sizes, `full` and `row`. 439 is now the compile's
 // own: a non-web link renders as text in both sizes, so the divergence this port carried (G184)
-// is no longer kept. One divergence, visible: the openable single image's button carries
+// is no longer kept. Two divergences, visible: the openable single image's button carries
 // `width: 100%`, because a button does not fill its line as a div does outside a stretching flex
 // or grid parent; the compile's button shrank to its content on the member event page's cover
-// (62 wide at 390) and in a Messenger bubble. Translations, none visible: `useInputMode` is the app's `useMode`; the
+// (62 wide at 390) and in a Messenger bubble. And `natural` (1738): an image whose row stores no
+// dimensions, the Messenger log's, draws at the frame's width and its own ratio up to the height
+// given, cropped from its centre past it, with no fill, where the compile has only the 1.91:1
+// `unknown` frame contained on --media-fill. Translations, none visible: `useInputMode` is the app's `useMode`; the
 // compile's `__ds_scope` lookups are imports. Record: docs/strand-ports/v1791654208929113-media.md.
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { Icon } from "./Icon";
@@ -60,6 +63,10 @@ export type MediaBlockProps = {
   crop?: MediaCrop | null | undefined;
   /** image: own ratio, uncropped, for the expanded card (1643). */
   whole?: boolean | undefined;
+  /** image, a divergence (1738): a caller that stores no dimensions draws the image at the frame's
+   *  width and its own ratio, up to this many pixels tall, a taller one cropped from its centre, with
+   *  no fill around it. The Messenger log's image message; the set's frame and `whole` do not apply. */
+  natural?: number | undefined;
   /** image and gallery: tapping opens ImageViewer (1429, 1431); false returns the plain frame. */
   openable?: boolean | undefined;
   /** image and gallery: a caller that owns the viewer receives the tapped index instead. */
@@ -260,6 +267,7 @@ function Single({
   focalPoint,
   crop,
   whole,
+  natural,
   openable = true,
   step,
   onOpen,
@@ -272,17 +280,20 @@ function Single({
   const touch = mode === "touch";
   const w = num(width);
   const h = num(height);
-  const f: Fit & { clamp: string } = whole
-    ? {
-        frame: { id: "whole", r: w && h ? w / h : null, css: w && h ? w + " / " + h : null },
-        fit: "contain",
-        clamp: "whole",
-        r: w && h ? w / h : null,
-      }
-    : imageFrame(width, height, crop, ratio);
+  const f: Fit & { clamp: string } = natural
+    ? { frame: { id: "natural", r: null, css: null }, fit: "cover", clamp: "natural", r: null }
+    : whole
+      ? {
+          frame: { id: "whole", r: w && h ? w / h : null, css: w && h ? w + " / " + h : null },
+          fit: "contain",
+          clamp: "whole",
+          r: w && h ? w / h : null,
+        }
+      : imageFrame(width, height, crop, ratio);
   const box: CSSProperties = {
-    ...frameBox(style, "var(--media-fill)"),
+    ...frameBox(style, natural ? "transparent" : "var(--media-fill)"),
     position: "relative",
+    ...(natural ? { display: "block" } : {}),
     ...(f.frame.css ? cell(f.frame.css) : {}),
   };
   const data = {
@@ -298,9 +309,18 @@ function Single({
       width={w || undefined}
       height={h || undefined}
       style={
-        f.frame.css
-          ? placement(f, focalPoint, crop)
-          : { display: "block", width: "100%", height: "auto" }
+        natural
+          ? {
+              display: "block",
+              width: "100%",
+              height: "auto",
+              maxHeight: natural,
+              objectFit: "cover",
+              objectPosition: "50% 50%",
+            }
+          : f.frame.css
+            ? placement(f, focalPoint, crop)
+            : { display: "block", width: "100%", height: "auto" }
       }
     />
   );
