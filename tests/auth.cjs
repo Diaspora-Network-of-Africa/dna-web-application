@@ -428,6 +428,9 @@ async function runAuthLayout(browserType, bname, [w, h], theme) {
       await page.waitForURL("**/settings/security**", { timeout: 15000 });
       await page.waitForSelector('[data-testid="password"]', { timeout: 15000 });
       await hydrated(page);
+      // The form mounts before the drawer's enter finishes; the width is read once the Sheet has
+      // settled, never mid-slide (webkit-macos run 17 read the panel 127 px past the viewport).
+      await M.sheetSettled(page, 'dialog[data-sheet-scrim] section[role="dialog"]');
       record(
         tag + ": /password renders in the shell content column",
         (await page.locator("header").count()) > 0 &&
@@ -711,6 +714,7 @@ async function runAuthFlows(browserType, bname, [w, h], theme) {
       await page.waitForURL("**/settings/security**", { timeout: 15000 });
       await page.waitForSelector('[data-testid="password"]', { timeout: 15000 });
       await hydrated(page);
+      await M.sheetSettled(page, 'dialog[data-sheet-scrim] section[role="dialog"]');
       record(
         tag + ": /password renders inside the shell",
         (await page.locator("header").count()) > 0,
