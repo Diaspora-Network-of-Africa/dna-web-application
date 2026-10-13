@@ -31,6 +31,24 @@ serves() {
   [ "$code" = "200" ] || failed=1
 }
 
+# Polls one path until it redirects to the location named, so a route that moved is still confirmed
+# to serve. Handoff 61-S1 (ruling 230, finding 3): /password is a 307 into the Account drawer's
+# password level at /settings/security, and the suites open it for that redirect.
+redirects() {
+  local path="$1" to="$2" code=000 loc="" i
+  for ((i = 1; i <= TRIES; i++)); do
+    code=$(curl -sS -o /dev/null -D /tmp/redirect-headers -w '%{http_code}' --max-time 30 "$BASE$path" || echo 000)
+    loc=$(grep -i '^location:' /tmp/redirect-headers 2>/dev/null | head -1 | tr -d '\r' | awk '{print $2}')
+    case "$code" in 301 | 302 | 307 | 308) [[ "$loc" == *"$to"* ]] && break ;; esac
+    [ "$i" -lt "$TRIES" ] && sleep "$DELAY"
+  done
+  echo "GET $path -> $code ${loc:-no location}"
+  case "$code" in
+    301 | 302 | 307 | 308) [[ "$loc" == *"$to"* ]] || failed=1 ;;
+    *) failed=1 ;;
+  esac
+}
+
 echo "Confirming $BASE serves every path the suites open"
 
 # Handoff 40-B section 6: the admin host serves these paths and nothing of the member app's;
@@ -59,7 +77,10 @@ serves /connect /dev/null
 # Brief 4B's routes, opened by tests/auth.cjs.
 serves /reset
 serves /reset/new
-serves /password
+# Handoff 61-S1: /password redirects into the Account drawer, whose routes tests/account.cjs opens.
+redirects /password /settings/security
+serves /settings
+serves /settings/security
 # Brief 5's routes, opened by tests/onboarding.cjs.
 serves /welcome
 serves /where
