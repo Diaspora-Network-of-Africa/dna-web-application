@@ -38,5 +38,12 @@ export function feedViewOf(
       ? { kind: "expanded", id, reveal: !!state.reveal }
       : { kind: "direct", id };
   }
-  return pathname === "/feed" ? { kind: "feed" } : null;
+  // Handoff 61-S1 (EXTRACTION-60-SETTINGS addendum change 1): the Account drawer opens over the Feed,
+  // from the avatar and from a link to a panel alike, so /settings and its panels show the list.
+  return pathname === "/feed" || isSettingsPath(pathname) ? { kind: "feed" } : null;
+}
+
+/** /settings and every route under it. */
+export function isSettingsPath(pathname: string): boolean {
+  return pathname === "/settings" || pathname.startsWith("/settings/");
 }

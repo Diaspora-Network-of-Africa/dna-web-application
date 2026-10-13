@@ -65,6 +65,54 @@ export function applyTheme(theme: Theme) {
   }
 }
 
+/**
+ * Handoff 61-S1 (extraction 60-SETTINGS 3.5; rulings 1381, 1393): the member's appearance choice,
+ * on the device. `system` is no stored choice, which is the default, and the theme is then the
+ * device's scheme as `readTheme` already resolves it; `light` and `dark` are the stored choice.
+ * Read once on mount, as `useTheme` reads it: a scheme change while the page is open moves nothing,
+ * which is the behaviour tests/theme.cjs's member arm reads (1377).
+ */
+export type ThemeChoice = "system" | Theme;
+
+export function readThemeChoice(): ThemeChoice {
+  try {
+    const v = localStorage.getItem(THEME_KEY);
+    if (v === "light" || v === "dark") return v;
+  } catch {
+    /* no storage */
+  }
+  return "system";
+}
+
+export function applyThemeChoice(choice: ThemeChoice): Theme {
+  if (choice !== "system") {
+    applyTheme(choice);
+    return choice;
+  }
+  try {
+    localStorage.removeItem(THEME_KEY);
+  } catch {
+    /* no storage */
+  }
+  const t = readTheme();
+  document.documentElement.setAttribute("data-theme", t);
+  return t;
+}
+
+export function useThemeChoice(): [ThemeChoice, (c: ThemeChoice) => void] {
+  const [choice, setChoice] = useState<ThemeChoice>("system");
+  useEffect(() => {
+    setChoice(readThemeChoice());
+  }, []);
+  return [
+    choice,
+    (c) => {
+      applyThemeChoice(c);
+      setChoice(c);
+    },
+  ];
+}
+
 export function useTheme(): [Theme, (t: Theme) => void] {
   const [theme, setTheme] = useState<Theme>("light");
   useEffect(() => {

@@ -28,6 +28,20 @@ const RECOVERY_USER = {
   user_metadata: { full_name: "Amara Osei" },
   app_metadata: { provider: "email" },
   created_at: new Date().toISOString(),
+  // Handoff 61-S1: the Account drawer reads the sign-in methods off the user's identities, and a
+  // member with an email identity has a password set, so /password opens "Change your password".
+  identities: [
+    {
+      identity_id: "i-email",
+      id: UID,
+      user_id: UID,
+      provider: "email",
+      identity_data: { email: "member@test.invalid", sub: UID },
+      created_at: "2026-09-01T00:00:00Z",
+      last_sign_in_at: "2026-10-01T00:00:00Z",
+      updated_at: "2026-10-01T00:00:00Z",
+    },
+  ],
 };
 const RECOVERY_SESSION = {
   access_token: JWT,
@@ -407,15 +421,17 @@ async function runAuthLayout(browserType, bname, [w, h], theme) {
 
       // The signed-in change-password surface, inside the shell. The shared signIn waits for the
       // shell to finish mounting; navigating on the bare waitForURL raced the shell's own
-      // navigation in WebKit and lost the goto.
+      // navigation in WebKit and lost the goto. Since handoff 61-S1 (finding 3) /password redirects
+      // into the Account drawer's password level at /settings/security, the one password flow.
       await signIn(page);
       await page.goto(BASE + "/password", { waitUntil: "domcontentloaded" });
+      await page.waitForURL("**/settings/security**", { timeout: 15000 });
       await page.waitForSelector('[data-testid="password"]', { timeout: 15000 });
       await hydrated(page);
       record(
         tag + ": /password renders in the shell content column",
         (await page.locator("header").count()) > 0 &&
-          (await page.locator("h1").innerText()).trim() === "Change your password",
+          (await page.locator("[data-drawer-title]").innerText()).trim() === "Change your password",
       );
       await noOverflow(page, tag + ": change password");
     } catch (e) {
@@ -683,13 +699,16 @@ async function runAuthFlows(browserType, bname, [w, h], theme) {
     await browser.close();
   }
 
-  // 9. /password, signed in and inside the shell.
+  // 9. /password, signed in and inside the shell. Since handoff 61-S1 (finding 3) it redirects into
+  // the Account drawer's password level, the one password flow: the refusal renders in the field's
+  // own line (414) and the done state is the S3 status line on Sign-in and security.
   {
     const { browser, page, auth } = await open(browserType, [w, h], theme);
     try {
       auth.wrongCurrent = "not-my-password";
       await signIn(page);
       await page.goto(BASE + "/password", { waitUntil: "domcontentloaded" });
+      await page.waitForURL("**/settings/security**", { timeout: 15000 });
       await page.waitForSelector('[data-testid="password"]', { timeout: 15000 });
       await hydrated(page);
       record(
@@ -699,20 +718,21 @@ async function runAuthFlows(browserType, bname, [w, h], theme) {
       await page.fill('input[autocomplete="current-password"]', "not-my-password");
       await page.fill('input[autocomplete="new-password"] >> nth=0', "correct horse battery");
       await page.fill('input[autocomplete="new-password"] >> nth=1', "correct horse battery");
-      await page.click('button[type="submit"]');
-      await page.waitForSelector('[data-testid="auth-alert"]');
+      await page.click('[data-testid="password-submit"]');
+      await page.waitForSelector('[data-testid="password-refusal"]');
       record(
         tag + ": the wrong current password is named and only that field is flagged",
-        (await page.locator('[data-testid="auth-alert"]').innerText()).startsWith(
+        (await page.locator('[data-testid="password-refusal"]').innerText()).startsWith(
           "That is not your current password.",
         ) &&
           (await page
             .locator('input[autocomplete="current-password"][aria-invalid="true"]')
-            .count()) === 1,
+            .count()) === 1 &&
+          (await page.locator('input[aria-invalid="true"]').count()) === 1,
       );
       await page.fill('input[autocomplete="current-password"]', "my-real-password");
-      await page.click('button[type="submit"]');
-      await page.waitForSelector('[data-testid="password-done"]', { timeout: 15000 });
+      await page.click('[data-testid="password-submit"]');
+      await page.waitForSelector('[data-testid="password-changed"]', { timeout: 15000 });
       record(
         tag + ": changing the password signs out other devices",
         auth.logoutScopes.includes("others"),
@@ -720,7 +740,7 @@ async function runAuthFlows(browserType, bname, [w, h], theme) {
       );
       record(
         tag + ": the member stays signed in here",
-        (await page.locator('[data-testid="password-done"]').innerText()).includes(
+        (await page.locator('[data-testid="password-changed"]').innerText()).includes(
           "You stay signed in here.",
         ),
       );

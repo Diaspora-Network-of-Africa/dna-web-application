@@ -16,29 +16,26 @@ import {
   type ReactNode,
 } from "react";
 import { AppHeader, MessagesControl } from "@/components/strand/AppHeader";
-import { Button } from "@/components/strand/Button";
 import { Icon } from "@/components/strand/Icon";
 import { PulseDock, type PulseState } from "@/components/strand/PulseDock";
-import { Switch } from "@/components/strand/Switch";
 import type { C } from "@/components/strand/cmeta";
 import { LeftRail, RightRail } from "@/components/dna/Rails";
 import { NotificationPanel } from "@/components/dna/NotificationPanel";
 import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import type { Member } from "@/lib/auth";
 import { openComposer, useComposerState } from "@/lib/composer-store";
-import type { FeedView } from "@/lib/feed-view";
+import { isSettingsPath, type FeedView } from "@/lib/feed-view";
 import { useHeaderLens } from "@/lib/header-lens-store";
 import { connectPendingKey, connectRequestsPending } from "@/lib/notifications";
-import { settingsSet } from "@/lib/messenger";
-import { SETTINGS_KEY, useMessagingSettings, useMessengerInbox } from "@/lib/messenger-inbox";
+import { useMessengerInbox } from "@/lib/messenger-inbox";
 import { useColumnPad, useLeftRail, useRightRail, useShellLayout } from "@/lib/rail-store";
 import { ShellScrollProvider, useScrollState } from "@/lib/shell-scroll";
-import { getSupabase } from "@/lib/supabase";
 import { useTheme, useTier, useWide } from "@/lib/tier";
 
 export const COMPOSER_HOST = "feed";
 
-/** Popover chrome shared by the expanded notification list and the account panel (SPEC section 6). */
+/** Popover chrome of the expanded notification list (SPEC section 6). The account panel that shared it
+ *  is the Account drawer since handoff 61-S1 (src/components/dna/AccountDrawer.tsx). */
 export const POPOVER_STYLE = {
   position: "fixed" as const,
   top: 60,
@@ -80,10 +77,10 @@ export function AppShell({
   const wide = useWide();
   const navigate = useNavigate();
   const router = useRouter();
-  const [theme, setTheme] = useTheme();
-  const [account, setAccount] = useState(false);
+  // The stored or device theme is stamped on the document here, once per shell mount; the choice
+  // itself moved to the Account drawer's Preferences (handoff 61-S1, 1381, 1393).
+  useTheme();
   const [notifOpen, setNotifOpen] = useState(false);
-  const closeAccount = useCallback(() => setAccount(false), []);
   // Handoff 60-NC (1557, SPEC 6.4): `?notifications=email`, validated by the shell route, opens the
   // panel on its email view once; the panel calls back when it has, and the parameter is replaced
   // away so a reload or a Back does not open it again.
@@ -117,8 +114,6 @@ export function AppShell({
   const canvas = layout?.mode === "canvas";
   // Brief 14 (1334, 1344): the inbox for the life of the session and the Messages control's dot.
   const inbox = useMessengerInbox(member);
-  const qc = useQueryClient();
-  const messaging = useMessagingSettings(member);
   // 1481, 1522: Connect's slot carries the for-you dot while a request arrived after the member last
   // opened My Network. One read on the bell's interval feeds the header's row and the dock alike;
   // nothing else in either is a state, so the dot is all they carry.
@@ -210,9 +205,6 @@ export function AppShell({
   useEffect(() => {
     document.documentElement.setAttribute("data-shell", mounted.current);
   }, []);
-  useEffect(() => {
-    setAccount(false);
-  }, [closeKey]);
   // Ruling 1457: iOS scrolls the window, not the shell's scroller, to keep a focused field above
   // the keyboard, and the document never scrolls inside the shell (104), so nothing scrolls it
   // back. When the keyboard closes, a window left scrolled is returned to the origin, on every
@@ -233,33 +225,25 @@ export function AppShell({
     const frame = window.requestAnimationFrame(reset);
     return () => window.cancelAnimationFrame(frame);
   }, [keyboard]);
-  useEffect(() => {
-    if (!account) return;
-    const k = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setAccount(false);
-    };
-    window.addEventListener("keydown", k);
-    return () => window.removeEventListener("keydown", k);
-  }, [account]);
+  // Handoff 61-S1 (1656): the avatar opens the Account drawer at /settings, one control, replacing
+  // the account dialog this shell drew. The drawer is the /settings route's, over the Feed.
+  const onSettings = isSettingsPath(pathname);
+  const openAccount = () => {
+    if (onSettings) return;
+    void navigate({ to: "/settings" });
+  };
 
   const go = (c: C) => {
-    setAccount(false);
     void navigate({ to: "/$c", params: { c } });
   };
   const warm = (c: C) => void router.preloadRoute({ to: "/$c", params: { c } });
   const homeHref = router.buildLocation({ to: "/feed", search: {} }).href;
   const goHome = () => {
-    setAccount(false);
     scrollToTop();
     void navigate({ to: "/feed", search: {} });
   };
   const compose = () => {
-    setAccount(false);
     openComposer({ host: COMPOSER_HOST });
-  };
-  const signOut = async () => {
-    await getSupabase()?.auth.signOut();
-    void navigate({ to: "/sign-in" });
   };
 
   // The floating composer entry (ruling 107): mounted on Feed while nothing sits over it; shown while
@@ -334,8 +318,8 @@ export function AppShell({
             onHomeIntent={() => void router.preloadRoute({ to: "/feed", search: {} })}
             member={{ name: member.name, src: member.avatar }}
             onCompose={compose}
-            onAvatar={() => setAccount((v) => !v)}
-            avatarActive={account}
+            onAvatar={openAccount}
+            avatarActive={onSettings}
             cActive={active}
             cStates={cStates}
             onSelectC={go}
@@ -345,10 +329,7 @@ export function AppShell({
               <MessagesControl
                 unread={inbox.unread}
                 active={onMessages}
-                onClick={() => {
-                  setAccount(false);
-                  void navigate({ to: "/messages" });
-                }}
+                onClick={() => void navigate({ to: "/messages" })}
               />
             }
             // 1123: on Discovery (the `lanes` layout) at expanded the header's row takes the canvas's
@@ -369,7 +350,6 @@ export function AppShell({
             <NotificationPanel
               member={member}
               tier={tier}
-              onOpen={closeAccount}
               onChange={setNotifOpen}
               closeKey={closeKey}
               openTo={notificationsTo}
@@ -770,167 +750,6 @@ export function AppShell({
               <Icon name="pen-line" size={18} />
             </button>
           </div>
-        )}
-        {account && (
-          <>
-            {expanded && (
-              <button
-                type="button"
-                aria-label="Close account panel"
-                onClick={() => setAccount(false)}
-                style={{ all: "unset", position: "fixed", inset: 0, zIndex: 40, cursor: "default" }}
-              />
-            )}
-            <div
-              role="dialog"
-              aria-label="Account"
-              data-testid="account-panel"
-              style={
-                expanded
-                  ? POPOVER_STYLE
-                  : {
-                      position: "fixed",
-                      inset: 0,
-                      paddingTop: "env(safe-area-inset-top)",
-                      zIndex: 50,
-                      background: "var(--bg)",
-                      display: "flex",
-                      flexDirection: "column",
-                      boxSizing: "border-box",
-                      animation: "strand-slide var(--dur-default) var(--ease)",
-                    }
-              }
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                  height: 56,
-                  padding: "0 8px 0 16px",
-                  borderBottom: "1px solid var(--line)",
-                  flex: "none",
-                }}
-              >
-                <span style={{ flex: 1, fontSize: 17, fontWeight: 500 }}>{member.name}</span>
-                <Button variant="ghost" size="sm" onClick={() => setAccount(false)}>
-                  Close
-                </Button>
-              </div>
-              <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 16 }}>
-                {/* Ruling 428 (B12 item 1): the member's email address is not shown here. It
-                    belongs to User Settings (37), which has no surface yet. */}
-                {member.handle && (
-                  <div
-                    style={{ display: "flex", flexDirection: "column", gap: 4, margin: "-4px 0" }}
-                  >
-                    <button
-                      type="button"
-                      data-testid="view-my-profile"
-                      onClick={() => {
-                        setAccount(false);
-                        void navigate({
-                          to: "/m/$handle",
-                          params: { handle: member.handle as string },
-                          search: {},
-                        });
-                      }}
-                      style={{
-                        all: "unset",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        minHeight: 44,
-                        fontSize: 15,
-                        fontWeight: 500,
-                      }}
-                    >
-                      View my profile
-                    </button>
-                    <button
-                      type="button"
-                      data-testid="edit-my-profile"
-                      onClick={() => {
-                        setAccount(false);
-                        void navigate({
-                          to: "/m/$handle",
-                          params: { handle: member.handle as string },
-                          search: { edit: true },
-                        });
-                      }}
-                      style={{
-                        all: "unset",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        minHeight: 44,
-                        fontSize: 15,
-                        fontWeight: 500,
-                      }}
-                    >
-                      Edit profile
-                    </button>
-                  </div>
-                )}
-                {/* Ruling 230: the signed-in change-password path. /password is the whole of it;
-                    there is no settings surface, so this row is its entry point. */}
-                <button
-                  type="button"
-                  data-testid="change-password"
-                  onClick={() => {
-                    setAccount(false);
-                    void navigate({ to: "/password" });
-                  }}
-                  style={{
-                    all: "unset",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    minHeight: 44,
-                    margin: "-4px 0",
-                    fontSize: 15,
-                    fontWeight: 500,
-                  }}
-                >
-                  Change password
-                </button>
-                <Switch
-                  label="Dark theme"
-                  checked={theme === "dark"}
-                  onChange={(on) => setTheme(on ? "dark" : "light")}
-                />
-                {/* Brief 14 (1372, 1345, 1343): the two Messenger settings, in this panel's row
-                    pattern, writing through messenger_settings_set; a conversion exception. */}
-                <Switch
-                  style={{ display: "flex" }}
-                  label="Read receipts"
-                  checked={!!messaging.data?.receipts_enabled}
-                  disabled={!messaging.data}
-                  onChange={(on) =>
-                    void settingsSet({ receipts: on }).then(
-                      (row) => qc.setQueryData(SETTINGS_KEY(member.id), row),
-                      () => undefined,
-                    )
-                  }
-                />
-                <Switch
-                  style={{ display: "flex" }}
-                  label="Link previews"
-                  checked={!!messaging.data?.link_previews_enabled}
-                  disabled={!messaging.data}
-                  onChange={(on) =>
-                    void settingsSet({ linkPreviews: on }).then(
-                      (row) => qc.setQueryData(SETTINGS_KEY(member.id), row),
-                      () => undefined,
-                    )
-                  }
-                />
-                <Button variant="secondary" size="sm" onClick={() => void signOut()}>
-                  Sign out
-                </Button>
-              </div>
-            </div>
-          </>
         )}
       </div>
     </ShellScrollProvider>

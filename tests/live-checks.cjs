@@ -1287,6 +1287,132 @@ async function get(url, headers = {}) {
             " was " +
             before,
         );
+
+        // -------------------------------------------------------------------------------------
+        // Handoff 61-S1 (20261013120000): sessions_list() and session_revoke(uuid), the Account
+        // drawer's Signed-in devices. The list is the caller's own and carries id, user_agent,
+        // last_active_at and is_current, never an IP, a location or a factor; one member's list
+        // names none of another's sessions; the revoke refuses the current session (42501) and
+        // another member's (P0002), and removes a second session of the caller's own, whose
+        // refresh token goes by cascade so it cannot mint another access token. Until the
+        // migration is applied (it holds a delete, so it reaches the project by the founder's SQL
+        // Editor paste, 1528) PostgREST answers PGRST202 and the arm reads UNPROVEN (228).
+        // -------------------------------------------------------------------------------------
+        {
+          const ownerList = await memberRpc(ownerToken, "sessions_list", {});
+          const absent =
+            ownerList.status === 404 ||
+            (ownerList.body && ownerList.body.code === "PGRST202") ||
+            (ownerList.status >= 400 &&
+              /sessions_list/.test(String((ownerList.body && ownerList.body.message) || "")));
+          if (absent) {
+            skip(
+              "61-S1: sessions_list and session_revoke (S10 to S19)",
+              "20261013120000 is not applied on the project yet (status " + ownerList.status + ")",
+            );
+          } else {
+            const ALLOWED = ["id", "user_agent", "last_active_at", "is_current"];
+            const memberList = await memberRpc(memberToken, "sessions_list", {});
+            const rows = Array.isArray(ownerList.body) ? ownerList.body : [];
+            const mrows = Array.isArray(memberList.body) ? memberList.body : [];
+            const keys = [...new Set(rows.flatMap((r) => Object.keys(r)))];
+            record(
+              "61-S1: sessions_list answers the owner's rows with id, user_agent, last_active_at and is_current only, one of them current, and no ip, location or factor",
+              ownerList.status === 200 &&
+                rows.length >= 1 &&
+                keys.every((k) => ALLOWED.includes(k)) &&
+                rows.filter((r) => r.is_current === true).length === 1,
+              "status " + ownerList.status + " rows " + rows.length + " keys " + keys.join(","),
+            );
+            const ownerIds = new Set(rows.map((r) => r.id));
+            record(
+              "61-S1: the member's list names its own current session and none of the owner's",
+              memberList.status === 200 &&
+                mrows.length >= 1 &&
+                mrows.filter((r) => r.is_current === true).length === 1 &&
+                mrows.every((r) => !ownerIds.has(r.id)),
+              "status " + memberList.status + " rows " + mrows.length,
+            );
+            const ownerCurrent = rows.find((r) => r.is_current) || null;
+            const memberCurrent = mrows.find((r) => r.is_current) || null;
+            if (!ownerCurrent || !memberCurrent) {
+              skip(
+                "61-S1: session_revoke's refusals and the owner's second session",
+                "a current session did not resolve for both accounts",
+              );
+            } else {
+              const revokeSelf = await memberRpc(ownerToken, "session_revoke", {
+                p_session_id: ownerCurrent.id,
+              });
+              const revokeOther = await memberRpc(ownerToken, "session_revoke", {
+                p_session_id: memberCurrent.id,
+              });
+              const ownerAfter = await memberRpc(ownerToken, "sessions_list", {});
+              const memberAfter = await memberRpc(memberToken, "sessions_list", {});
+              record(
+                "61-S1: session_revoke refuses the current session (current_session) and another member's (session_not_found), and both lists are as they were",
+                revokeSelf.status >= 400 &&
+                  /current_session/.test(JSON.stringify(revokeSelf.body || "")) &&
+                  revokeOther.status >= 400 &&
+                  /session_not_found/.test(JSON.stringify(revokeOther.body || "")) &&
+                  Array.isArray(ownerAfter.body) &&
+                  ownerAfter.body.length === rows.length &&
+                  Array.isArray(memberAfter.body) &&
+                  memberAfter.body.length === mrows.length,
+                "self " +
+                  revokeSelf.status +
+                  " " +
+                  JSON.stringify(revokeSelf.body || "").slice(0, 80) +
+                  " other " +
+                  revokeOther.status +
+                  " " +
+                  JSON.stringify(revokeOther.body || "").slice(0, 80),
+              );
+              // The positive control (270): a second session of the owner's own, revoked from the
+              // first; its refresh token is gone with the row (the cascade), so it cannot refresh.
+              const second = await fetch(SUPABASE_URL + "/auth/v1/token?grant_type=password", {
+                method: "POST",
+                headers: { apikey: KEY, "content-type": "application/json" },
+                body: JSON.stringify({ email: OWNER_EMAIL, password: OWNER_PASSWORD }),
+              })
+                .then((r) => r.json())
+                .catch(() => null);
+              const token2 = second && second.access_token;
+              const list2 = token2 ? await memberRpc(token2, "sessions_list", {}) : null;
+              const secondRow =
+                list2 && Array.isArray(list2.body) ? list2.body.find((r) => r.is_current) : null;
+              if (!token2 || !secondRow) {
+                skip(
+                  "61-S1: the owner revokes a second session of their own",
+                  "the second sign-in did not resolve a current session",
+                );
+              } else {
+                const revoked = await memberRpc(ownerToken, "session_revoke", {
+                  p_session_id: secondRow.id,
+                });
+                const listAfter = await memberRpc(ownerToken, "sessions_list", {});
+                const refresh = await fetch(
+                  SUPABASE_URL + "/auth/v1/token?grant_type=refresh_token",
+                  {
+                    method: "POST",
+                    headers: { apikey: KEY, "content-type": "application/json" },
+                    body: JSON.stringify({ refresh_token: second.refresh_token }),
+                  },
+                ).catch(() => ({ status: 0 }));
+                record(
+                  "61-S1: the owner revokes a second session of their own, the list no longer carries it, and its refresh token no longer refreshes (the cascade)",
+                  secondRow.id !== ownerCurrent.id &&
+                    revoked.status >= 200 &&
+                    revoked.status < 300 &&
+                    Array.isArray(listAfter.body) &&
+                    !listAfter.body.some((r) => r.id === secondRow.id) &&
+                    refresh.status >= 400,
+                  "revoke " + revoked.status + " refresh " + refresh.status,
+                );
+              }
+            }
+          }
+        }
       }
     }
   }

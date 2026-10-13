@@ -9307,3 +9307,46 @@ page section for section" in `tests/profile.cjs`. On run 580 (#110's head `9edd6
 `main`'s run 579, the same app code, the check passed, and in run 580 itself it passed at every other
 profile-owner cell. The arm reads `sectionIds` after a fixed 400 ms wait once the banner appears, so
 it is the same fixed-wait class as the three above. The same owed item applies.
+
+## G282. Cancel the change (A6) is held out of the email change
+
+**Severity: low. Opened 13 October 2026 by handoff 61-S1 under ruling 1745. The number is assigned
+by this entry (ruling 638).**
+
+The extraction draws Cancel the change (A6) in the pending line of Sign-in and security, and
+section 4 names its server action, `email_change_cancel()`, which Supabase Auth does not expose: a
+pending `new_email` and its two confirmation tokens live in `auth.users`, which no member-facing
+path writes. Ruling 1745 holds the act out, so the pending line carries A3 and Resend (A4) and no
+Cancel; the change lapses when its tokens expire, or completes when both are opened (1668). Owed: a
+ruling on whether a cancel exists at all, and if so its writer, which clears `new_email` and the
+`email_change_token_*` columns for the caller only. Owner: Chat.
+
+## G283. Set and Not set on the Password row are read from the email identity
+
+**Severity: low; nothing is written wrongly. Opened 13 October 2026 by handoff 61-S1. The number is
+assigned by this entry (ruling 638).**
+
+The Sign-in methods rows come from `auth.getUserIdentities()` (extraction section 4), and the
+client has no other read of whether a password is set: `encrypted_password` never leaves
+`auth.users`. `methodsOf` in `src/lib/account.ts` therefore reads Set when an `email` identity
+exists, which Supabase Auth creates for an account that signed up with an address and a password.
+Whether setting a first password on a provider-only account (S6, Set a password) adds that identity
+is not read in the tree and could not be verified on the canonical project, which holds no
+provider-only test account; if it does not, such a member reads Not set and Set a password again
+after a reload, and the A21 guard keeps standing although the password works. Owed: one provider
+sign-in on the canonical project, Set a password, and a read of `auth.identities` after it; then
+either nothing, or a definer read of `encrypted_password is not null` for the caller. Owner: Code,
+by Chat's brief.
+
+## G284. `?notifications=email` and `next=email-preferences` still open the panel's view, not the drawer's route
+
+**Severity: low. Opened 13 October 2026 by handoff 61-S1. The number is assigned by this entry
+(ruling 638).**
+
+`src/routes/_shell/feed.tsx` says the Settings build repoints `?notifications=email` (1557) to the
+email preferences' route once Settings takes the control over (1552). Handoff 61-S1 mounts the view
+as `/settings/notifications` and changes nothing in the panel, so the parameter, and sign-in's
+`next=email-preferences` that maps to it, still open the notification panel's email view and not
+the drawer. Both entries reach the same rows (1552), so nothing is lost; what is owed is the one
+destination 1552 names: the parameter and `next` resolve to `/settings/notifications`, which also
+closes G276's provider half once the destination is a route. Owner: Code, by Chat's brief.

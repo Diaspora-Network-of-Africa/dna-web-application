@@ -1,3 +1,11 @@
+// Handoff 61-S1 (the Account drawer): `sessions_list` and `session_revoke` are added to Functions by
+// hand from the committed 20261013120000_h61_s1_sessions.sql, in the shape the generator writes,
+// because the file holds a `delete` and reaches the project by the founder's SQL Editor paste (1528)
+// after this commit (225). The next regeneration after that paste replaces this hand edit with the
+// generator's own; nothing else moves. `export type Views` is restored by hand after every
+// regeneration (CLAUDE.md).
+//
+// Before H61-S1:
 // Regenerated from the canonical Supabase project (dgspjevjoblujcoljvkn) with the Supabase MCP
 // generate_typescript_types tool on handoff H60-NC's branch, on main at bff0906 (the merge of #108),
 // after the founder applied 20261012120000 by SQL Editor paste and Chat read it back at 20:47 PDT on
@@ -4810,6 +4818,16 @@ export type Database = {
       send_introduction: {
         Args: { p_message: string; p_recipient: string };
         Returns: string;
+      };
+      session_revoke: { Args: { p_session_id: string }; Returns: undefined };
+      sessions_list: {
+        Args: never;
+        Returns: {
+          id: string;
+          user_agent: string;
+          last_active_at: string;
+          is_current: boolean;
+        }[];
       };
       set_follow: {
         Args: { p_on: boolean; p_target: string };
