@@ -9,7 +9,9 @@
 //
 // DELETE is the object behind a delete-for-everyone (F4): the client calls `messenger_delete` first,
 // which marks the row, and this removes the object and forgets the row; then it sweeps up to twenty
-// older marked rows, because Pages has no cron. Returns `{ removed }` for the client to discard.
+// older marked rows, because Pages has no cron. Returns `{ removed }` for the client to discard, with
+// `sweep: "failed"` beside it when the sweep's listing errored (G280: the listing ran read-only under
+// PostgREST and failed on every call, and the handler said nothing), so a log or an arm can read it.
 //
 // `media_.$id` rather than `media.$id`: the underscore keeps this route a sibling of
 // /api/messages/media rather than its child, as reset_.new does for /reset/new. This file carries only
@@ -131,10 +133,13 @@ export const Route = createFileRoute("/api/messages/media_/$id")({
         // The sweep (F4): older marked rows, their objects removed and their rows forgotten. A
         // missing object is already gone (R2's delete of an absent key succeeds), so each row is
         // forgotten once its delete has returned; a failed delete leaves the row for the next call.
+        // A listing that errors is reported, never swallowed: the member's own row is gone and the
+        // answer is still 200, with `sweep: "failed"` so the failure is visible outside the handler.
         const marked = await member.sb.rpc("messenger_media_marked", {
           p_limit: MESSAGE_MEDIA_SWEEP,
         });
-        if (!marked.error && Array.isArray(marked.data)) {
+        if (marked.error) return json({ removed, sweep: "failed" }, 200, envHeader);
+        if (Array.isArray(marked.data)) {
           for (const item of marked.data as Array<Record<string, unknown>>) {
             const mediaId = item["media_id"];
             const key = item["storage_path"];
