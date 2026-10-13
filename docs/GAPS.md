@@ -9458,3 +9458,41 @@ Owner: Code, with the ruling on G286.
 ## G289. Two `live` jobs on different branches collide on the shared fixtures
 
 Withdrawn: duplicate of G33.
+
+## G290. The `matrix (chromium)` job's ceiling at `pages.yml:397` is overrun by a green run
+
+**Severity: medium; a green run that reads cancelled. Opened 13 October 2026 by handoff 61-VT, from
+Pages runs 587 and 590. The number is assigned by this entry (ruling 638).**
+
+`.github/workflows/pages.yml:397` sets the matrix job's `timeout-minutes` to 85 for WebKit and 75
+for Chromium, from handoff 38-C's reading of runs 436 and 439 (Chromium's suite at 51 minutes;
+15 + 52 + 1 = 68, a 7-minute margin). On run 590 (id 38436572606, #113's head `09fe456`) the
+Chromium job ran from 17:12:51 to 18:28:04 UTC, 75 minutes 13 seconds, and concluded `cancelled`
+after its matrix step had passed 9029 of 9029: the ceiling ended it, not an arm. On run 587 the same
+job took about 69 minutes. The trend is the one 38-C named, the suite growing with every surface arm,
+and the cost is a run whose every check passed reading as cancelled, which is not a result Chat can
+cite under 1114. Fix PR 05 does not change `pages.yml`; this entry records the reading. Owed: the
+Chromium job's budget read again on two recent runs and a new ceiling in the shape 38-C set, or a
+split of the Chromium suite. Owner: Chat rules, then Code.
+
+## G291. `private.member_display` and `private.event_post_facts` name a member without the core predicate
+
+**Severity: moderate under prototype posture (140); invite-boundary gate before 31 October. Opened
+13 October 2026 by handoff 61-VT (Fix PR 05), the one residue the conformance arm's classes do not
+cover. The number is assigned by this entry (ruling 638).**
+
+Both are security definer and read `public.members` directly: `member_display(p_ids)` answers id,
+name, handle and avatar_path for whatever ids it is handed, and `event_post_facts(p_event)` builds
+`presented_by` from the event post's author row. `event_presenters`, `event_speakers`, `event_page`
+and `event_public_page` reach them, so a presenter's or an event author's name, handle and avatar
+reach a reader through no predicate, neither `private.visible_to` nor `admit_member`. A Private
+member who publishes an event to everyone is named as its presenter to every reader of the event,
+while `members_member_select` refuses the same reader that member's core row, and the Feed withholds
+the same name under 416. The conformance arm (`tests/visibility-conformance.cjs`) does not catch it:
+its invoker class checks the relations an object reads through policies, and its reach check asks
+whether an object reaches the predicate, not whether a private helper it reaches reads
+`public.members` without one. Owed: a ruling on whether a host's or presenter's name is consent by
+publication, as a thread is (1330), or a core-row read under `visible_to`; then either a comment on
+each helper naming it as deliberately outside the predicate, or a rewrite through it; and the arm
+extended to name any reachable private helper that reads `public.members` without the predicate.
+Owner: Chat rules, then Code.

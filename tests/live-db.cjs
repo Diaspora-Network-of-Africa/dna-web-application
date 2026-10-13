@@ -97,6 +97,7 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const { runVisibilityConformance, CHECKS: CONFORMANCE } = require("./visibility-conformance.cjs");
 
 const OWNER_HANDLE = "owner-test";
 const MEMBER_HANDLE = "member-test";
@@ -464,6 +465,24 @@ async function runLiveDbArms({ record, skip }) {
       "Handoff 60-NC (G245, 1529, 1572): a token email_unsubscribe_mint returns for the outbox row a notification enqueued turns every category off for its member on email_unsubscribe as anon, and the same token a second time answers expired and changes nothing",
     ncTokenAged:
       "Handoff 60-NC (G245, 1572): a token 61 days old answers expired and leaves the member's modes as they were",
+    vt: "H61-VT (1747): before the block, each account reads the other's everyone section: row present both ways",
+    vtEveryone:
+      "H61-VT (1747): a blocked party reads an everyone section of the blocker: row present",
+    vtConnections:
+      "H61-VT (1747): a blocked party reads a connections section of the blocker: no row",
+    vtAnchored:
+      "H61-VT (1747): a blocked party who shares an anchor reads an anchored section of the blocker: no row",
+    vtAnchoredControl:
+      "H61-VT control (1747): the same anchored read with no block: row present, both ways",
+    vtReverseEveryone:
+      "H61-VT (1747): the blocker reads the blocked party's everyone section: row present",
+    vtReverseConnections:
+      "H61-VT (1747): the blocker reads the blocked party's connections section: no row",
+    vtReverseAnchored:
+      "H61-VT (1747): the blocker reads the blocked party's anchored section across the shared anchor: no row",
+    // The conformance arm's checks (tests/visibility-conformance.cjs), listed here so that a run
+    // that cannot connect reports each of them UNPROVEN by name (G143, 228).
+    ...Object.fromEntries(Object.entries(CONFORMANCE).map(([k, v]) => ["conformance" + k, v])),
   };
   // G143: a block that opens with a presence probe carries every arm it holds in `names`, under one key
   // prefix, so a probe that fails reports each of them UNPROVEN and the job's total does not fall with
@@ -511,6 +530,17 @@ async function runLiveDbArms({ record, skip }) {
       who.rows[0] && who.rows[0].u === "live_arms",
       "current_user " + (who.rows[0] && who.rows[0].u),
     );
+
+    // ------------------------------------------------------------------------------------------
+    // H61-VT (1734, 1747): the conformance arm, on this client, as live_arms, before any fixture.
+    // It reads the catalog only. A throw here is reported on every check it holds, by name.
+    // ------------------------------------------------------------------------------------------
+    try {
+      await runVisibilityConformance({ client, record, skip });
+    } catch (e) {
+      await client.query("rollback").catch(() => {});
+      unreachedIn("conformance", "the conformance arm threw: " + String(e.message || e));
+    }
 
     // ------------------------------------------------------------------------------------------
     // Hotfix 01: the fixture file, byte for byte. It opens and rolls back its own transaction.
@@ -1009,6 +1039,132 @@ async function runLiveDbArms({ record, skip }) {
             ? "request " + controlIntro.rows[0].id + ", rolled back"
             : controlIntro.code + " " + controlIntro.message,
         );
+      }
+    });
+
+    // ------------------------------------------------------------------------------------------
+    // H61-VT (1734, 1747). A block lowers what either party can see of the other, in every section,
+    // through private.visible_to. The fixture is the two test accounts, each with an about row
+    // written through save_profile_section (the one writer) and its audience set through the same
+    // path; the shared anchor is one accepted event attestation between them, inserted as live_arms
+    // under the r382 grant the 435 arm already uses (one accepted attestation on an event, with one
+    // account on each side, is what private.shares_anchor reads). member-test blocks owner-test
+    // through the owner insert policy, the app's own path (216). Owner-test is then the blocked
+    // party and member-test the blocker; both directions are read at each audience, through the
+    // member_about viewer policy, and every answer is printed. The anchored reads carry their own
+    // control: the block is torn down (the owner delete policy) and the same read answers present,
+    // or the absence under the block is reported unproven rather than passing for the wrong reason
+    // (228, 270). Everything rolls back.
+    // ------------------------------------------------------------------------------------------
+    await inTransaction(client, async () => {
+      const blocked = owner;
+      const blocker = member;
+      const readAbout = async (asId, ofId) => {
+        await actAs(client, asId);
+        const r = await attempt(
+          client,
+          "select count(*)::int as n from public.member_about where member_id = $1::uuid",
+          [ofId],
+        );
+        return r.ok ? r.rows[0].n : null;
+      };
+      const both = async () => ({
+        // The blocked party reads the blocker, and the blocker reads the blocked party.
+        blocked: await readAbout(blocked.id, blocker.id),
+        blocker: await readAbout(blocker.id, blocked.id),
+      });
+      const show = (x) => "blocked party reads " + x.blocked + ", blocker reads " + x.blocker;
+      const setAudience = async (id, audience) => {
+        await actAs(client, id);
+        return attempt(client, "select public.save_profile_section('visibility', $1::jsonb)", [
+          JSON.stringify({ section: "about", audience }),
+        ]);
+      };
+      const problems = [];
+      for (const who of [blocked, blocker]) {
+        await actAs(client, who.id);
+        const open = await attempt(
+          client,
+          "update public.members set profile_private = false where id = $1::uuid",
+          [who.id],
+        );
+        const about = await attempt(
+          client,
+          "select public.save_profile_section('about', $1::jsonb)",
+          [JSON.stringify({ about: "H61-VT fixture, rolled back by the same run." })],
+        );
+        const aud = await setAudience(who.id, "everyone");
+        for (const [what, r] of [
+          ["profile_private", open],
+          ["about", about],
+          ["audience", aud],
+        ])
+          if (!r.ok) problems.push(who.handle + " " + what + ": " + r.code + " " + r.message);
+      }
+      await actAsSelf(client);
+      const anchor = await attempt(
+        client,
+        `insert into public.attestations (member_id, c_category, object_kind, object_id, attester_member_id, attester_role, accepted_at)
+         values ($1::uuid, 'collaborate', 'event', gen_random_uuid(), $2::uuid, 'Host', now()) returning id`,
+        [blocked.id, blocker.id],
+      );
+      if (!anchor.ok) problems.push("anchor: " + anchor.code + " " + anchor.message);
+      if (problems.length) {
+        unreachedIn("vt", "the fixture could not be built: " + problems.join("; "));
+        skip(names.vt, "the fixture could not be built: " + problems.join("; "));
+        return;
+      }
+      const before = await both();
+      record(names.vt, before.blocked === 1 && before.blocker === 1, show(before));
+
+      await actAs(client, blocker.id);
+      const block = await attempt(
+        client,
+        "insert into public.member_blocks (blocker_id, blocked_id) values ($1::uuid, $2::uuid)",
+        [blocker.id, blocked.id],
+      );
+      if (!block.ok) {
+        unreachedIn("vt", "the block could not be written: " + block.code + " " + block.message);
+        return;
+      }
+      const everyone = await both();
+      record(names.vtEveryone, everyone.blocked === 1, show(everyone));
+      record(names.vtReverseEveryone, everyone.blocker === 1, show(everyone));
+
+      await setAudience(blocked.id, "connections");
+      await setAudience(blocker.id, "connections");
+      const connections = await both();
+      record(names.vtConnections, connections.blocked === 0, show(connections));
+      record(names.vtReverseConnections, connections.blocker === 0, show(connections));
+
+      await setAudience(blocked.id, "anchored");
+      await setAudience(blocker.id, "anchored");
+      const anchored = await both();
+
+      // The control: the same anchored read with no block. The blocker removes their own row.
+      await actAs(client, blocker.id);
+      const unblock = await attempt(
+        client,
+        "delete from public.member_blocks where blocker_id = $1::uuid and blocked_id = $2::uuid",
+        [blocker.id, blocked.id],
+      );
+      const control = await both();
+      const controlOk = unblock.ok && control.blocked === 1 && control.blocker === 1;
+      record(
+        names.vtAnchoredControl,
+        controlOk,
+        (unblock.ok ? "" : "unblock " + unblock.code + "; ") + show(control),
+      );
+      if (!controlOk) {
+        const why =
+          "the shared anchor did not admit the anchored section without the block (" +
+          show(control) +
+          "), so the absence under the block proves nothing";
+        skip(names.vtAnchored, why);
+        skip(names.vtReverseAnchored, why);
+      } else {
+        record(names.vtAnchored, anchored.blocked === 0, show(anchored));
+        record(names.vtReverseAnchored, anchored.blocker === 0, show(anchored));
       }
     });
 
