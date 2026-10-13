@@ -642,6 +642,8 @@ function messengerFixture() {
     threads,
     messages,
     requests,
+    // Set by an arm to make messenger_settings_set refuse (handoff 61-S1).
+    settingsFail: false,
     settings: {
       member_id: UID,
       receipts_enabled: false,
@@ -802,7 +804,13 @@ async function handleMessenger({ p, method, url, req, json, db }) {
     return json(rows.filter((r) => set.includes(r.id)));
   }
   // Reads only: the profile's block control writes member_blocks through matrix.cjs's own handler.
-  if (p === "/rest/v1/member_blocks" && method === "GET")
+  // Handoff 61-S1: the Account drawer's read embeds the blocked member's row (`select` names
+  // `members`) and matrix.cjs answers it from db.account.blocked; this answers the Messenger's own.
+  if (
+    p === "/rest/v1/member_blocks" &&
+    method === "GET" &&
+    !(url.searchParams.get("select") || "").includes("members")
+  )
     return json([{ blocked_id: M.members.yaa.id }]);
   if (p === "/rest/v1/threads" && method === "GET") return json([]);
   if (!p.startsWith("/rest/v1/rpc/messenger_")) return false;
@@ -817,6 +825,8 @@ async function handleMessenger({ p, method, url, req, json, db }) {
         : M.settings,
     );
   if (fn === "messenger_settings_set") {
+    // Handoff 61-S1 (tests/account.cjs): the Account drawer's failed-save states (M5, M6).
+    if (M.settingsFail) return json({ code: "P0001", message: "That did not save." }, 400);
     if (body.p_receipts !== undefined && body.p_receipts !== null) {
       M.settings.receipts_enabled = body.p_receipts;
       M.settings.receipts_chosen_at = new Date().toISOString();

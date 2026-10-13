@@ -22,6 +22,7 @@ import { Route as ShellConveneRouteImport } from './routes/_shell/convene'
 import { Route as ShellFeedRouteImport } from './routes/_shell/feed'
 import { Route as ShellMessagesRouteImport } from './routes/_shell/messages'
 import { Route as ShellPasswordRouteImport } from './routes/_shell/password'
+import { Route as ShellSettingsRouteImport } from './routes/_shell/settings'
 import { Route as ESlugRouteImport } from './routes/e.$slug'
 import { Route as ResetNewRouteImport } from './routes/reset_.new'
 import { Route as XCodeRouteImport } from './routes/x.$code'
@@ -30,6 +31,8 @@ import { Route as ShellEmailUnsubscribedRouteImport } from './routes/_shell/emai
 import { Route as ShellMHandleRouteImport } from './routes/_shell/m.$handle'
 import { Route as ShellMessagesThreadRouteImport } from './routes/_shell/messages.$thread'
 import { Route as ShellPostsIdRouteImport } from './routes/_shell/posts.$id'
+import { Route as ShellSettingsIndexRouteImport } from './routes/_shell/settings.index'
+import { Route as ShellSettingsPanelRouteImport } from './routes/_shell/settings.$panel'
 import { Route as ApiEmailUnsubscribeRouteImport } from './routes/api/email/unsubscribe'
 import { Route as ApiMessagesMediaRouteImport } from './routes/api/messages/media'
 import { Route as ShellConveneEventsIdRouteImport } from './routes/_shell/convene.events.$id'
@@ -99,6 +102,11 @@ const ShellPasswordRoute = ShellPasswordRouteImport.update({
   path: '/password',
   getParentRoute: () => ShellRoute,
 } as any)
+const ShellSettingsRoute = ShellSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => ShellRoute,
+} as any)
 const ESlugRoute = ESlugRouteImport.update({
   id: '/e/$slug',
   path: '/e/$slug',
@@ -139,6 +147,16 @@ const ShellPostsIdRoute = ShellPostsIdRouteImport.update({
   path: '/posts/$id',
   getParentRoute: () => ShellRoute,
 } as any)
+const ShellSettingsIndexRoute = ShellSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ShellSettingsRoute,
+} as any)
+const ShellSettingsPanelRoute = ShellSettingsPanelRouteImport.update({
+  id: '/$panel',
+  path: '/$panel',
+  getParentRoute: () => ShellSettingsRoute,
+} as any)
 const ApiEmailUnsubscribeRoute = ApiEmailUnsubscribeRouteImport.update({
   id: '/api/email/unsubscribe',
   path: '/api/email/unsubscribe',
@@ -173,6 +191,7 @@ export interface FileRoutesByFullPath {
   '/feed': typeof ShellFeedRoute
   '/messages': typeof ShellMessagesRouteWithChildren
   '/password': typeof ShellPasswordRoute
+  '/settings': typeof ShellSettingsRouteWithChildren
   '/e/$slug': typeof ESlugRoute
   '/reset/new': typeof ResetNewRoute
   '/x/$code': typeof XCodeRoute
@@ -181,8 +200,10 @@ export interface FileRoutesByFullPath {
   '/m/$handle': typeof ShellMHandleRoute
   '/messages/$thread': typeof ShellMessagesThreadRoute
   '/posts/$id': typeof ShellPostsIdRoute
+  '/settings/$panel': typeof ShellSettingsPanelRoute
   '/api/email/unsubscribe': typeof ApiEmailUnsubscribeRoute
   '/api/messages/media': typeof ApiMessagesMediaRoute
+  '/settings/': typeof ShellSettingsIndexRoute
   '/convene/events/$id': typeof ShellConveneEventsIdRoute
   '/api/messages/media/$id': typeof ApiMessagesMediaIdRoute
 }
@@ -207,8 +228,10 @@ export interface FileRoutesByTo {
   '/m/$handle': typeof ShellMHandleRoute
   '/messages/$thread': typeof ShellMessagesThreadRoute
   '/posts/$id': typeof ShellPostsIdRoute
+  '/settings/$panel': typeof ShellSettingsPanelRoute
   '/api/email/unsubscribe': typeof ApiEmailUnsubscribeRoute
   '/api/messages/media': typeof ApiMessagesMediaRoute
+  '/settings': typeof ShellSettingsIndexRoute
   '/convene/events/$id': typeof ShellConveneEventsIdRoute
   '/api/messages/media/$id': typeof ApiMessagesMediaIdRoute
 }
@@ -227,6 +250,7 @@ export interface FileRoutesById {
   '/_shell/feed': typeof ShellFeedRoute
   '/_shell/messages': typeof ShellMessagesRouteWithChildren
   '/_shell/password': typeof ShellPasswordRoute
+  '/_shell/settings': typeof ShellSettingsRouteWithChildren
   '/e/$slug': typeof ESlugRoute
   '/reset_/new': typeof ResetNewRoute
   '/x/$code': typeof XCodeRoute
@@ -235,8 +259,10 @@ export interface FileRoutesById {
   '/_shell/m/$handle': typeof ShellMHandleRoute
   '/_shell/messages/$thread': typeof ShellMessagesThreadRoute
   '/_shell/posts/$id': typeof ShellPostsIdRoute
+  '/_shell/settings/$panel': typeof ShellSettingsPanelRoute
   '/api/email/unsubscribe': typeof ApiEmailUnsubscribeRoute
   '/api/messages/media': typeof ApiMessagesMediaRoute
+  '/_shell/settings/': typeof ShellSettingsIndexRoute
   '/_shell/convene/events/$id': typeof ShellConveneEventsIdRoute
   '/api/messages/media_/$id': typeof ApiMessagesMediaIdRoute
 }
@@ -255,6 +281,7 @@ export interface FileRouteTypes {
     | '/feed'
     | '/messages'
     | '/password'
+    | '/settings'
     | '/e/$slug'
     | '/reset/new'
     | '/x/$code'
@@ -263,8 +290,10 @@ export interface FileRouteTypes {
     | '/m/$handle'
     | '/messages/$thread'
     | '/posts/$id'
+    | '/settings/$panel'
     | '/api/email/unsubscribe'
     | '/api/messages/media'
+    | '/settings/'
     | '/convene/events/$id'
     | '/api/messages/media/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -289,8 +318,10 @@ export interface FileRouteTypes {
     | '/m/$handle'
     | '/messages/$thread'
     | '/posts/$id'
+    | '/settings/$panel'
     | '/api/email/unsubscribe'
     | '/api/messages/media'
+    | '/settings'
     | '/convene/events/$id'
     | '/api/messages/media/$id'
   id:
@@ -308,6 +339,7 @@ export interface FileRouteTypes {
     | '/_shell/feed'
     | '/_shell/messages'
     | '/_shell/password'
+    | '/_shell/settings'
     | '/e/$slug'
     | '/reset_/new'
     | '/x/$code'
@@ -316,8 +348,10 @@ export interface FileRouteTypes {
     | '/_shell/m/$handle'
     | '/_shell/messages/$thread'
     | '/_shell/posts/$id'
+    | '/_shell/settings/$panel'
     | '/api/email/unsubscribe'
     | '/api/messages/media'
+    | '/_shell/settings/'
     | '/_shell/convene/events/$id'
     | '/api/messages/media_/$id'
   fileRoutesById: FileRoutesById
@@ -431,6 +465,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellPasswordRouteImport
       parentRoute: typeof ShellRoute
     }
+    '/_shell/settings': {
+      id: '/_shell/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof ShellSettingsRouteImport
+      parentRoute: typeof ShellRoute
+    }
     '/e/$slug': {
       id: '/e/$slug'
       path: '/e/$slug'
@@ -486,6 +527,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/posts/$id'
       preLoaderRoute: typeof ShellPostsIdRouteImport
       parentRoute: typeof ShellRoute
+    }
+    '/_shell/settings/': {
+      id: '/_shell/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof ShellSettingsIndexRouteImport
+      parentRoute: typeof ShellSettingsRoute
+    }
+    '/_shell/settings/$panel': {
+      id: '/_shell/settings/$panel'
+      path: '/$panel'
+      fullPath: '/settings/$panel'
+      preLoaderRoute: typeof ShellSettingsPanelRouteImport
+      parentRoute: typeof ShellSettingsRoute
     }
     '/api/email/unsubscribe': {
       id: '/api/email/unsubscribe'
@@ -544,6 +599,20 @@ const ShellMessagesRouteWithChildren = ShellMessagesRoute._addFileChildren(
   ShellMessagesRouteChildren,
 )
 
+interface ShellSettingsRouteChildren {
+  ShellSettingsPanelRoute: typeof ShellSettingsPanelRoute
+  ShellSettingsIndexRoute: typeof ShellSettingsIndexRoute
+}
+
+const ShellSettingsRouteChildren: ShellSettingsRouteChildren = {
+  ShellSettingsPanelRoute: ShellSettingsPanelRoute,
+  ShellSettingsIndexRoute: ShellSettingsIndexRoute,
+}
+
+const ShellSettingsRouteWithChildren = ShellSettingsRoute._addFileChildren(
+  ShellSettingsRouteChildren,
+)
+
 interface ShellRouteChildren {
   ShellCRoute: typeof ShellCRoute
   ShellConnectRoute: typeof ShellConnectRoute
@@ -551,6 +620,7 @@ interface ShellRouteChildren {
   ShellFeedRoute: typeof ShellFeedRoute
   ShellMessagesRoute: typeof ShellMessagesRouteWithChildren
   ShellPasswordRoute: typeof ShellPasswordRoute
+  ShellSettingsRoute: typeof ShellSettingsRouteWithChildren
   ShellEmailUnsubscribedRoute: typeof ShellEmailUnsubscribedRoute
   ShellMHandleRoute: typeof ShellMHandleRoute
   ShellPostsIdRoute: typeof ShellPostsIdRoute
@@ -563,6 +633,7 @@ const ShellRouteChildren: ShellRouteChildren = {
   ShellFeedRoute: ShellFeedRoute,
   ShellMessagesRoute: ShellMessagesRouteWithChildren,
   ShellPasswordRoute: ShellPasswordRoute,
+  ShellSettingsRoute: ShellSettingsRouteWithChildren,
   ShellEmailUnsubscribedRoute: ShellEmailUnsubscribedRoute,
   ShellMHandleRoute: ShellMHandleRoute,
   ShellPostsIdRoute: ShellPostsIdRoute,

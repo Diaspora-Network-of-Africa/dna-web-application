@@ -20,6 +20,9 @@
 // - The icon is `sliders-horizontal`: the bound compile carries no `mail` icon (1568).
 // - `openTo="email"` is how the shell opens the panel on its email view from the
 //   `?notifications=email` search parameter (1557, SPEC 6.4).
+// - Handoff 61-S1 (1552): the rows of the email view are `EmailPreferencesView` below, one component
+//   with its own per-row state, mounted here as the panel's second view and in the Account drawer's
+//   Notifications panel as the second entry to the one control. Nothing in the view changed; it moved.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -79,11 +82,6 @@ export function NotificationPanel({
   const [view, setView] = useState<"list" | "email">("list");
   const [marking, setMarking] = useState(false);
   const [markFailed, setMarkFailed] = useState(false);
-  // A row's pick before the read catches up with it; null is "no pill selected" (1560, 1571).
-  const [picked, setPicked] = useState<Record<string, string | null>>({});
-  const [rowState, setRowState] = useState<Record<string, RowState>>({});
-  const saveSeq = useRef<Record<string, number>>({});
-  const savedTimers = useRef<Record<string, number>>({});
   const bellWrap = useRef<HTMLSpanElement>(null);
   // SPEC 5: every close returns focus to the bell. The Sheet restores what was focused when it
   // opened, and WebKit does not focus a button on a click, so the bell is named outright.
@@ -278,55 +276,6 @@ export function NotificationPanel({
     }
   };
 
-  // The email view's words (1554, 1555): both vocabularies, or none of them.
-  const modes = vocab.data?.notification_email_modes ?? [];
-  const categories = vocab.data?.notification_categories ?? [];
-  const vocabFailed =
-    vocab.isError ||
-    emailView.isError ||
-    (vocab.isSuccess && (modes.length === 0 || categories.length === 0));
-  const modeLabel = (v: string | null) => modes.find((m) => m.value === v)?.label ?? null;
-  const shown = (c: string, mode: string | null, emailDefault: string | null) =>
-    c in picked ? (picked[c] ?? null) : (mode ?? emailDefault);
-
-  // SPEC 4.4: each row saves on its own; a press on the selected pill does nothing.
-  const pick = (c: string, current: string | null, v: string) => {
-    if (v === current) return;
-    const seq = (saveSeq.current[c] ?? 0) + 1;
-    saveSeq.current[c] = seq;
-    window.clearTimeout(savedTimers.current[c]);
-    setPicked((p) => ({ ...p, [c]: v }));
-    setRowState((s) => ({ ...s, [c]: { status: "saving" } }));
-    void setEmailMode(c, v).then(
-      () => {
-        if (saveSeq.current[c] !== seq) return;
-        setRowState((s) => ({ ...s, [c]: { status: "saved" } }));
-        void qc.invalidateQueries({ queryKey: emailViewKey(member.id) });
-        savedTimers.current[c] = window.setTimeout(() => {
-          setRowState((s) => {
-            if (s[c]?.status !== "saved") return s;
-            const next = { ...s };
-            delete next[c];
-            return next;
-          });
-        }, SAVED_MS);
-      },
-      () => {
-        if (saveSeq.current[c] !== seq) return;
-        setPicked((p) => ({ ...p, [c]: current }));
-        setRowState((s) => ({ ...s, [c]: { status: "failed", prev: current } }));
-      },
-    );
-  };
-  useEffect(() => {
-    const timers = savedTimers.current;
-    return () => Object.values(timers).forEach((t) => window.clearTimeout(t));
-  }, []);
-  const retryVocab = () => {
-    void qc.invalidateQueries({ queryKey: ["vocabularies"] });
-    void qc.invalidateQueries({ queryKey: emailViewKey(member.id) });
-  };
-
   const openEmail = () => {
     focusNext.current = "heading";
     setView("email");
@@ -466,8 +415,136 @@ export function NotificationPanel({
       )}
     </div>
   );
+  // SPEC 4.3 and 4.5: the rows, one component mounted here and in the Account drawer (1552).
+  const email: ReactNode = <EmailPreferencesView member={member} btnSize={btnSize} />;
+  const body = (
+    <>
+      {head}
+      {failureLine}
+      {emailOpen ? email : rows}
+    </>
+  );
+  return (
+    <>
+      <span ref={bellWrap} style={{ display: "contents" }}>
+        <NotificationBell
+          unread={unread.data === true && kindsLoaded}
+          active={open}
+          onClick={toggle}
+        />
+      </span>
+      {/* Pointer keeps B2's 380 popover under the bell. Touch takes the standard Sheet at 80
+          percent, not the full-screen inset B2 built (B17 item 3, rulings 492, 480). */}
+      {pointer ? (
+        open && (
+          <>
+            <button
+              type="button"
+              aria-label="Close notifications"
+              onClick={toggle}
+              style={{ all: "unset", position: "fixed", inset: 0, zIndex: 40, cursor: "default" }}
+            />
+            <div
+              role="dialog"
+              aria-label={emailOpen ? "Email preferences" : "Notifications"}
+              style={POPOVER_STYLE}
+            >
+              {body}
+            </div>
+          </>
+        )
+      ) : (
+        // Ruling 492: 80 percent tall on compact, a side sheet of --sheet-expanded-width on medium and expanded (1219, 1220). A full-width
+        // bottom sheet at 820 is the tablet full screen the ruling forbids.
+        <Sheet
+          open={open}
+          onClose={close}
+          returnFocus={bell}
+          variant={tier === "compact" ? "sheet" : "drawer"}
+          label={emailOpen ? "Email preferences" : "Notifications"}
+        >
+          {body}
+        </Sheet>
+      )}
+    </>
+  );
+}
+
+/**
+ * SPEC 4.3 to 4.5 (1552 to 1555, 1560, 1561, 1566, 1571): the email preferences rows. One row per
+ * category with copy, in the read's order; each row saves alone; a failed save returns the previous
+ * mode with "Did not save. Still {mode}.", or "Did not save." where there was none; a failed
+ * vocabulary renders one line and Try again and never a literal label. Mounted by the notification
+ * panel's email view and by the Account drawer's Notifications panel (handoff 61-S1).
+ */
+export function EmailPreferencesView({
+  member,
+  btnSize,
+}: {
+  member: Member;
+  btnSize: "sm" | "md";
+}) {
+  const qc = useQueryClient();
+  // A row's pick before the read catches up with it; null is "no pill selected" (1560, 1571).
+  const [picked, setPicked] = useState<Record<string, string | null>>({});
+  const [rowState, setRowState] = useState<Record<string, RowState>>({});
+  const saveSeq = useRef<Record<string, number>>({});
+  const savedTimers = useRef<Record<string, number>>({});
+  const vocab = useQuery({ queryKey: ["vocabularies"], queryFn: loadVocabularies });
+  const emailView = useQuery({ queryKey: emailViewKey(member.id), queryFn: loadEmailView });
+  const withCopy = (emailView.data ?? []).filter((e) => e.hasCopy);
+
+  // The email view's words (1554, 1555): both vocabularies, or none of them.
+  const modes = vocab.data?.notification_email_modes ?? [];
+  const categories = vocab.data?.notification_categories ?? [];
+  const vocabFailed =
+    vocab.isError ||
+    emailView.isError ||
+    (vocab.isSuccess && (modes.length === 0 || categories.length === 0));
+  const modeLabel = (v: string | null) => modes.find((m) => m.value === v)?.label ?? null;
+  const shown = (c: string, mode: string | null, emailDefault: string | null) =>
+    c in picked ? (picked[c] ?? null) : (mode ?? emailDefault);
+
+  // SPEC 4.4: each row saves on its own; a press on the selected pill does nothing.
+  const pick = (c: string, current: string | null, v: string) => {
+    if (v === current) return;
+    const seq = (saveSeq.current[c] ?? 0) + 1;
+    saveSeq.current[c] = seq;
+    window.clearTimeout(savedTimers.current[c]);
+    setPicked((p) => ({ ...p, [c]: v }));
+    setRowState((s) => ({ ...s, [c]: { status: "saving" } }));
+    void setEmailMode(c, v).then(
+      () => {
+        if (saveSeq.current[c] !== seq) return;
+        setRowState((s) => ({ ...s, [c]: { status: "saved" } }));
+        void qc.invalidateQueries({ queryKey: emailViewKey(member.id) });
+        savedTimers.current[c] = window.setTimeout(() => {
+          setRowState((s) => {
+            if (s[c]?.status !== "saved") return s;
+            const next = { ...s };
+            delete next[c];
+            return next;
+          });
+        }, SAVED_MS);
+      },
+      () => {
+        if (saveSeq.current[c] !== seq) return;
+        setPicked((p) => ({ ...p, [c]: current }));
+        setRowState((s) => ({ ...s, [c]: { status: "failed", prev: current } }));
+      },
+    );
+  };
+  useEffect(() => {
+    const timers = savedTimers.current;
+    return () => Object.values(timers).forEach((t) => window.clearTimeout(t));
+  }, []);
+  const retryVocab = () => {
+    void qc.invalidateQueries({ queryKey: ["vocabularies"] });
+    void qc.invalidateQueries({ queryKey: emailViewKey(member.id) });
+  };
+
   // SPEC 4.3 and 4.5: one row per category with copy, in the read's order (the vocabulary's).
-  const email: ReactNode = (
+  return (
     <div
       data-testid="notifications-email-view"
       style={{
@@ -552,56 +629,5 @@ export function NotificationPanel({
         })
       )}
     </div>
-  );
-  const body = (
-    <>
-      {head}
-      {failureLine}
-      {emailOpen ? email : rows}
-    </>
-  );
-  return (
-    <>
-      <span ref={bellWrap} style={{ display: "contents" }}>
-        <NotificationBell
-          unread={unread.data === true && kindsLoaded}
-          active={open}
-          onClick={toggle}
-        />
-      </span>
-      {/* Pointer keeps B2's 380 popover under the bell. Touch takes the standard Sheet at 80
-          percent, not the full-screen inset B2 built (B17 item 3, rulings 492, 480). */}
-      {pointer ? (
-        open && (
-          <>
-            <button
-              type="button"
-              aria-label="Close notifications"
-              onClick={toggle}
-              style={{ all: "unset", position: "fixed", inset: 0, zIndex: 40, cursor: "default" }}
-            />
-            <div
-              role="dialog"
-              aria-label={emailOpen ? "Email preferences" : "Notifications"}
-              style={POPOVER_STYLE}
-            >
-              {body}
-            </div>
-          </>
-        )
-      ) : (
-        // Ruling 492: 80 percent tall on compact, a side sheet of --sheet-expanded-width on medium and expanded (1219, 1220). A full-width
-        // bottom sheet at 820 is the tablet full screen the ruling forbids.
-        <Sheet
-          open={open}
-          onClose={close}
-          returnFocus={bell}
-          variant={tier === "compact" ? "sheet" : "drawer"}
-          label={emailOpen ? "Email preferences" : "Notifications"}
-        >
-          {body}
-        </Sheet>
-      )}
-    </>
   );
 }

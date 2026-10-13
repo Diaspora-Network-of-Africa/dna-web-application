@@ -4,7 +4,7 @@
 // layer, so the real client code paths run against a deterministic backend. Backend behaviour
 // (RLS, the feed view) is verified separately in SQL against the live project.
 // Usage: BASE=https://b2-shell-feed.dna-web-application.pages.dev WEBKIT=1 node tests/matrix.cjs
-// Env: ONLY='[390,844]' runs one viewport; SPECIAL=publish,guards,keyboard,fields,silence,shell,width,targeted,profile,connect,event,discovery,vocab,block,auth,onboarding,mount,sheet,gate,admin,media,messenger,theme runs flows only.
+// Env: ONLY='[390,844]' runs one viewport; SPECIAL=publish,guards,keyboard,fields,silence,shell,width,targeted,profile,connect,event,discovery,vocab,block,auth,onboarding,mount,sheet,gate,admin,media,messenger,theme,account runs flows only.
 // Ruling 1237: an arm that loses its web process is run again once, alone, in a fresh browser, by
 // `drive()` below; CRASH_PROBE=<arm tag> is the harness probe that proves it (off by default).
 // Brief 3 profile flows live in tests/profile.cjs and Brief 4 Connect flows in tests/connect.cjs; both share this mock.
@@ -909,6 +909,77 @@ function makeMockDb() {
     },
     // Handoff 55-A: members a read by id answers, keyed by id (see the members table below).
     membersById: {},
+    // Handoff 61-S1: what the Account drawer reads and writes (tests/account.cjs). Supabase Auth's
+    // user (its identities and a pending new_email), the password and email writes, the devices
+    // sessions_list() answers and session_revoke() removes, and the member's blocked rows.
+    account: {
+      identities: [
+        {
+          identity_id: "i-email",
+          id: UID,
+          user_id: UID,
+          provider: "email",
+          identity_data: { email: "member@test.invalid", sub: UID },
+          created_at: "2026-09-01T00:00:00Z",
+          last_sign_in_at: "2026-10-01T00:00:00Z",
+          updated_at: "2026-10-01T00:00:00Z",
+        },
+      ],
+      newEmail: null,
+      // Ruling 1746: /auth/v1/user answers 403 session_not_found, or fails at the network.
+      sessionGone: false,
+      userFail: null,
+      updateCalls: [],
+      updateFail: null,
+      weakPassword: false,
+      wrongCurrent: null,
+      tokenCalls: [],
+      logoutScopes: [],
+      resendCalls: 0,
+      unlinkCalls: [],
+      unlinkFail: false,
+      sessions: [
+        {
+          id: "s-current",
+          user_agent:
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+          last_active_at: new Date().toISOString(),
+          is_current: true,
+        },
+        {
+          id: "s-phone",
+          user_agent:
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+          last_active_at: "2026-10-09T18:12:00Z",
+          is_current: false,
+        },
+        {
+          id: "s-windows",
+          user_agent:
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) Gecko/20100101 Firefox/130.0",
+          last_active_at: "2026-10-04T09:05:00Z",
+          is_current: false,
+        },
+      ],
+      sessionsFail: false,
+      revokeCalls: [],
+      revokeFail: false,
+      blocked: [
+        {
+          blocked_id: "c4000000-0000-4000-8000-0000000000b1",
+          created_at: "2026-10-07T12:00:00Z",
+          member: { name: "Yaa Mensah", handle: "yaa-mensah", avatar_path: null },
+        },
+        {
+          blocked_id: "c4000000-0000-4000-8000-0000000000b2",
+          created_at: "2026-09-20T12:00:00Z",
+          member: { name: "Kojo Asante", handle: "kojo-asante", avatar_path: null },
+        },
+      ],
+      blockedFail: false,
+      unblockFail: false,
+      unblockCalls: [],
+    },
     saves: [],
     reactions: [],
     drafts: new Map(),
@@ -1129,9 +1200,91 @@ async function mockSupabase(page, db, opts = {}) {
           "access-control-allow-methods": "*",
         },
       });
-    if (p.startsWith("/auth/v1/token")) return json(SESSION);
-    if (p === "/auth/v1/user") return json(USER);
-    if (p === "/auth/v1/logout") return json({}, 204);
+    // Handoff 61-S1 (tests/account.cjs): the auth surface the Account drawer reaches. The user
+    // carries its identities (getUserIdentities reads them off the user) and a pending new_email;
+    // a password grant is the drawer's re-authentication, refused when it names the wrong current
+    // password; PUT /user is updateUser for the email change and the password.
+    const ac = db.account;
+    const accountUser = () => ({
+      ...USER,
+      identities: ac.identities,
+      ...(ac.newEmail ? { new_email: ac.newEmail } : {}),
+    });
+    if (p.startsWith("/auth/v1/token")) {
+      const body = req.postDataJSON() || {};
+      ac.tokenCalls.push(body);
+      if (ac.wrongCurrent && body.password === ac.wrongCurrent)
+        return json({ code: 400, error_code: "invalid_credentials", msg: "Invalid login" }, 400);
+      return json({ ...SESSION, user: accountUser() });
+    }
+    if (p === "/auth/v1/user" && method === "PUT") {
+      const body = req.postDataJSON() || {};
+      ac.updateCalls.push(body);
+      await new Promise((r) => setTimeout(r, 120));
+      if (body.password !== undefined && ac.weakPassword)
+        return json(
+          {
+            code: 422,
+            error_code: "weak_password",
+            msg: "Password is known to be weak and easy to guess, please choose a different one.",
+            weak_password: { reasons: ["pwned"] },
+          },
+          422,
+        );
+      if (body.email !== undefined) {
+        if (ac.updateFail === "email")
+          return json({ code: 500, error_code: "unexpected_failure", msg: "mail" }, 500);
+        ac.newEmail = body.email;
+      }
+      return json(accountUser());
+    }
+    if (p === "/auth/v1/user") {
+      // Ruling 1746 (tests/account.cjs): the server's answer that this session is gone, as GoTrue
+      // writes it, and a network failure, which is no answer at all.
+      if (ac.userFail === "network") return route.abort("connectionfailed");
+      if (ac.sessionGone)
+        return json(
+          {
+            code: 403,
+            error_code: "session_not_found",
+            msg: "Session from session_id claim in JWT does not exist",
+          },
+          403,
+        );
+      return json(accountUser());
+    }
+    if (p.startsWith("/auth/v1/user/identities/") && method === "DELETE") {
+      const id = p.slice("/auth/v1/user/identities/".length);
+      ac.unlinkCalls.push(id);
+      await new Promise((r) => setTimeout(r, 120));
+      if (ac.unlinkFail)
+        return json({ code: 500, error_code: "unexpected_failure", msg: "unlink" }, 500);
+      ac.identities = ac.identities.filter((i) => i.identity_id !== id);
+      return json({});
+    }
+    if (p === "/auth/v1/resend") {
+      ac.resendCalls++;
+      return json({});
+    }
+    if (p === "/auth/v1/logout") {
+      ac.logoutScopes.push(url.searchParams.get("scope") || "global");
+      if ((url.searchParams.get("scope") || "global") === "others")
+        ac.sessions = ac.sessions.filter((x) => x.is_current);
+      return json({}, 204);
+    }
+    if (p === "/rest/v1/rpc/sessions_list") {
+      await new Promise((r) => setTimeout(r, 120));
+      if (ac.sessionsFail) return json({ code: "P0001", message: "sessions" }, 400);
+      return json(ac.sessions);
+    }
+    if (p === "/rest/v1/rpc/session_revoke") {
+      const body = req.postDataJSON() || {};
+      ac.revokeCalls.push(body.p_session_id);
+      await new Promise((r) => setTimeout(r, 120));
+      if (ac.revokeFail) return json({ code: "P0002", message: "session_not_found" }, 400);
+      ac.sessions = ac.sessions.filter((x) => x.id !== body.p_session_id);
+      return json(null, 204);
+    }
     if (p === "/functions/v1/dia-compose-read") {
       db.inferCalls++;
       const body = req.postDataJSON();
@@ -2236,6 +2389,19 @@ async function mockSupabase(page, db, opts = {}) {
       // projection mode carries the same consequence, so the surface re-reads the state it will
       // read live.
       if (table === "member_blocks") {
+        // Handoff 61-S1: the drawer's Blocked members list, the blocker's own rows with the blocked
+        // member's core embedded through member_blocks_blocked_id_fkey (tests/account.cjs).
+        if (method === "GET" && (url.searchParams.get("select") || "").includes("members")) {
+          if (db.account.blockedFail) return json({ code: "P0001", message: "blocked" }, 400);
+          return json(db.account.blocked);
+        }
+        if (method === "DELETE") {
+          const bid = (url.searchParams.get("blocked_id") || "").replace(/^eq\./, "");
+          db.account.unblockCalls.push(bid);
+          if (db.account.unblockFail)
+            return json({ code: "P0001", message: "That did not save." }, 400);
+          db.account.blocked = db.account.blocked.filter((b) => b.blocked_id !== bid);
+        }
         if (method === "POST") {
           db.profile.blocks.push("block");
           db.profile.mode = "blocker";
@@ -6936,8 +7102,9 @@ async function fadeProbe(page, barSelector, under = 48) {
 // Ruling 344: the width arm. One arm per engine and viewport, light theme (width does not depend
 // on the palette), walking every surface the suites open in the states that change its layout:
 // the public profile signed out, the three onboarding screens, the feed with the composer, the
-// notification and account panels open, Connect's list and mosaic, the owner's profile, change
-// password, sign-in and reset. Each
+// notification panel and the Account drawer open, Connect's list and mosaic, the owner's profile,
+// change password (which /password now reaches through the drawer, handoff 61-S1), sign-in and
+// reset. Each
 // stop is one check that fails when the document is wider than the viewport at that tier, with
 // the offending element named (measureWidth above).
 // ---------------------------------------------------------------------------
@@ -7018,9 +7185,12 @@ async function runWidth(browserType, bname, [w, h]) {
     await stop("notifications open");
     await page.keyboard.press("Escape");
     await page.waitForTimeout(400);
+    // Handoff 61-S1: the avatar opens the Account drawer at /settings; Escape returns to /feed.
     await page.click('[data-testid="avatar"]');
-    await stop("account panel open");
+    await page.waitForURL("**/settings", { timeout: 15000 });
+    await stop("account drawer open");
     await page.keyboard.press("Escape");
+    await page.waitForURL("**/feed", { timeout: 15000 }).catch(() => undefined);
     for (const [path, label] of WIDTH_STOPS) await visit(path, null, label);
   } catch (e) {
     record(tag + " completed", false, String(e).slice(0, 400));
@@ -7572,6 +7742,19 @@ if (require.main === module)
               await drive(nc.runUnsubscribed, bt, bname, vp, theme);
             }
         }
+        // Handoff 61-S1: the Account drawer at every cell, its flows on the three tiers' cells
+        // (tests/account.cjs).
+        if (process.env.SPECIAL.includes("account")) {
+          const ac = require("./account.cjs");
+          for (const vp of process.env.ONLY ? [JSON.parse(process.env.ONLY)] : VIEWPORTS)
+            for (const theme of process.env.THEME ? [process.env.THEME] : THEMES)
+              await drive(ac.runAccountDrawer, bt, bname, vp, theme);
+          for (const vp of process.env.ONLY ? [JSON.parse(process.env.ONLY)] : ac.FLOW_CELLS)
+            for (const theme of process.env.THEME ? [process.env.THEME] : THEMES) {
+              await drive(ac.runAccountFlows, bt, bname, vp, theme);
+              await drive(ac.runAccountSessionGone, bt, bname, vp, theme);
+            }
+        }
         // Handoff 32-A item 5: the mount arms, one cell per tier (tests/mount.cjs).
         if (process.env.SPECIAL.includes("mount")) {
           const { runMount, MOUNT_CELLS } = require("./mount.cjs");
@@ -7795,6 +7978,16 @@ if (require.main === module)
         for (const theme of THEMES) {
           await drive(nc.runNotifyFlows, bt, bname, vp, theme);
           await drive(nc.runUnsubscribed, bt, bname, vp, theme);
+        }
+      // Handoff 61-S1: the Account drawer at every cell (61), its flows on the compact, medium and
+      // expanded cells.
+      const ac = require("./account.cjs");
+      for (const vp of VIEWPORTS)
+        for (const theme of THEMES) await drive(ac.runAccountDrawer, bt, bname, vp, theme);
+      for (const vp of ac.FLOW_CELLS)
+        for (const theme of THEMES) {
+          await drive(ac.runAccountFlows, bt, bname, vp, theme);
+          await drive(ac.runAccountSessionGone, bt, bname, vp, theme);
         }
       // Brief 10 (handoff 30-C item 13): the member's event page at every cell, its flows on the
       // two representative layouts.

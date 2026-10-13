@@ -61,6 +61,7 @@ import {
   loadPublicAttestations,
   respondRequest,
   saveSection,
+  SECTION_TITLES,
   setFollow,
   uploadProfileImage,
   withdrawRequest,
@@ -133,23 +134,9 @@ const AUD_LABEL: Record<Audience, string> = {
   connections: "My connections",
   anchored: "Anchored",
 };
-const TITLES: Record<SectionKey, string> = {
-  about: "About",
-  // Ruling 397: the section is labelled Stance, never Segment.
-  stance: "Stance",
-  origin: "Origin and heritage",
-  where: "Where I am",
-  work: "What I work on",
-  skills: "Skills",
-  languages: "Languages",
-  intent: "What I am here for",
-  links: "Links",
-  convene: "Convene",
-  collaborate: "Collaborate",
-  contribute: "Contribute",
-  convey: "Convey",
-  badges: "Badges",
-};
+// Ruling 397: the section is labelled Stance, never Segment. The titles live in src/lib/profile.ts
+// since handoff 61-S1, where the Account drawer's Privacy panel reads the same list.
+const TITLES = SECTION_TITLES;
 
 function specs(v: Vocabularies | null): SectionSpec[] {
   const V = v ?? {

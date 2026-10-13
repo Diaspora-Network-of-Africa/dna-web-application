@@ -61,6 +61,54 @@ export type SectionKey =
   | "convey"
   | "badges";
 
+/**
+ * Every section that carries an audience, in the profile's own order (B3 SPEC section 3; ruling
+ * 124). The core row has none and is not here. Profile renders its cards in this order and the
+ * Account drawer's Privacy panel lists the same rows from this one list (handoff 61-S1), so the two
+ * can never disagree on which sections exist.
+ */
+export const SECTION_KEYS: readonly SectionKey[] = [
+  "about",
+  "stance",
+  "origin",
+  "where",
+  "work",
+  "skills",
+  "languages",
+  "intent",
+  "links",
+  "convene",
+  "collaborate",
+  "contribute",
+  "convey",
+  "badges",
+];
+
+/** The section titles as the profile draws them. Ruling 397: the stance section is labelled Stance,
+ *  never Segment; where the member's stance label is known the profile shows that instead. */
+export const SECTION_TITLES: Record<SectionKey, string> = {
+  about: "About",
+  stance: "Stance",
+  origin: "Origin and heritage",
+  where: "Where I am",
+  work: "What I work on",
+  skills: "Skills",
+  languages: "Languages",
+  intent: "What I am here for",
+  links: "Links",
+  convene: "Convene",
+  collaborate: "Collaborate",
+  contribute: "Contribute",
+  convey: "Convey",
+  badges: "Badges",
+};
+
+/** The audience a section has until the owner sets one, as the profile reads it (Links is
+ *  connections-only by default, every other section Everyone on DNA). */
+export function defaultAudience(section: SectionKey): Audience {
+  return section === "links" ? "connections" : "everyone";
+}
+
 export type ActivityC = Extract<C, "convene" | "collaborate" | "contribute" | "convey">;
 
 export type ActivityRow = {

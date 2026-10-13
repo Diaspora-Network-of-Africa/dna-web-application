@@ -9280,7 +9280,7 @@ either the delete no longer writes the mark `messenger_media_marked` reads, or t
 longer selects it on the canonical project. Owed: a reading of both functions against the arm, and
 the fix in whichever is wrong. Owner: Code, by Chat's brief.
 
-## G281. Three matrix arms pass and fail on the same app code
+## G281. Four matrix arms pass and fail on the same app code
 
 **Severity: low; non-crash failures in Linux matrix jobs that a merge reads. Opened 12 October 2026
 by handoff 61-CI. The number is assigned by this entry (ruling 638).**
@@ -9299,3 +9299,75 @@ checks, in three arms, passed on 574 and failed on 576, none of them behind a cr
 Each reads a state that settles asynchronously, so the lead is a wait that ends before the state
 does. That lead is not measured. Owed: per arm, a wait on the state itself rather than on time, or a
 named cause if the product is at fault. Owner: Code.
+
+**Addendum, 13 October 2026 (handoff 61-S1).** A fourth arm, from #110's PR comment of 22:53 PDT on
+12 October: `chromium-1366x1024-dark profile owner`, check 5, "View as public matches the signed-out
+page section for section" in `tests/profile.cjs`. On run 580 (#110's head `9edd660`, rebased on
+`588a12b`) the owner's View as public listed no sections where the signed-out page listed ten; on
+`main`'s run 579, the same app code, the check passed, and in run 580 itself it passed at every other
+profile-owner cell. The arm reads `sectionIds` after a fixed 400 ms wait once the banner appears, so
+it is the same fixed-wait class as the three above. The same owed item applies.
+
+**Addendum, 13 October 2026 (handoff 61-S1, run 585).** A fifth arm: `webkit-1280x800-dark-vocab-served`,
+check "Profile stance section title" at `tests/vocabulary.cjs` line 123, on `matrix (webkit)` of
+Pages run 585 (head `08a52df`). The arm reads the stance `h2`'s text the moment the heading attaches,
+and the text is the label the vocabulary read supplies, so it is empty until that read answers
+(G64 names the empty heading). Three of the four cells passed and Chromium passed both themes; the
+PR touches nothing on that path. The same owed item applies: a wait on the vocabulary's answer rather
+than on the heading's attachment.
+
+## G282. Cancel the change (A6) is held out of the email change
+
+**Severity: low. Opened 13 October 2026 by handoff 61-S1 under ruling 1745. The number is assigned
+by this entry (ruling 638).**
+
+The extraction draws Cancel the change (A6) in the pending line of Sign-in and security, and
+section 4 names its server action, `email_change_cancel()`, which Supabase Auth does not expose: a
+pending `new_email` and its two confirmation tokens live in `auth.users`, which no member-facing
+path writes. Ruling 1745 holds the act out, so the pending line carries A3 and Resend (A4) and no
+Cancel; the change lapses when its tokens expire, or completes when both are opened (1668). Owed: a
+ruling on whether a cancel exists at all, and if so its writer, which clears `new_email` and the
+`email_change_token_*` columns for the caller only. Owner: Chat.
+
+## G283. Set and Not set on the Password row are read from the email identity
+
+**Severity: low; nothing is written wrongly. Opened 13 October 2026 by handoff 61-S1. The number is
+assigned by this entry (ruling 638).**
+
+The Sign-in methods rows come from `auth.getUserIdentities()` (extraction section 4), and the
+client has no other read of whether a password is set: `encrypted_password` never leaves
+`auth.users`. `methodsOf` in `src/lib/account.ts` therefore reads Set when an `email` identity
+exists, which Supabase Auth creates for an account that signed up with an address and a password.
+Whether setting a first password on a provider-only account (S6, Set a password) adds that identity
+is not read in the tree and could not be verified on the canonical project, which holds no
+provider-only test account; if it does not, such a member reads Not set and Set a password again
+after a reload, and the A21 guard keeps standing although the password works. Owed: one provider
+sign-in on the canonical project, Set a password, and a read of `auth.identities` after it; then
+either nothing, or a definer read of `encrypted_password is not null` for the caller. Owner: Code,
+by Chat's brief.
+
+## G284. `?notifications=email` and `next=email-preferences` still open the panel's view, not the drawer's route
+
+**Severity: low. Opened 13 October 2026 by handoff 61-S1. The number is assigned by this entry
+(ruling 638).**
+
+`src/routes/_shell/feed.tsx` says the Settings build repoints `?notifications=email` (1557) to the
+email preferences' route once Settings takes the control over (1552). Handoff 61-S1 mounts the view
+as `/settings/notifications` and changes nothing in the panel, so the parameter, and sign-in's
+`next=email-preferences` that maps to it, still open the notification panel's email view and not
+the drawer. Both entries reach the same rows (1552), so nothing is lost; what is owed is the one
+destination 1552 names: the parameter and `next` resolve to `/settings/notifications`, which also
+closes G276's provider half once the destination is a route. Owner: Code, by Chat's brief.
+
+## G285. The two test accounts hold hundreds of `auth.sessions` rows
+
+**Severity: low; test accounts only. Opened 13 October 2026 by handoff 61-S1, from run 584's live
+job. The number is assigned by this entry (ruling 638).**
+
+Every CI run signs the two ruling 218 accounts in over REST and never signs them out, and Supabase
+Auth keeps a session row until it is revoked or expires, so `sessions_list()` answered 885 rows for
+owner-test and 508 for member-test on 13 October. No real member is affected, but on those two
+accounts Signed-in devices lists hundreds of rows, and the count grows by two or more on every run.
+Owed: a ruling on whether the live arms sign their sessions out at the end of a run (a `logout` with
+scope `local` per token), and a one-time purge of the rows already there, by the founder on the
+project. Owner: Chat.

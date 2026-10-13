@@ -1,4 +1,15 @@
 // Regenerated from the canonical Supabase project (dgspjevjoblujcoljvkn) with the Supabase MCP
+// generate_typescript_types tool on handoff H61-S1's branch (#112, the Account drawer), on main at
+// 3725471 (the merge of #110), after the founder applied 20261013120000 by SQL Editor paste under
+// 1528 and Chat read it back at 01:20 PDT on 13 October 2026 with the recorded drift md5 equal to the
+// file (4dcf1a5c5fb56f35e3f99a0de6b11430); 115 rows in schema_migrations, head
+// 20261013120000_h61_s1_sessions. What it changes here: `sessions_list` and `session_revoke` join
+// Functions in the generator's own shape, replacing the hand edit the branch carried before the
+// paste, and `PostgrestVersion` reads what the project reports. Nothing else moves. `export type
+// Views` is restored by hand after every regeneration (CLAUDE.md).
+//
+// Before H61-S1:
+// Regenerated from the canonical Supabase project (dgspjevjoblujcoljvkn) with the Supabase MCP
 // generate_typescript_types tool on handoff H60-NC's branch, on main at bff0906 (the merge of #108),
 // after the founder applied 20261012120000 by SQL Editor paste and Chat read it back at 20:47 PDT on
 // 11 October 2026 with the recorded drift md5 equal to the file (c1eb7f559903792583938a29c403f950);
@@ -193,7 +204,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5";
+    PostgrestVersion: "14.17";
   };
   public: {
     Tables: {
@@ -4810,6 +4821,16 @@ export type Database = {
       send_introduction: {
         Args: { p_message: string; p_recipient: string };
         Returns: string;
+      };
+      session_revoke: { Args: { p_session_id: string }; Returns: undefined };
+      sessions_list: {
+        Args: never;
+        Returns: {
+          id: string;
+          is_current: boolean;
+          last_active_at: string;
+          user_agent: string;
+        }[];
       };
       set_follow: {
         Args: { p_on: boolean; p_target: string };
