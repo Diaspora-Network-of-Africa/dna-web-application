@@ -1,0 +1,123 @@
+:root{
+--space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:20px; --space-6:24px; --space-8:32px; --space-10:40px; --space-12:48px; --space-16:64px;
+
+--radius-s:6px; --radius-m:10px; --radius-l:14px; --radius-badge:8px; --radius-pill:999px;
+
+--border-thin:1px; --border-card:1.5px;
+
+/* Elevation: five levels, deliberately shallow. Feed cards sit at level 0. */
+--shadow-0:none;
+--shadow-1:0 1px 2px rgba(26,26,24,0.06);
+--shadow-2:0 1px 2px rgba(26,26,24,0.06), 0 4px 10px rgba(26,26,24,0.07);
+--shadow-3:0 1px 2px rgba(26,26,24,0.06), 0 6px 16px rgba(26,26,24,0.08);
+--shadow-4:0 2px 4px rgba(26,26,24,0.06), 0 12px 28px rgba(26,26,24,0.10);
+--shadow-none:var(--shadow-0); /* legacy alias. --shadow-stack is struck (609); cite --shadow-3 by name. */
+
+--target-primary:44px;
+--target-min:24px; /* WCAG 2.2 AA 2.5.8 floor; primary actions stay at --target-primary */
+
+/* Tier breakpoints (583, 603). The three frames: compact under 640, medium 640 to 1024, expanded over 1024. */
+--tier-medium:640px;
+--tier-expanded:1024px;
+
+/* Sheet geometry (584, 603). 492's two named exceptions are carried, not re-derived. */
+--sheet-compact-height:80%;
+--sheet-side-max-width:calc(var(--content-max) + 2 * var(--space-5) + var(--border-thin)); /* 1219: the one cap on every side sheet above compact, the feed card's width plus Sheet's body padding and the left hairline (the hairline sits inside the border-box); read by the three width tokens below, not by the notification panel */
+--sheet-medium-width:min(60%, var(--sheet-side-max-width)); /* @kind other */ /* 1220: 60% of the window below the cap */
+--sheet-expanded-width:min(60%, var(--sheet-side-max-width)); /* @kind other */
+--sheet-expanded-max-height:80%;
+--sheet-composer-ratio:min(60%, var(--sheet-side-max-width)); /* @kind other */ /* 492 exception, 1200: the composer drawer width */
+--sheet-panel-width:380px; /* 1704 (brief 60-SP item 18): the side panel width, written once; the notification panel and the account drawer read it (LAYER 2) */
+--sheet-notification-width:var(--sheet-panel-width);  /* 492 exception: the pointer notification panel (now an alias, value unchanged) */
+--sheet-radius:var(--radius-l);
+--sheet-drag-dismiss:120px;
+
+/* Pane geometry (603). The pane is navigated into, so it is laid out, never summoned. */
+--pane-list-width:360px;
+--pane-gap:var(--space-6);
+
+/* Correction 30's parts (604, correction 31 item 1). Values unchanged from the readings off v5. */
+--browse-tile-width:180px;        /* BrowseTile: the tile's width */
+--browse-tile-min-height:84px;    /* BrowseTile: the tile's minimum height */
+--person-card-min-height:84px;    /* PersonCard row: minimum height */
+--person-tile-min-height:112px;   /* PersonCard tile: minimum height */
+--avatar-card:56px;               /* PersonCard row: avatar */
+--avatar-tile:48px;               /* PersonCard tile: avatar */
+--carousel-slide:86%;             /* MediaBlock carousel: a slide's share of the row, so the next slide's edge shows */
+--icon-inline:14px;               /* BrowseTile: the check before the detail line (the --text-xs rung's glyph) */
+--focus-offset:2px;               /* BrowseTile, PersonCard, MediaBlock carousel: outline offset */
+
+/* EmptyState (1147, correction 31 item 4). */
+--empty-badge:48px;               /* EmptyState: the CBadge */
+--empty-measure:360px;            /* EmptyState: title and body measure */
+
+/* Tooltip (1146, correction 31 item 3). */
+--tooltip-delay:300ms; /* @kind other */   /* pointer rest or focus before the tooltip paints */
+--tooltip-grace:300ms; /* @kind other */   /* after one hides, a neighbour's shows at once within this window */
+--tooltip-gap:6px;                         /* between the control and the tooltip */
+--tooltip-max-width:240px;
+--z-tooltip:90; /* @kind other */          /* above toast: a tooltip names the control under the pointer wherever it is */
+
+/* Lane geometry (731). A card laid in a lane; read by the caller that lays the lane, PostCard is unchanged. */
+--lane-card-width:320px;
+
+/* Public event page (G164, 1230, correction 35). The side column of the two-column public page above --tier-expanded: `var(--event-page-side-column) minmax(0,1fr)`, gap --space-8. Not --lane-card-width: one token, one meaning. */
+--event-page-side-column:320px;
+
+/* MediaBlock link preview and ImageViewer (1429, 1432, 1453, 1454). The Row size carries the domain as text and no favicon (1454), and the viewer carries no position mark (1453),
+   so the thumbnail is the only measure the two sizes differ by. The single image's 1429 band (a rule kept in the component) is replaced by the frame set below (1643). */
+--link-thumb-full:72px;           /* link preview, Full: the square thumbnail (was 112 wide) */
+--viewer-inset:var(--space-4);    /* ImageViewer: the gap between the image and the window edge */
+
+/* Image frames (1643, brief 60-IF). The set a MediaBlock image's frame is chosen from, nearest to the image's own ratio, so a frame is never further from the image than the gap
+   between two neighbours. MediaBlock mirrors the four numbers for the choice and draws the frame from the token. Past an end by more than that end's own step (taller than 16:25, wider
+   than 2.74:1) the image is contained whole on --media-fill (tokens/colors.css). A gallery takes one of the same four by its lead's orientation and its count. ImageAdjust shows the same frame. */
+--media-frame-tall:4 / 5; /* @kind other */      /* portrait: the tallest frame */
+--media-frame-square:1 / 1; /* @kind other */
+--media-frame-photo:4 / 3; /* @kind other */     /* the landscape phone photograph, so a group photo keeps its edges */
+--media-frame-wide:1.91 / 1; /* @kind other */   /* landscape: the widest frame */
+
+/* MemberCard (1469 to 1472, brief 44-W70). The portrait is the card's leading edge, inset a little and carrying its own radius and a soft halo,
+   so it reads as a photograph set into the card rather than part of the white panel (the founder's mock; 1469 and guardrail 6 said no inner radius and no gutter, so this wants a ruling).
+   At medium and expanded it runs the card's full height. At compact it leads an identity row and the actions take their own band across the card's foot. */
+--member-portrait-inset:var(--space-3);  /* the gap between the portrait and the card's edge. One token for the card's whole edge: the name row and the identity column pad by the same step, so the name, the photograph and the lines under it share one left edge */
+--member-portrait-radius:var(--radius-m);
+--member-portrait-shadow:0 0 8px rgba(26,26,24,0.34); /* centred, no offset: the mock's own shadow, which separates the photograph without implying a light source. The dark theme overrides it in tokens/colors.css, where an ink halo would have no delta against --surface */
+--member-portrait-compact:132px; /* compact: the identity row's leading edge; against that row's height it reads as a portrait crop */
+--member-portrait-aspect:4 / 5;  /* @kind other */ /* the crop the panel is never narrower than: at compact the row takes its least height from this and the panel's width, so the photograph cannot be squeezed landscape by the bands around it */
+--member-portrait-medium:152px;
+--member-portrait-expanded:172px;
+--member-card-min-height:288px;        /* compact: the name lane, the identity row at its least (the portrait's 4:5 crop and its inset) and the action band */
+--member-name-min-compact:15px;        /* 1491: the size the name's fit steps down to at compact and stops. Below it the lane gives, then the line count: the name wraps to a second line rather than shrink further. There is no hard minimum */
+--member-name-min-wide:18px;           /* the same at medium and expanded */
+--member-stance-size:12px;             /* parked with the stance prop: the stance is not drawn at present (the founder: remove it). Kept so the ruling that settles it has a value to return to */
+--member-portrait-focus:50% 22%; /* @kind other */ /* object-position: a face sits high in a portrait, so the focal point holds as the card grows */
+--member-mark-offset:6px;              /* 1497: the Identified mark's inset from the portrait's bottom-right corner. The mark is 22px at every tier (IdentityMark's own default), so it holds at 360 */
+
+/* Admin console (1306, 1308). ConsoleShell's bar and left navigation; the drawer at compact and medium is the same width. */
+--console-bar-height:56px;
+--console-nav-width:248px;
+
+/* Z-index scale (603). Ruled order. No component hardcodes a z-index. */
+--z-pane:1; /* @kind other */           /* navigated into, page content, never over chrome */
+--z-rail:2; /* @kind other */           /* FacetRail as a rail, sticky in its column */
+--z-sticky:20; /* @kind other */        /* AppHeader, PulseDock, sticky bars */
+--z-scrim:50; /* @kind other */         /* scrim behind any summoned layer */
+--z-sheet:60; /* @kind other */          /* sheet, and FacetRail's collapsed sheet form under 640 */
+--z-menu:62; /* @kind other */          /* 1103: Menu, summoned from a control; above pane and sticky chrome (and a sheet it opens from), below dialog and notification */
+--z-dialog:65; /* @kind other */        /* 606: Dialog, the centred modal; a dialog over a sheet stacks by DOM order */
+--z-viewer:68; /* @kind other */        /* 1429: ImageViewer, opened from feed content; above a dialog it can be opened over, below the notification panel */
+--z-notification:70; /* @kind other */  /* pointer notification panel, above a sheet */
+--z-toast:80; /* @kind other */
+--dock-height:64px;
+--content-max:680px;
+--page-max:1120px;
+
+--ease:cubic-bezier(0.2,0,0,1); /* @kind other */
+/* Motion: exactly three durations. */
+--dur-micro:100ms; /* @kind other */ /* checkbox, switch */
+--dur-default:150ms; /* @kind other */ /* hover, press, focus */
+--dur-slow:300ms; /* @kind other */ /* modals, sheets, page */
+/* Assignment (604): sheet --dur-slow, pane --dur-slow, FacetRail --dur-default.
+   The --dur-fast and --dur-base aliases are struck, not repointed (194 applied to a token). */
+}

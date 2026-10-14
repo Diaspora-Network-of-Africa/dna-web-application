@@ -1,0 +1,87 @@
+:root{
+/* Neutrals: warm off-white ground, near-black ink */
+--bg:#FAF7F2;
+--bg-sunken:#F2EDE5;
+--surface:#FFFFFF;
+--surface-raised:#FFFDFA;
+--ink:#1A1A18;
+--ink-2:#4A4844;
+--ink-3:#77736C;
+--ink-4:#A9A49B;
+--line:#E4DED3;
+--line-strong:#CFC7B9;
+--inverse-bg:#1A1A18;
+--inverse-ink:#FAF7F2;
+--on-fill:#FFFFFF;            /* ink on any C or ink fill */
+--scrim:rgba(26,26,24,0.4);   /* behind sheets, drawers, dialogs */
+--surface-glass:rgba(250,247,242,0.92); /* PulseDock, sticky bars */
+
+/* Five Cs (D092, canonical, logo-derived). Three rungs each. brand (--c-<c>): fills, glyphs, the 3px accent stroke; locked hex, never used as small text. text: contrast-safe rung, AA as text on --bg. tint: light wash behind badges and chips. */
+--c-connect:#2D6A4F;      --c-connect-text:#1E5A3C;     --c-connect-tint:#E4EFE9;   --c-connect-ink:var(--on-fill);
+--c-convene:#B87333;      --c-convene-text:#8A4A16;     --c-convene-tint:#F7E9DC;   --c-convene-ink:var(--on-fill);
+--c-collaborate:#30909C;  --c-collaborate-text:#146A6A; --c-collaborate-tint:#DFEFF1; --c-collaborate-ink:#FFFFFF; /* 3.9:1, large text and icons only on teal fills */
+--c-contribute:#D4AF37;   --c-contribute-text:#7E6000;  --c-contribute-tint:#F8F0D3; --c-contribute-ink:var(--ink); /* gold is too light for white ink */
+--c-convey:#79344B;       --c-convey-text:#79344B;      --c-convey-tint:#F1E2E7;    --c-convey-ink:var(--on-fill);
+--c-stroke:3px;           /* accent stroke width, brand rung */
+/* System category (posts DIA could not type): no C, framed in the strong line */
+--c-system:var(--line-strong); --c-system-tint:var(--bg-sunken); --c-system-ink:var(--ink);
+
+/* Pulse state signals. State is never encoded as a C color. */
+--pulse-none:transparent;
+--pulse-activity:#A9A49B;
+--pulse-for-you:#1A1A18;
+--pulse-urgent:#B3261E;
+
+/* Semantic states. Destructive is a separate, more saturated warm red than error; never swap them. */
+--success:#4A8D77; --success-tint:#E4F0EB;
+--warning:#C4942A; --warning-tint:#F7EDD6;
+--error:#CC3333;   --error-tint:#F9E2E2;
+--info:#2A7A8C;    --info-tint:#E0EEF1;
+--destructive:hsl(0 65% 45%); --destructive-tint:#F8DEDE;
+--danger:var(--error); --danger-tint:var(--error-tint); /* legacy alias */
+--focus:#4A8D77;   /* emerald. Never blue. */
+--glow-dia:0 0 0 2px #FAF7F2, 0 0 0 4px #E8B830, 0 0 18px rgba(232,184,48,0.45); /* DIA only. Never on any other component. */
+
+/* Image viewer (1429). The viewer's ground is the same near-black in both themes, so its ink is named here rather than inherited from --ink, which flips. */
+--viewer-scrim:rgba(20,20,18,0.94);
+--viewer-ink:#FAF7F2;
+--viewer-control:rgba(250,247,242,0.14);
+/* Image frames (1643). The ground an image is contained on past the ends of the frame set, and behind a frame before its file arrives: the theme's sunken neutral in both themes, never black. */
+--media-fill:var(--bg-sunken);
+
+/* Logo palette (reference only; not used for UI) */
+--logo-green:#1E4D3A; --logo-red:#D64541; --logo-orange:#E08A3C; --logo-teal:#2A8F8F; --logo-leaf:#5FA67A; --logo-gold:#E8B830;
+
+/* Semantic aliases */
+--text-body:var(--ink);
+--text-muted:var(--ink-3);
+--text-subtle:var(--ink-2);
+--surface-card:var(--surface);
+--surface-page:var(--bg);
+--border-default:var(--line);
+}
+
+/* Dark theme (ruling 57). Same token names; warm near-black ground, lifted C colors that pass AA as text on --bg. */
+[data-theme="dark"]{
+--bg:#141412; --bg-sunken:#1E1D1A; --surface:#1A1A18; --surface-raised:#232220;
+--ink:#F2EDE5; --ink-2:#C9C3B8; --ink-3:#9B958A; --ink-4:#6B665E;
+--line:#33312C; --line-strong:#4A4740;
+--inverse-bg:#FAF7F2; --inverse-ink:#1A1A18;
+--on-fill:#141412; --scrim:rgba(0,0,0,0.6); --surface-glass:rgba(20,20,18,0.92);
+--c-connect:#5FB08A;     --c-connect-text:#7FC6A4;     --c-connect-tint:#1B2E24;
+--c-convene:#D08A4A;     --c-convene-text:#E6A46E;     --c-convene-tint:#33241B;
+--c-collaborate:#4FB3BF; --c-collaborate-text:#72C6D0; --c-collaborate-tint:#172C2C;
+--c-contribute:#D4AF37;  --c-contribute-text:#E2C45C;  --c-contribute-tint:#302A15;
+--c-convey:#B0607C;      --c-convey-text:#D18BA3;      --c-convey-tint:#2E1F2B;
+--c-connect-ink:#141412; --c-convene-ink:#141412; --c-collaborate-ink:#141412; --c-contribute-ink:#141412; --c-convey-ink:#141412;
+--pulse-activity:#6B665E; --pulse-for-you:#F2EDE5; --pulse-urgent:#E5645A;
+--success:#7DBBA3; --success-tint:#1B2E26; --warning:#DDB35A; --warning-tint:#2F2812; --error:#E06666; --error-tint:#3A1D1D; --info:#5FA9BA; --info-tint:#162A2F; --destructive:hsl(0 65% 58%); --destructive-tint:#3A1A1A;
+--focus:#7DBBA3;
+--viewer-scrim:rgba(10,10,9,0.96);
+--media-fill:var(--bg-sunken); /* 1643: restated here because a var() alias resolves where it is declared; without this line the dark theme would inherit the light fill */
+--c-system-tint:var(--bg-sunken); /* 1673 item 17: restated for the same reason; it read the light #F2EDE5 in the dark theme before */
+--glow-dia:0 0 0 2px #141412, 0 0 0 4px #E8B830, 0 0 18px rgba(232,184,48,0.4);
+/* MemberCard's portrait halo: on the warm near-black ground an ink shadow has no delta against --surface, so the dark theme separates the photograph with a deeper halo and a faint rim of its own light. */
+--member-portrait-shadow:0 0 10px rgba(0,0,0,0.55), 0 0 0 1px rgba(242,237,229,0.10);
+}
+[data-theme="dark"]{color-scheme:dark}
