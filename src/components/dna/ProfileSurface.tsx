@@ -34,7 +34,8 @@ import { IconButton } from "@/components/strand/IconButton";
 import { Input } from "@/components/strand/Input";
 import { LinkRow } from "@/components/dna/LinkRow";
 import { PatternPicker } from "@/components/dna/PatternPicker";
-import { ProfileHeader, type MastheadPattern } from "@/components/dna/ProfileHeader";
+import { ProfileHeader } from "@/components/strand/ProfileHeader";
+import type { MastheadPattern } from "@/components/dna/PatternPicker";
 import { RailWidget } from "@/components/strand/RailWidget";
 import { BackRow } from "@/components/dna/BackRow";
 import { SectionCard } from "@/components/dna/SectionCard";
@@ -1907,9 +1908,12 @@ function ProfileBody(p: BodyProps) {
           headline: m.headline,
           avatar: profile.avatarUrl,
           cover: profile.coverUrl,
-          coverFocus: m.cover_focus,
           pattern: m.pattern as MastheadPattern,
         }}
+        // Item 13 (1718, 1719, 1729): the frames come from the media rows through profile.ts; a
+        // missing frame is undefined here, never a default in the part.
+        coverFrame={profile.coverFrame}
+        photoFrame={profile.photoFrame}
         identified={m.tier !== "account"}
         owner={owner}
         onAvatar={() => p.avatarInput.current?.click()}

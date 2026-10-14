@@ -96,3 +96,18 @@ export * from "./BadgeRow";
 // nothing mounts yet (1710). Record: docs/strand-ports/v1791654208929113-media.md.
 export * from "./ImageViewer";
 export * from "./ImageAdjust";
+// Strand compile sha256-b1a458dac1bd562f (brief 60-SP items 1 to 21, ratified 1728; handoff H61-SP):
+// the parts for comments, reactions, tags and reframing. ReactionRow and ReactionPicker's quick view
+// are bound by MessageBubble; TokenSuggest by MessageComposer's mention list and Input's `tokens`;
+// AttachmentTile by Composer's strip; ProfileHeader by ProfileSurface, replacing the app copy in
+// src/components/dna/ (one implementation). Comment, TagLink and TagText wait for the Feed card and
+// hashtag handoffs. Popover is the full picker's pointer container (1578). Record:
+// docs/strand-ports/sha256-b1a458dac1bd562f.md.
+export * from "./TagLink";
+export * from "./TokenSuggest";
+export * from "./ReactionRow";
+export * from "./ReactionPicker";
+export * from "./Popover";
+export * from "./Comment";
+export * from "./AttachmentTile";
+export * from "./ProfileHeader";

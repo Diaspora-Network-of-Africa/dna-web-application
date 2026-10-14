@@ -9161,7 +9161,12 @@ what can be built. 1455 is unbuildable until a Story writer exists, and closes i
 it, which names the block's storage and its framing beside the media row (1673). Owner: Chat, at that
 brief.
 
-## G270. Strand's openable `MediaBlock` image is a button that does not fill its line
+## G270. Strand's openable `MediaBlock` image is a button that does not fill its line — closed (H61-SP, item 20)
+
+**Closed 14 October 2026 by handoff H61-SP (Strand compile `sha256-b1a458dac1bd562f`, brief 60-SP item
+20, ruling 1711).** The compile's openable image button is `width: 100%` and `box-sizing: border-box`,
+so the width the port carried as its own divergence is now the compile's, and the port's header no
+longer names it. `docs/strand-ports/sha256-b1a458dac1bd562f.md` section 1.
 
 **Severity: medium (visible). Opened 11 October 2026 during H60-MEDIA, filed under ruling 597. The
 number is assigned by this entry (ruling 638).**
@@ -9176,7 +9181,16 @@ Strand's specimen sat its frames in a flex column, where the button is stretched
 verifier could not see it. Closes when a compile carries the width, or when Chat rules the divergence
 standing. Owner: Strand, by Chat's brief.
 
-## G271. The profile's portrait and cover are not placed by their focal points: held for Strand item 13
+## G271. The profile's portrait and cover are not placed by their focal points: held for Strand item 13 — closed (H61-SP, item 13)
+
+**Closed 14 October 2026 by handoff H61-SP (Strand compile `sha256-b1a458dac1bd562f`, brief 60-SP item
+13, rulings 1718, 1719, 1729).** `ProfileHeader` is Strand's part at `src/components/strand/ProfileHeader.tsx`
+and the app copy is deleted; the cover is a fixed box the part measures and always fills by the focal
+point (1718), the portrait fills its square by the focal point where a frame is passed (1719), and the
+cover's row leaves the Held table in `docs/media-sites.md`. The frames reach the part through
+`src/lib/profile.ts`, which maps a null or absent frame to a missing one (1729). The projection carries no
+framing yet, so the frame is missing on every profile today: that is G292, a projection gap, not this
+part's.
 
 **Severity: medium (visible). Opened 11 October 2026 by handoff 60-MEDIA-2 Work 6, under ruling 1714.
 The number is assigned by this entry (ruling 638).**
@@ -9190,7 +9204,14 @@ plate (row 11) draws the portrait's square and follows it. Since 60-MEDIA-2 a ta
 `ImageViewer` on the master, whole, for every viewer; only the framing is held. Closes when item 13
 lands and the cover's row leaves the Held table. Owner: Strand, by Chat's brief.
 
-## G272. The discovery face crops its cover at 16:9: held for Strand item 12
+## G272. The discovery face crops its cover at 16:9: held for Strand item 12 — closed (H61-SP, items 12 and 21)
+
+**Closed 14 October 2026 by handoff H61-SP (Strand compile `sha256-b1a458dac1bd562f`, brief 60-SP items
+12 and 21, rulings 1697, 1714, 1717).** The discovery face keeps its own fixed 16:9 box and places the
+image through MediaBlock's exported `imageFrame` and `placement`, on `--media-fill` with `data-frame`; a
+flyer past one ratio step of 16:9 (1.24:1 to 2.55:1) shows whole. `DiscoverySurface` passes the card the
+media row's size and framing, not the URL alone. The face still opens the event, never the viewer
+(1697).
 
 **Severity: low. Opened 11 October 2026 by handoff 60-MEDIA-2 Work 6, under ruling 1714. The number is
 assigned by this entry (ruling 638).**
@@ -9200,7 +9221,13 @@ assigned by this entry (ruling 638).**
 framed by the set, and a tap opens the event rather than the image. The crop is inside a Strand part
 and is not hand-fixed (1714). Closes when Strand item 12 lands. Owner: Strand, by Chat's brief.
 
-## G273. The composer's attachment tile crops a member's image: held for Strand items 10 and 11
+## G273. The composer's attachment tile crops a member's image: held for Strand items 10 and 11 — closed (H61-SP, items 10 and 11)
+
+**Closed 14 October 2026 by handoff H61-SP (Strand compile `sha256-b1a458dac1bd562f`, brief 60-SP items
+10 and 11, rulings 1695, 1696).** The composer's strip is `AttachmentTile` in a list named Attached
+images: an 80 square `MediaBlock` at 1:1, placed by the image's own focal point and crop, Remove image
+over its corner. Reframe is the tile's act once a framing has a write path (the Reframe handoff, which
+passes `onFraming`); until then the tile offers none, as the port record names.
 
 **Severity: low. Opened 11 October 2026 by handoff 60-MEDIA-2 Work 6, under ruling 1714. The number is
 assigned by this entry (ruling 638).**
@@ -9496,3 +9523,73 @@ publication, as a thread is (1330), or a core-row read under `visible_to`; then 
 each helper naming it as deliberately outside the predicate, or a rewrite through it; and the arm
 extended to name any reachable private helper that reads `public.members` without the predicate.
 Owner: Chat rules, then Code.
+
+## G292. `profile_view` returns no media framing, so Strand's `ProfileHeader` frames every profile from its centre
+
+**Severity: low (visible on a profile whose cover or portrait has a focal point set, of which there are
+none until the Reframe build). Opened 14 October 2026 during H61-SP, filed under ruling 597. The number
+is assigned by this entry (ruling 638).**
+
+Handoff H61-SP's Done Means 4 says the header's frames "come from the media rows as `coverFrame` and
+`photoFrame`", mapped in `src/lib/profile.ts`. Read in the tree (ruling 555), `profile_view`
+(`supabase/migrations/20261013150000_h61_vt_visible_to.sql`) returns `avatar_path`, `cover_path` and
+`cover_focus` and nothing of the media rows' `width`, `height`, `focal_point` or `crop`; a visitor cannot
+read `public.media` for another member (`media_member_select` is the owner's own rows), so the client
+cannot fetch them either. `profile.ts` therefore maps what the projection gives, which is nothing: every
+profile renders with the frame missing, the cover filling its band from its centre (1718's fill, centred)
+and the portrait as the Avatar. `cover_focus` is dead data: nothing reads it since the `coverFocus`
+conversion left with item 13. Closes when a migration teaches `profile_view` to return each image's media
+row framing (and retires `cover_focus`), which is a schema change outside this port (no migration, by the
+handoff's guardrails). Owner: Chat, by brief.
+
+## G293. The tree's `ConsoleShell` is at compile `v1790885781186000`; items 15 and 16 landed on a current-row form the tree does not carry
+
+**Severity: low (admin only; no page binds the part, handoff 40-D item 6). Opened 14 October 2026 during
+H61-SP, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+Brief 60-SP items 15 and 16 (1649, 1650) correct W75's console (1474, brief 44-NAV): a destination's
+explanatory line reads `--ink-2` where `--ink-3` measured 4.00:1 on the current row's tint, and the
+current row's 600 becomes `--weight-semibold`. The tree's `src/components/strand/ConsoleShell.tsx` is the
+earlier compile's part: its current row is `--ink` at 500 on `--bg-sunken`, with no tint and no 600, so
+item 16's token has no consumer here, and item 15 lands as the explanatory line's colour alone. The
+current-row form (the `--c-connect-tint` ground, `--c-connect-text` at `--weight-semibold`, the 3px
+leading rule) is W75's port, not this handoff's. Closes when the admin's binding handoff ports
+`ConsoleShell` at a compile that carries 1474. Owner: Chat, by brief.
+
+## G294. Two full emoji pickers, one bound: the Messenger keeps Frimousse under 1776 while Strand's full view waits
+
+**Severity: low (nothing visible; a second implementation of one job, held by ruling). Opened 14 October
+2026 during H61-SP, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+Ruling 1776 (Notion D1879): the Messenger keeps `src/components/dna/ReactionPicker.tsx`, the Frimousse
+full picker (56-41E), as its full picker. Strand's `ReactionPicker` (compile `sha256-b1a458dac1bd562f`,
+brief 60-SP item 5) stays ported whole in `src/components/strand/ReactionPicker.tsx`; its quick view is
+bound by `MessageBubble`, and its full view is exported and bound by nothing. Nothing is deleted. So the
+tree holds two full-picker implementations and one is bound, which the one-implementation guardrail
+would otherwise refuse; 1776 holds it open because Strand's full view does not yet carry four things the
+Frimousse picker does today (`docs/strand-ports/sha256-b1a458dac1bd562f.md`, section 6):
+
+1. Search over the library's data: Strand matches names only, Frimousse matches labels and emojibase's
+   tags.
+2. Toned picks across the library: Strand's `withTone` tones nine literal hand characters, Frimousse
+   tones every emoji with skins.
+3. A virtualised grid: Frimousse renders rows as they scroll, Strand renders every cell of every group
+   in the DOM, about 3,700 buttons at emojibase 17.
+4. Arrow-key movement across the grid: Frimousse moves the active cell, Strand's grid is Tab only.
+
+Closes when a later Strand compile carries all four and its port binds Strand's full view in the
+Messenger and deletes the Frimousse picker in the same PR. Owner: Strand, by Chat's brief.
+
+## G295. `profile visitor stranger: withdraw returns to Connect with PATCH` failed once on `main`'s run 594 and passed on the next head
+
+**Severity: low (an intermittent failure on a mocked arm; no member-facing defect read). Opened 14
+October 2026 during H61-SP, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+Run 594 on `main` at `334a88c`, `matrix (chromium)`: one failure,
+`chromium-390x844-dark profile visitor stranger: withdraw returns to Connect with PATCH`
+(`tests/profile.cjs`, the record after the fixed 800 ms wait). The same check is green on #115's run
+38522046743 (head `251ba61`), whose diff does not touch the profile's relationship actions or the arm.
+Recorded as an intermittent failure on a mocked arm: the record waits a fixed 800 ms for the withdraw's
+PATCH and the return to Connect, and a slow cell can outlast it. Not fixed here (the arm is outside
+H61-SP's scope). Closes when the record waits on the write and the route rather than on the clock, or
+when the failure recurs and is root-caused. Owner: Chat, by brief.

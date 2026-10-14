@@ -14,14 +14,24 @@
 // image or tile opens ImageViewer on the master, whole; `openable={false}` returns the plain
 // frame. 1432 and 1544: the link preview has two sizes, `full` and `row`. 439 is now the compile's
 // own: a non-web link renders as text in both sizes, so the divergence this port carried (G184)
-// is no longer kept. Two divergences, visible: the openable single image's button carries
-// `width: 100%`, because a button does not fill its line as a div does outside a stretching flex
-// or grid parent; the compile's button shrank to its content on the member event page's cover
-// (62 wide at 390) and in a Messenger bubble. And `natural` (1738): an image whose row stores no
+// is no longer kept. One divergence, visible: `natural` (1738): an image whose row stores no
 // dimensions, the Messenger log's, draws at the frame's width and its own ratio up to the height
 // given, cropped from its centre past it, with no fill, where the compile has only the 1.91:1
 // `unknown` frame contained on --media-fill. Translations, none visible: `useInputMode` is the app's `useMode`; the
 // compile's `__ds_scope` lookups are imports. Record: docs/strand-ports/v1791654208929113-media.md.
+//
+// Re-synced at compile sha256-b1a458dac1bd562f (brief 60-SP items 20 and 21; 1711, 1714, 1717;
+// ratified 1728; handoff H61-SP). Item 20 (1711): the openable image's button is `width: 100%` and
+// `box-sizing: border-box` as compiled, so the width this port carried as its own divergence (G270)
+// is now the compile's and the gap closes. Item 21 (1714, 1717): a FIXED BOX (`ratio` given: the
+// discovery face's 16:9, the event page's 21:9) keeps its shape; an image within one ratio step of
+// the box fills it, placed by its focal point, and further than that shows whole, contained, on
+// --media-fill. One ratio step is the set's own neighbour step at the box's ratio: 16:9 sits between
+// 4:3 and 1.91:1 and takes 1.91 / (4/3), so it fills from 1.24:1 to 2.55:1; 21:9 is past the wide
+// end and takes 1.91:1's step, 1.63:1 to 3.34:1; on a frame of the set, the wider of its two.
+// `data-frame` reads `fixed` when it fills and `fixed-whole` when it shows whole. `fixedStep(R)` is
+// exported, as the compile exports it. The profile cover is the 1718 exception; ProfileHeader draws
+// it. Record: docs/strand-ports/sha256-b1a458dac1bd562f.md.
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { Icon } from "./Icon";
 import { ImageViewer } from "./ImageViewer";
@@ -97,6 +107,19 @@ const WIDE = FRAMES[3];
 const TALL_LIMIT = TALL.r / (SQUARE.r / TALL.r);
 const WIDE_LIMIT = WIDE.r * (WIDE.r / PHOTO.r);
 const EPS = 1e-3;
+/** 1714, 1717: one ratio step at a fixed box of ratio R, as a quotient: the set's neighbour step at the box (past an end, that end's step; on a frame of the set, the wider of its two). */
+export function fixedStep(R: number): number {
+  const steps = FRAMES.slice(1).map((f, i) => f.r / (FRAMES[i] as { r: number }).r);
+  if (R <= TALL.r * (1 + EPS)) return steps[0] as number;
+  if (R >= WIDE.r * (1 - EPS)) return steps[steps.length - 1] as number;
+  for (let i = 0; i < FRAMES.length - 1; i++) {
+    const a = (FRAMES[i] as { r: number }).r;
+    const b = (FRAMES[i + 1] as { r: number }).r;
+    if (Math.abs(Math.log(R / b)) < EPS) return Math.max(steps[i] as number, steps[i + 1] || 0);
+    if (R > a * (1 + EPS) && R < b) return b / a;
+  }
+  return steps[0] as number;
+}
 const num = (v: unknown): number | null => {
   const n = Number(v);
   return n > 0 && isFinite(n) ? n : null;
@@ -167,17 +190,14 @@ export function imageFrame(
   const c = cropOf(crop);
   const fixed = ratioNum(ratio);
   const r = w && h ? w / h : null;
-  if (fixed)
-    return {
-      frame: {
-        id: "fixed",
-        r: fixed,
-        css: typeof ratio === "number" ? String(ratio) : String(ratio),
-      },
-      fit: "cover",
-      clamp: "fixed",
-      r,
-    };
+  if (fixed) {
+    const frame = { id: "fixed", r: fixed, css: String(ratio) };
+    // Item 21 (1714, 1717): within one ratio step of the box the image fills it; beyond, it shows whole.
+    const rr = r && w && h ? (c ? (w * c.width) / (h * c.height) : r) : null;
+    if (rr && Math.abs(Math.log(rr / fixed)) > Math.log(fixedStep(fixed)) * (1 + EPS))
+      return { frame, fit: "contain", clamp: "fixed-whole", r };
+    return { frame, fit: "cover", clamp: "fixed", r };
+  }
   if (!r || !w || !h) return { frame: WIDE, fit: "contain", clamp: "unknown", r: null };
   const rr = c ? (w * c.width) / (h * c.height) : r;
   if (rr < TALL_LIMIT * (1 - EPS)) return { frame: TALL, fit: "contain", clamp: "tall", r };
@@ -342,10 +362,10 @@ function Single({
           else setOpen(true);
         }}
         style={{
-          ...box,
-          // Divergence (H60-MEDIA): a button does not fill its line as the div it replaces did,
-          // outside a stretching flex or grid parent, so the port sets the width the div had.
+          // Item 20 (1711): the button fills its container, as the plain frame does; G270 closes.
           width: "100%",
+          boxSizing: "border-box",
+          ...box,
           margin: 0,
           padding: 0,
           font: "inherit",

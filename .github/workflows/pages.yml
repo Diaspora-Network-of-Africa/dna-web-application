@@ -54,6 +54,12 @@ jobs:
       # yet, so no deployment carries them for a mount arm to open. Their tokens are the step above.
       - name: The Strand admin parts render, and hasNumber reads a number (handoff 40-D)
         run: node tests/strand-admin.cjs
+      # Handoff H61-SP (Strand compile sha256-b1a458dac1bd562f, brief 60-SP items 1 to 21, 1728): one
+      # focused check per new behaviour the port carries for the parts no page binds yet (fixedStep's
+      # bounds at 16:9 and 21:9, a profile with no stored framing, a controlled Tooltip on touch, the
+      # new parts' landmarks). Static, as the arm above.
+      - name: The Strand parts of brief 60-SP render, and fixedStep holds its bounds (handoff H61-SP)
+        run: node tests/strand-parts.cjs
       # Handoff 45-C arm 4 (1378): admin-dia-note's SYSTEM places Direction, Depth and Source in
       # Mobilization and calls no joined member new, and BLOCKS is unchanged. Static.
       - name: DIA's Overview prompt, and its off switch (handoffs 45-C and 45-D, rulings 1378 and 1391)

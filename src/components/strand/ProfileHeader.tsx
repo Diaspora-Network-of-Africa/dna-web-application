@@ -1,44 +1,72 @@
-// Ported from profile/strand-patch/Profile.jsx (B3-Profile-v3, rulings 122, 127, 130, 131, 134,
-// 136). One masthead for every view: `hero` is the locked, condensing banner;
-// `hero && split` the expanded public split banner; neither is the in-column card form. The ground
-// carries the member's textile tile (ruling 132), the one place a pattern sits behind a page head.
-// Mate masie appears nowhere on the profile (ruling 133).
+// Ported from Strand components/dna/ProfileHeader.jsx at compile sha256-b1a458dac1bd562f (brief
+// 60-SP item 13; RF 5.2 item 3; Brief 3's 122, 127, 212, 275; 1694, 1714, 1718, 1719, 1729;
+// ratified 1728; handoff H61-SP). Strand landed the part from the app's staged
+// profile/strand-patch/Profile.jsx with three changes: its own IdentityMark replaces the staged
+// copy; `coverFrame` and `photoFrame` ({ width, height, focalPoint, crop } from the media rows)
+// replace `coverFocus`, which is gone; and the cover is reframed in its tier's own box (1694): the
+// band is measured, its ratio fixes the frame, and MediaBlock's exported imageFrame and placement
+// put the image in it. 1718 makes the cover the exception to 1714's fixed-box rule: it always
+// fills its band by the focal point, at every tier, and is never shown whole on the fill; a tap on
+// it opens ImageViewer on the whole image ("Open image", MediaBlock's string). Without stored
+// dimensions the file's own are read on load; the band measurement is batched to the next frame
+// (note 3). 1719: the portrait stays square in the plate, filled and placed by the focal point;
+// without a frame it is the Avatar as before. This file replaces src/components/dna/ProfileHeader.tsx
+// (one implementation); `MastheadPattern` now lives with PatternPicker, the app part that
+// enumerates the three tiles. Ruling 275 under 212: the core row is name, handle, avatar, headline,
+// identity tier and pattern, and nothing else.
 //
-// Ruling 275, under ruling 212: the core row is name, handle, avatar, headline, identity tier and
-// pattern, and nothing else, at any scope and for any viewer. Origin, current place, the segment
-// label and the place-derived local time line left it and obey admit_section as sections. The props
-// that carried them (`originCountry`, `currentPlace`, `segmentLabel`, `timeLine`) are gone rather
-// than left unpassed, because a component that still accepts a prop the doctrine forbids is a prop
-// somebody eventually passes.
-//
-// 1714 (handoff 60-MEDIA-2 Work 3): the portrait and the cover open Strand's ImageViewer on the
-// master, whole, for every viewer. The owner's change controls are their own: the camera badge on
-// the portrait is a button of its own where a photo is set (with none, the portrait itself still
-// asks for one), and the cover keeps its corner IconButton. Their framing (1718's square portrait and
-// 1719's cover filling its band, each placed by its focal point) is Strand item 13's and is not
-// restyled here; docs/media-sites.md holds the cover's raw <img> as that item's.
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Avatar } from "@/components/strand/Avatar";
-import { Button } from "@/components/strand/Button";
-import { Icon } from "@/components/strand/Icon";
-import { IconButton } from "@/components/strand/IconButton";
-import { IdentityMark } from "@/components/strand/IdentityMark";
-import { ImageViewer } from "@/components/strand/ImageViewer";
-import { assetBase } from "@/components/strand/cmeta";
+// Divergences, kept and visible, each under 1714 (every image a member uploads opens full size on
+// tap) as 60-MEDIA-2 Work 3 built them and tests/media-sites.cjs reads them: the portrait opens the
+// viewer on the master for every viewer ("Open photo of {name}"), where the compile's plate is the
+// owner's change control and a visitor's nothing; the owner's camera badge is then its own button,
+// "Change your photo"; one viewer serves the cover and the portrait and returns focus to the control
+// that opened it, because Safari does not focus a button on a click. The owner's Change cover
+// IconButton sits on a wrapper (G136). The data-testid hooks (masthead, cover, portrait, open-cover,
+// change-photo, add-cover, masthead-condensed) are the profile arms'. Translations, none visible:
+// `assetBase()` for the compile's STRAND_ASSET_BASE read; typed props; the compile's `member.cover`
+// viewer alt "" is kept. Record: docs/strand-ports/sha256-b1a458dac1bd562f.md.
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type RefObject,
+  type SyntheticEvent,
+} from "react";
+import { Avatar } from "./Avatar";
+import { Button } from "./Button";
+import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
+import { IdentityMark } from "./IdentityMark";
+import { ImageViewer } from "./ImageViewer";
+import { imageFrame, placement, type FocalPoint, type MediaCrop } from "./MediaBlock";
+import { assetBase } from "./cmeta";
 
-export type MastheadPattern = "kente" | "adinkra" | "mudcloth";
+/** A media row's framing, as the projection hands it: the stored size and the author's framing (351). */
+export type MediaFrame = {
+  width?: number | null | undefined;
+  height?: number | null | undefined;
+  focalPoint?: FocalPoint | null | undefined;
+  crop?: MediaCrop | null | undefined;
+};
 
 export type ProfileHeaderMember = {
   name: string;
   headline?: string | null | undefined;
   avatar?: string | null | undefined;
   cover?: string | null | undefined;
-  coverFocus?: string | null | undefined;
-  pattern?: MastheadPattern | null | undefined;
+  /** The textile tile behind the masthead (ruling 132); default kente. */
+  pattern?: string | null | undefined;
 };
 
 export type ProfileHeaderProps = {
   member: ProfileHeaderMember;
+  /** The cover's media row framing; absent, the cover fills its band from its centre (1729). */
+  coverFrame?: MediaFrame | undefined;
+  /** The portrait's media row framing; absent, the portrait is the Avatar. */
+  photoFrame?: MediaFrame | undefined;
   identified?: boolean | undefined;
   actions?: ReactNode;
   onAvatar?: (() => void) | undefined;
@@ -59,8 +87,138 @@ export type ProfileHeaderProps = {
 
 const ONE: CSSProperties = { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
 
+const num = (v: unknown): number | null => {
+  const n = Number(v);
+  return n > 0 && isFinite(n) ? n : null;
+};
+
+/** The box an element occupies, read once and on every resize, batched to the next frame (note 3). */
+function useBox<T extends HTMLElement>(): [RefObject<T | null>, { w: number; h: number } | null] {
+  const ref = useRef<T>(null);
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const read = () => {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0)
+        setBox((b) =>
+          b && Math.abs(b.w - r.width) < 0.5 && Math.abs(b.h - r.height) < 0.5
+            ? b
+            : { w: r.width, h: r.height },
+        );
+    };
+    read();
+    if (typeof ResizeObserver !== "function") return;
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(read);
+    });
+    ro.observe(el);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, []);
+  return [ref, box];
+}
+
+/** One image in a box the caller sizes, always filling it by the focal point (1718, 1719): a frame the fixed-box rule would contain is drawn covered instead.
+ *  data-frame reads fill, or pending until the box and the image's size are known. With onOpen the box is a button, Open image. */
+function Framed({
+  src,
+  frame = {},
+  h,
+  alt = "",
+  role,
+  onOpen,
+  testId,
+  hidden,
+}: {
+  src: string;
+  frame?: MediaFrame | undefined;
+  h?: number | null | undefined;
+  alt?: string | undefined;
+  role: "cover" | "photo";
+  onOpen?: ((e: SyntheticEvent<HTMLElement>) => void) | undefined;
+  testId?: string | undefined;
+  hidden?: boolean | undefined;
+}) {
+  const [ref, box] = useBox<HTMLElement>();
+  const [nat, setNat] = useState<{ w: number; h: number } | null>(null);
+  const w = num(frame.width) || (nat && nat.w);
+  const ih = num(frame.height) || (nat && nat.h);
+  const f0 = box ? imageFrame(w, ih, frame.crop, box.w / box.h) : null;
+  const f = f0 && { ...f0, fit: "cover" as const };
+  const st: CSSProperties = f
+    ? placement(f, frame.focalPoint, frame.crop)
+    : { display: "block", width: "100%", height: "100%", objectFit: "cover" };
+  const boxStyle: CSSProperties = {
+    position: h != null ? "absolute" : "relative",
+    left: 0,
+    right: 0,
+    top: 0,
+    height: h != null ? h : "100%",
+    width: "100%",
+    boxSizing: "border-box",
+    overflow: "hidden",
+    background: "var(--media-fill)",
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr)",
+    gridTemplateRows: "minmax(0,1fr)",
+  };
+  const img = (
+    <img
+      src={src}
+      alt={alt}
+      onLoad={(e) => {
+        if (!(num(frame.width) && num(frame.height)))
+          setNat({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight });
+      }}
+      style={st}
+    />
+  );
+  const data = { "data-frame-box": role, "data-frame": f ? "fill" : "pending" };
+  if (onOpen)
+    return (
+      <button
+        ref={ref as RefObject<HTMLButtonElement>}
+        type="button"
+        {...data}
+        aria-label="Open image"
+        data-testid={testId}
+        tabIndex={hidden ? -1 : undefined}
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen(e);
+        }}
+        style={{
+          ...boxStyle,
+          margin: 0,
+          padding: 0,
+          border: 0,
+          font: "inherit",
+          color: "inherit",
+          appearance: "none",
+          cursor: "zoom-in",
+          outlineOffset: "calc(-1 * var(--focus-offset))",
+        }}
+      >
+        {img}
+      </button>
+    );
+  return (
+    <div ref={ref as RefObject<HTMLDivElement>} {...data} style={boxStyle}>
+      {img}
+    </div>
+  );
+}
+
 export function ProfileHeader({
   member,
+  coverFrame,
+  photoFrame,
   identified,
   actions,
   onAvatar,
@@ -86,8 +244,7 @@ export function ProfileHeader({
     ? { position: "sticky", top: 0, zIndex: 3 }
     : { position: "relative" };
   // The image open in the viewer, kept through the close so the viewer fades out on it; `open`
-  // alone says whether it shows. Focus goes back to the control that opened it: Safari does not
-  // focus a button on a click, so the viewer's own restore would land on the body there.
+  // alone says whether it shows. Focus goes back to the control that opened it (1714 divergence).
   const [view, setView] = useState<{ src: string; alt: string; open: boolean } | null>(null);
   const opener = useRef<HTMLElement | null>(null);
   const viewOpen = !!view?.open;
@@ -96,7 +253,7 @@ export function ProfileHeader({
     opener.current.focus({ preventScroll: true });
     opener.current = null;
   }, [viewOpen]);
-  const openView = (src: string, alt: string) => (e: { currentTarget: HTMLElement }) => {
+  const openView = (src: string, alt: string) => (e: SyntheticEvent<HTMLElement>) => {
     opener.current = e.currentTarget;
     setView({ src, alt, open: true });
   };
@@ -109,6 +266,18 @@ export function ProfileHeader({
       onClose={() => setView((v) => (v ? { ...v, open: false } : v))}
     />
   );
+  const cover = (h: number | null, hidden?: boolean) =>
+    member.cover ? (
+      <Framed
+        src={member.cover}
+        frame={coverFrame}
+        h={h}
+        role="cover"
+        testId="open-cover"
+        hidden={hidden}
+        onOpen={openView(member.cover, "")}
+      />
+    ) : null;
   const viewAvatar = member.avatar ? openView(member.avatar, member.name) : undefined;
   const portraitAct = viewAvatar ?? (owner ? onAvatar : undefined);
   const portraitLabel = viewAvatar
@@ -116,8 +285,32 @@ export function ProfileHeader({
     : owner
       ? "Change your photo"
       : member.name;
-  /** The owner's change control on the portrait: drawn as the camera badge it always was, its own
-   *  button where the portrait opens the viewer, and the portrait's aria-hidden mark otherwise. */
+  const photo = (size: number, r: number) =>
+    member.avatar && photoFrame ? (
+      <span
+        role="img"
+        aria-label={member.name}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: r,
+          overflow: "hidden",
+          flex: "none",
+          display: "block",
+          position: "relative",
+        }}
+      >
+        <Framed src={member.avatar} frame={photoFrame} role="photo" />
+      </span>
+    ) : (
+      <Avatar
+        name={member.name}
+        src={member.avatar ?? undefined}
+        size={size}
+        style={{ borderRadius: r }}
+      />
+    );
+  /** The owner's change control on the portrait: the camera badge, its own button where the portrait opens the viewer. */
   const badge = (box: number, icon: number, own: boolean) => {
     const look: CSSProperties = {
       position: "absolute",
@@ -132,6 +325,7 @@ export function ProfileHeader({
       alignItems: "center",
       justifyContent: "center",
       color: "var(--ink-2)",
+      boxSizing: "border-box",
     };
     return own ? (
       <button
@@ -145,44 +339,17 @@ export function ProfileHeader({
           margin: 0,
           padding: 0,
           font: "inherit",
-          boxSizing: "border-box",
           cursor: "pointer",
         }}
       >
         <Icon name="camera" size={icon} />
       </button>
     ) : (
-      <span aria-hidden="true" style={{ ...look, boxSizing: "border-box" }}>
+      <span aria-hidden="true" style={look}>
         <Icon name="camera" size={icon} />
       </span>
     );
   };
-  /** The cover's image, a button that opens it whole; out of the tab order while condensed away. */
-  const coverImage = (img: CSSProperties, hidden?: boolean) =>
-    member.cover ? (
-      <button
-        type="button"
-        onClick={openView(member.cover, member.name + ", cover")}
-        aria-label={"Open cover of " + member.name}
-        data-testid="open-cover"
-        tabIndex={hidden ? -1 : undefined}
-        style={{
-          appearance: "none",
-          border: 0,
-          margin: 0,
-          padding: 0,
-          font: "inherit",
-          background: "none",
-          display: "block",
-          width: "100%",
-          height: "100%",
-          cursor: "zoom-in",
-          outlineOffset: "calc(-1 * var(--focus-offset))",
-        }}
-      >
-        <img src={member.cover} alt="" style={img} />
-      </button>
-    ) : null;
   const coverTools = owner && (
     <>
       {!member.cover && (
@@ -209,7 +376,6 @@ export function ProfileHeader({
         </div>
       )}
       {member.cover && (
-        // G136: the placement sits on a wrapper, so the Tooltip's host span wraps the button.
         <span style={{ position: "absolute", right: 12, top: 12, display: "flex" }}>
           <IconButton
             name="camera"
@@ -244,12 +410,7 @@ export function ProfileHeader({
           cursor: viewAvatar ? "zoom-in" : owner ? "pointer" : "default",
         }}
       >
-        <Avatar
-          name={member.name}
-          src={member.avatar ?? undefined}
-          size={size}
-          style={{ borderRadius: r - pad }}
-        />
+        {photo(size, r - pad)}
         {identified && (
           <IdentityMark
             size={size >= 100 ? 24 : 18}
@@ -284,7 +445,6 @@ export function ProfileHeader({
   );
 
   if (hero && split) {
-    // Expanded public: one locked banner, split. Identity panel at left, cover photo at right. No text over the image, nothing overlaps.
     if (condensed)
       return (
         <header
@@ -385,16 +545,10 @@ export function ProfileHeader({
             style={{
               position: "relative",
               overflow: "hidden",
-              background: member.cover ? "var(--bg-sunken)" : "var(--bg-sunken) url(" + tile + ")",
+              background: member.cover ? "var(--media-fill)" : "var(--bg-sunken) url(" + tile + ")",
             }}
           >
-            {coverImage({
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              objectPosition: member.coverFocus || "center 35%",
-              display: "block",
-            })}
+            {cover(null)}
             {coverTools}
           </div>
         </div>
@@ -422,12 +576,7 @@ export function ProfileHeader({
           background: "var(--bg)",
         }}
       >
-        <Avatar
-          name={member.name}
-          src={member.avatar ?? undefined}
-          size={avatarSize}
-          style={{ borderRadius: 18 }}
-        />
+        {photo(avatarSize, 18)}
         {identified && (
           <IdentityMark size={24} style={{ position: "absolute", right: -6, bottom: -6 }} />
         )}
@@ -474,20 +623,11 @@ export function ProfileHeader({
               position: "relative",
               height: condensed ? 0 : coverHeight,
               overflow: "hidden",
-              background: member.cover ? "var(--bg-sunken)" : "var(--bg-sunken) url(" + tile + ")",
+              background: member.cover ? "var(--media-fill)" : "var(--bg-sunken) url(" + tile + ")",
               transition: "height var(--dur-default) var(--ease)",
             }}
           >
-            {coverImage(
-              {
-                width: "100%",
-                height: coverHeight,
-                objectFit: "cover",
-                objectPosition: member.coverFocus || "center 35%",
-                display: "block",
-              },
-              condensed,
-            )}
+            {cover(coverHeight, condensed)}
             {!condensed && coverTools}
           </div>
           {condensed ? (
@@ -564,19 +704,13 @@ export function ProfileHeader({
             borderRadius: 14,
             overflow: "hidden",
             background: member.cover
-              ? "var(--bg-sunken)"
+              ? "var(--media-fill)"
               : "var(--bg-sunken) url(" + base + "patterns/kente-pattern.svg)",
             border: member.cover ? "none" : "1px solid var(--line)",
             boxSizing: "border-box",
           }}
         >
-          {coverImage({
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            objectPosition: member.coverFocus || "center 35%",
-            display: "block",
-          })}
+          {cover(null)}
           {owner && !member.cover && (
             <div
               style={{
@@ -600,7 +734,6 @@ export function ProfileHeader({
             </div>
           )}
           {owner && member.cover && (
-            // G136: the placement sits on a wrapper, so the Tooltip's host span wraps the button.
             <span style={{ position: "absolute", right: 8, top: 8, display: "flex" }}>
               <IconButton
                 name="camera"

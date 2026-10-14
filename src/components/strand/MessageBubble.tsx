@@ -15,13 +15,22 @@
 // reduced motion). The bar scrolls sideways at 390 to reach More (1586) and never wraps. The
 // caller closes the bar (1739): the hover cluster's React carries `data-react-toggle` so a press on
 // it toggles rather than counting as a tap outside.
+//
+// At compile sha256-b1a458dac1bd562f (brief 60-SP items 3, 4 and 5; ratified 1728; handoff H61-SP)
+// the pills are ReactionRow's names mode and the quick bar is ReactionPicker's quick view, both
+// lifted out of this part and bound back with no visible change: the same pills, the same eight,
+// the same hooks (data-reaction, data-picker, data-quick, data-more, b14-pop). The bar's row stops
+// its pointerdown at the bar, so the row's own long press (the message menu at 450 ms) does not fire
+// under the picker's hold (500 ms) that names a glyph on touch (1633). The pointer panel (`picker.panel`)
+// stays the caller's until the full picker is rebound. Record:
+// docs/strand-ports/sha256-b1a458dac1bd562f.md.
 import { Fragment, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Button } from "./Button";
 import { IconButton } from "./IconButton";
 import { Menu, type MenuItem, type MenuRule } from "./Menu";
-import { ReactionMark } from "./ReactionGlyph";
+import { ReactionPicker } from "./ReactionPicker";
+import { ReactionRow, stripTone, type ReactionPop } from "./ReactionRow";
 import { Ticks, type TickStatus } from "./Ticks";
-import { Tooltip } from "./Tooltip";
 import type { C } from "./cmeta";
 import { useLongPress } from "@/lib/long-press";
 import { useMode, type Mode } from "@/lib/tier";
@@ -188,12 +197,10 @@ export function MessageBubble({
   const touch = mode === "touch";
   const [hover, setHover] = useState(false);
   const [open, setOpen] = useState(false);
-  /** The glyph popping now: the character pressed and the press's instant, which keys the span. */
-  const [pop, setPop] = useState<{ emoji: string; t: number } | null>(null);
-  const popBase = (e: string) => e.replace(/[\u{1F3FB}-\u{1F3FF}]/gu, "").replace(/\uFE0F/g, "");
-  const popping = (e: string) => !!pop && popBase(pop.emoji) === popBase(e);
+  /** The glyph popping in the row now: the character a quick press stored, so the pill that lands pops (item 4's `pop`). */
+  const [pop, setPop] = useState<ReactionPop | null>(null);
   const press = (value: string, fn: (value: string) => void) => {
-    setPop({ emoji: value, t: Date.now() });
+    setPop({ key: stripTone(value), t: Date.now() });
     fn(value);
   };
   const bubbleRef = useRef<HTMLDivElement>(null);
@@ -275,105 +282,28 @@ export function MessageBubble({
       {own && !deleted && <Ticks status={status} c={c} receipts={receipts} />}
     </span>
   );
+  // Item 4: the pills are ReactionRow's names mode, unchanged.
   const reactionRow =
     reactions.length > 0 && !deleted ? (
-      <div data-reactions style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
-        {reactions.map((r) => (
-          <button
-            key={r.emoji}
-            type="button"
-            aria-label={r.label + ", " + r.names}
-            aria-pressed={r.own}
-            data-reaction={r.emoji}
-            data-reaction-label={r.label}
-            onClick={() => press(r.emoji, (e) => onToggleReaction?.(e))}
-            style={{
-              all: "unset",
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              minHeight: touch ? 32 : "var(--target-min)",
-              padding: "2px var(--space-2) 2px 6px",
-              borderRadius: "var(--radius-pill)",
-              border: "1px solid " + (r.own ? "var(--line-strong)" : "var(--line)"),
-              background: "var(--surface)",
-              fontSize: "var(--text-xs)",
-              color: "var(--ink-2)",
-              fontFamily: "inherit",
-            }}
-          >
-            <span
-              key={popping(r.emoji) ? pop?.t : "still"}
-              className={popping(r.emoji) ? "b14-pop" : undefined}
-              style={{ display: "inline-flex" }}
-            >
-              <ReactionMark emoji={r.emoji} size={18} toneFill={r.toneFill} />
-            </span>
-            {r.names}
-          </button>
-        ))}
-      </div>
+      <ReactionRow
+        reactions={reactions}
+        onReact={(e) => press(e, (v) => onToggleReaction?.(v))}
+        pop={pop}
+        input={mode}
+      />
     ) : null;
-  const target = touch ? 44 : 36;
+  // Item 5: the quick bar is ReactionPicker's quick view. Its pointerdown stops here so the row's
+  // long press (the menu) does not arm under the hold that names a glyph.
   const pickerRow = picker ? (
-    <div
-      role="group"
-      aria-label="React"
-      data-picker
-      style={{
-        display: "flex",
-        alignItems: "center",
-        flexWrap: "nowrap",
-        gap: 2,
-        marginTop: 2,
-        padding: 2,
-        borderRadius: "var(--radius-pill)",
-        background: "var(--surface)",
-        border: "1px solid var(--line)",
-        maxWidth: "100%",
-        overflowX: "auto",
-        scrollbarWidth: "none",
-        boxSizing: "border-box",
-      }}
-    >
-      {picker.quick.map((q) => (
-        // Fix PR 10 item 3 (1613, 1146): each glyph names itself through Tooltip, which shows on
-        // pointer only and renders nothing on touch; the button keeps the accessible name.
-        <Tooltip key={q.value} label={q.label} style={{ flex: "none" }}>
-          <button
-            type="button"
-            aria-label={q.label}
-            aria-pressed={q.pressed}
-            data-quick={q.value}
-            onClick={() => press(q.value, picker.onPick)}
-            style={{
-              all: "unset",
-              cursor: "pointer",
-              width: target,
-              height: target,
-              borderRadius: "var(--radius-pill)",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: q.pressed ? "var(--bg-sunken)" : "transparent",
-              boxSizing: "border-box",
-              flex: "none",
-            }}
-          >
-            <span
-              key={popping(q.value) ? pop?.t : "still"}
-              className={popping(q.value) ? "b14-pop" : undefined}
-              style={{ display: "inline-flex" }}
-            >
-              <ReactionMark emoji={q.value} size={24} toneFill={q.toneFill} />
-            </span>
-          </button>
-        </Tooltip>
-      ))}
-      <Button variant="ghost" size="sm" onClick={picker.onMore} style={{ flex: "none" }} data-more>
-        More
-      </Button>
+    <div onPointerDown={(e) => e.stopPropagation()} style={{ display: "contents" }}>
+      <ReactionPicker
+        view="quick"
+        quick={picker.quick}
+        onPick={(value) => press(value, picker.onPick)}
+        onMore={picker.onMore}
+        input={mode}
+        align={own ? "end" : "start"}
+      />
     </div>
   ) : null;
   const panel = picker?.panel ? (

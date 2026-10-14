@@ -12,6 +12,12 @@
 // The part measures its host span, as compiled. A caller that positions an IconButton absolutely
 // puts the placement on a wrapper around it, so the host span wraps the button and the tooltip is
 // placed against the control (G136).
+//
+// Re-synced at compile sha256-b1a458dac1bd562f (brief 60-SP item 6; FC 5.2 item 6, carried from
+// 58; 1632, 1633; handoff H61-SP): `open` makes the part controlled. While it is passed, hover and
+// focus do not toggle it, and it shows on touch too, so a held press can name its control
+// (ReactionPicker's hold at 500 ms). Still aria-hidden: the control keeps its name. Absent, the
+// part is unchanged. Record: docs/strand-ports/sha256-b1a458dac1bd562f.md.
 import {
   useEffect,
   useLayoutEffect,
@@ -43,24 +49,32 @@ export type TooltipProps = Omit<HTMLAttributes<HTMLSpanElement>, "style" | "chil
   placement?: "bottom" | "top" | undefined;
   /** Overrides the detected input mode; touch renders no tooltip. */
   input?: Mode | undefined;
+  /** Item 6 (1632, 1633): controlled. Shows while true on any input, touch included; hover and
+   *  focus no longer toggle it. Absent, uncontrolled as before. */
+  open?: boolean | undefined;
   style?: CSSProperties | undefined;
 };
 
 /** Tooltip (1146, correction 31). Wraps one control and names it. Appears --tooltip-delay after the pointer rests on the control or keyboard focus reaches it; once one is showing,
  *  a neighbour's shows at once for --tooltip-grace after the last hid. Hides on Escape, blur and pointer leave; the pointer may move onto the tooltip without closing it (WCAG 1.4.13).
  *  The child keeps its accessible name (aria-label); the tooltip is aria-hidden so it is not announced twice, and it carries no id the child points at. No tooltip on touch.
- *  Below the control by default, flipping above when the viewport's foot is too near; shifted sideways to stay inside. Fixed position, --z-tooltip, so no scroller clips it. */
+ *  Below the control by default, flipping above when the viewport's foot is too near; shifted sideways to stay inside. Fixed position, --z-tooltip, so no scroller clips it.
+ *  Brief 60-SP item 6 (1632, 1633): `open` makes it controlled. While `open` is passed, hover and focus do not toggle it, and it shows on touch too, so a held press can name
+ *  its control (the caller's long press at 500 ms). Still aria-hidden: the control keeps its name. Absent, the part is unchanged. */
 export function Tooltip({
   label,
   children,
   placement = "bottom",
   input,
+  open,
   style,
   ...rest
 }: TooltipProps) {
   const detected = useMode();
   const mode = input || detected;
-  const [on, setOn] = useState(false);
+  const [hover, setOn] = useState(false);
+  const controlled = open !== undefined;
+  const on = controlled ? !!open : hover;
   const [pos, setPos] = useState<{ top: number; left: number; below: boolean } | null>(null);
   const host = useRef<HTMLSpanElement>(null);
   const tip = useRef<HTMLSpanElement>(null);
@@ -75,7 +89,7 @@ export function Tooltip({
   };
   const [waited, setWaited] = useState<number | null>(null);
   const show = () => {
-    if (mode === "touch" || !label) return;
+    if (controlled || mode === "touch" || !label) return;
     clear();
     const grace = readMs("--tooltip-grace");
     if (Date.now() - lastHide < grace) {
@@ -94,7 +108,7 @@ export function Tooltip({
   };
   useEffect(() => () => clear(), []);
   useEffect(() => {
-    if (mode === "touch" && on) hide();
+    if (mode === "touch" && hover) hide();
   }, [mode]);
   // Correction 31: `input` overrides the detected mode, as PersonCard and BrowseTile take it, so a touch specimen can be drawn on a pointer device.
   useLayoutEffect(() => {
@@ -159,12 +173,13 @@ export function Tooltip({
       {...rest}
     >
       {children}
-      {on && mode !== "touch" ? (
+      {on && (controlled || mode !== "touch") ? (
         <span
           ref={tip}
           role="tooltip"
           aria-hidden="true"
           data-tooltip
+          data-controlled={controlled ? "" : undefined}
           data-placement={pos ? (pos.below ? "bottom" : "top") : undefined}
           style={{
             position: "fixed",

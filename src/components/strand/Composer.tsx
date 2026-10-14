@@ -37,6 +37,25 @@
 // 10. With a supplied form the preview reads `{c}.title` and `{c}.meta` and nothing else of the
 //    form's, and its footer is the card's fixed vocabulary (671).
 // 11. Segment fields render through the Segment part (673), the Composer its first caller.
+//
+// Brief 60-SP item 10 (RF 5.2 item 2, HT 5.2 item 3; 1685, 1695, 1696; compile
+// sha256-b1a458dac1bd562f, ratified 1728; handoff H61-SP). Images are held as data: each carries
+// its stored size, `focalPoint` and `crop` beside the production `preview` and `storage_path`
+// (the compile names the URL `src` and the row `media_id`; the tree's `upload` already returns the
+// row's path and size, so those names stay). The strip is AttachmentTile in a list named Attached
+// images (R9). `onFraming(image, value)` receives each reframe for media_set_framing; `tags`
+// ({ find, suggest, note }, the app's; Strand does no matching) completes `#` through TokenSuggest
+// under the field and writes T4 to T6 into the quiet note line; `initialReframe` is for review
+// harnesses. Reframe opens ImageAdjust on the image: on touch as a second view inside the Sheet
+// (`pushed`: Back, Reframe, the adjust, R6's line, Done in the footer), on pointer inline above the
+// live preview in a lined box headed Reframe with Done (1695); each change feeds the preview, which
+// frames the image by its focal point and crop. Post never waits on reframing. The caps label over
+// the preview reads Preview (R10). Two divergences, kept: the tile offers Reframe only while
+// `onFraming` is passed, because the app has no write path for a framing yet (the Reframe build is
+// its own handoff) and an adjust nothing stores would be a control that does nothing; and the
+// preview renders through PostCardRouter, so `tags.parse` and TagText in the preview wait for the
+// hashtag handoff with the body it renders. Nothing passes the new props yet. Record:
+// docs/strand-ports/sha256-b1a458dac1bd562f.md.
 import {
   Fragment,
   useEffect,
@@ -52,15 +71,19 @@ import { PostCardRouter } from "@/components/dna/PostCardRouter";
 import type { PostView } from "@/lib/post-view";
 import { domainOf } from "@/lib/post-view";
 import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
+import { AttachmentTile } from "./AttachmentTile";
 import { AudienceSelect, AUDIENCE_LABEL, type Audience } from "./AudienceSelect";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
 import { DiaLine, type DiaLineState } from "./DiaLine";
 import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
+import { ImageAdjust, type AdjustValue } from "./ImageAdjust";
 import { Input } from "./Input";
+import type { FocalPoint, MediaCrop } from "./MediaBlock";
 import { Segment } from "./Segment";
 import { COMPOSER_SHEET_WIDTH, Sheet } from "./Sheet";
+import { TokenList, useTokenSuggest, type TokenOption } from "./TokenSuggest";
 import { Switch } from "./Switch";
 import { type ComposerVerb } from "./cmeta";
 import { VERB_ACT } from "./VerbChip";
@@ -113,8 +136,26 @@ export type ComposerImage = {
   width?: number | undefined;
   height?: number | undefined;
   pending?: boolean | undefined;
+  /** Item 10: the author's framing, written by ImageAdjust (351); null or absent is auto-fit. */
+  focalPoint?: FocalPoint | null | undefined;
+  crop?: MediaCrop | null | undefined;
+  alt?: string | undefined;
 };
 export type UploadedImage = { storage_path: string; width: number; height: number };
+
+/** Item 10 (HT 2.1): the app's tag helpers; Strand does no matching. */
+export type ComposerTags = {
+  /** The token at the caret, or null. */
+  find: (
+    text: string,
+    caret: number | null,
+  ) => { start: number; end: number; query: string } | null;
+  /** Up to five options for a query. */
+  suggest?:
+    ((query: string) => Promise<readonly TokenOption[]> | readonly TokenOption[]) | undefined;
+  /** T4 to T6 for the quiet line under the field, or an empty string for none. */
+  note?: ((text: string) => string) | undefined;
+};
 
 export type DiaRecord = {
   verb: ComposerVerb | null;
@@ -207,6 +248,12 @@ export type ComposerProps = {
   forms?: Partial<Record<ComposerVerb, ComposerForm>> | undefined;
   /** Correction 7 (ruling 53): verbs that cannot be chosen here, each with its reason in words. */
   disabledVerbs?: Partial<Record<ComposerVerb, string>> | undefined;
+  /** Item 10: each reframe, for media_set_framing. While absent the tile offers no Reframe. */
+  onFraming?: ((image: ComposerImage, value: AdjustValue) => void) | undefined;
+  /** Item 10 (HT 2.1): the app's tag helpers. */
+  tags?: ComposerTags | undefined;
+  /** Item 10: the index being reframed on open; review harnesses only. */
+  initialReframe?: number | null | undefined;
 };
 
 // Ruling 400: no Connect line; the composer carries no Connect verb.
@@ -243,6 +290,9 @@ export function Composer({
   fieldOptions,
   forms = EMPTY_FORMS,
   disabledVerbs = EMPTY_DISABLED,
+  onFraming,
+  tags,
+  initialReframe = null,
 }: ComposerProps) {
   const touch = (mode || (tier === "expanded" ? "pointer" : "touch")) === "touch";
   /**
@@ -264,6 +314,10 @@ export function Composer({
   const [overridden, setOverridden] = useState(!!(seed.overridden || initialVerb));
   const [fv, setFv] = useState<FieldValues>(seed.fields || {});
   const [images, setImages] = useState<ComposerImage[]>(seed.images || []);
+  // Item 10: the index being reframed, or null; the token at the caret and its options.
+  const [reframing, setReframing] = useState<number | null>(initialReframe);
+  const [tok, setTok] = useState<{ start: number; end: number; query: string } | null>(null);
+  const [tagOpts, setTagOpts] = useState<readonly TokenOption[]>([]);
   const [link, setLink] = useState<ComposerLink | null>(seed.link || null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [url, setUrl] = useState("");
@@ -589,6 +643,53 @@ export function Composer({
     setPicker(false);
   };
 
+  // Item 10: a reframe writes the image's framing and feeds the preview; the caller stores it.
+  const frameImg = (i: number, v: AdjustValue) => {
+    const img = images[i];
+    if (!img) return;
+    setImages((s) =>
+      s.map((x, j) => (j === i ? { ...x, focalPoint: v.focalPoint, crop: v.crop } : x)),
+    );
+    if (onFraming) onFraming({ ...img, focalPoint: v.focalPoint, crop: v.crop }, v);
+  };
+  const onText = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    const v = e.target.value;
+    setText(v);
+    if (!tags) return;
+    const k = tags.find(v, e.target.selectionStart);
+    setTok(k);
+    if (k && k.query)
+      Promise.resolve(tags.suggest ? tags.suggest(k.query) : [])
+        .then((o) => setTagOpts(o || []))
+        .catch(() => setTagOpts([]));
+    else setTagOpts([]);
+  };
+  const chooseTag = (o: TokenOption) => {
+    if (!tok) return;
+    const v = text.slice(0, tok.start) + o.label + " " + text.slice(tok.end);
+    const at = tok.start + o.label.length + 1;
+    setText(v);
+    setTok(null);
+    setTagOpts([]);
+    requestAnimationFrame(() => {
+      const el = taRef.current;
+      if (el) {
+        el.focus();
+        el.setSelectionRange(at, at);
+      }
+    });
+  };
+  const ts = useTokenSuggest({
+    options: tagOpts,
+    open: !!tok && tagOpts.length > 0,
+    onChoose: chooseTag,
+    onClose: () => {
+      setTok(null);
+      setTagOpts([]);
+    },
+  });
+  const tagNote = tags && tags.note ? tags.note(text) || "" : null;
+
   const addLink = async () => {
     const u = url.trim();
     if (!u) return;
@@ -631,7 +732,14 @@ export function Composer({
     fields: form ? (convTitle ? { title: convTitle } : {}) : fv,
     meta:
       form && typeof convMeta?.value === "string" && convMeta.value ? convMeta.value : undefined,
-    media: images.map((i) => ({ src: i.preview, width: i.width, height: i.height })),
+    // Item 10: the preview is framed as the published card will be, by the author's framing.
+    media: images.map((i) => ({
+      src: i.preview,
+      width: i.width,
+      height: i.height,
+      focalPoint: i.focalPoint ?? null,
+      crop: i.crop ?? null,
+    })),
     link: link
       ? { url: link.url, domain: link.domain, title: link.title, image: link.image }
       : null,
@@ -818,42 +926,30 @@ export function Composer({
         </div>
       )}
       {images.length > 0 && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        // Item 10 (R9): the strip is AttachmentTile in a list named Attached images.
+        <div
+          role="list"
+          aria-label="Attached images"
+          style={{ display: "flex", gap: 12, flexWrap: "wrap", paddingTop: 6 }}
+        >
           {images.map((img, i) => (
-            <span
+            <AttachmentTile
               key={img.preview + i}
-              style={{
-                position: "relative",
-                width: 72,
-                height: 72,
-                borderRadius: 10,
-                overflow: "hidden",
-                border: "1px solid var(--line)",
+              src={img.preview}
+              alt={img.alt ?? ""}
+              width={img.width}
+              height={img.height}
+              focalPoint={img.focalPoint}
+              crop={img.crop}
+              pending={img.pending}
+              active={reframing === i}
+              input={touch ? "touch" : "pointer"}
+              onRemove={() => {
+                setImages((s) => s.filter((_, j) => j !== i));
+                if (reframing === i) setReframing(null);
               }}
-            >
-              <img
-                src={img.preview}
-                alt=""
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                  display: "block",
-                  opacity: img.pending ? 0.6 : 1,
-                }}
-              />
-              {/* G136: the placement sits on a wrapper, so the Tooltip's host span wraps the button
-                  and the tooltip is placed against it; the button lands where it did. */}
-              <span style={{ position: "absolute", top: -8, right: -8, display: "flex" }}>
-                <IconButton
-                  name="x"
-                  label="Remove image"
-                  size={44}
-                  onClick={() => setImages((s) => s.filter((_, j) => j !== i))}
-                  style={{ color: "var(--on-fill)", background: "var(--scrim)" }}
-                />
-              </span>
-            </span>
+              onReframe={onFraming ? () => setReframing(i) : undefined}
+            />
           ))}
         </div>
       )}
@@ -1018,8 +1114,13 @@ export function Composer({
         aria-label="What is going on with you"
         placeholder="What is going on with you?"
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={onText}
         rows={stacked ? 4 : 6}
+        {...(tags ? ts.fieldProps : {})}
+        aria-describedby={tagNote != null ? "composer-tag-note" : undefined}
+        onKeyDown={(e) => {
+          ts.keyDown(e);
+        }}
         style={{
           width: "100%",
           boxSizing: "border-box",
@@ -1035,6 +1136,36 @@ export function Composer({
           minHeight: 44,
         }}
       />
+      {tags ? (
+        <div style={{ position: "relative" }}>
+          <TokenList state={ts} label="Tags" placement="below" />
+        </div>
+      ) : null}
+      {tagNote != null ? (
+        <div
+          id="composer-tag-note"
+          role="status"
+          aria-live="polite"
+          data-note=""
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 6,
+            fontSize: "var(--text-xs)",
+            lineHeight: "var(--text-xs-lh)",
+            color: "var(--ink-2)",
+            textWrap: "pretty",
+            minHeight: tagNote ? undefined : 0,
+          }}
+        >
+          {tagNote ? (
+            <>
+              <Icon name="info" size={14} style={{ color: "var(--ink-3)", marginTop: 2 }} />
+              <span style={{ minWidth: 0 }}>{tagNote}</span>
+            </>
+          ) : null}
+        </div>
+      ) : null}
       {reasonShown ? (
         <div
           role="status"
@@ -1175,6 +1306,87 @@ export function Composer({
     boxSizing: "border-box" as const,
   };
   const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+  // Item 10 (1695): Reframe opens ImageAdjust on the image, inline above the preview on pointer and
+  // as the Sheet's pushed view on touch.
+  const rimg = reframing != null ? images[reframing] : undefined;
+  const adjust = rimg ? (
+    <ImageAdjust
+      key={rimg.preview}
+      src={rimg.preview}
+      alt={rimg.alt ?? ""}
+      width={rimg.width}
+      height={rimg.height}
+      input={touch ? "touch" : "pointer"}
+      value={{ focalPoint: rimg.focalPoint ?? null, crop: rimg.crop ?? null }}
+      onChange={(v) => {
+        if (reframing != null) frameImg(reframing, v);
+      }}
+    />
+  ) : null;
+  const inlineReframe =
+    rimg && !touch ? (
+      <section
+        aria-label="Reframe"
+        data-reframe="inline"
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+          padding: "var(--space-4)",
+          border: "var(--border-thin) solid var(--line)",
+          borderRadius: "var(--radius-l)",
+        }}
+      >
+        <div
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}
+        >
+          <h3
+            style={{
+              margin: 0,
+              fontSize: 13,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              fontWeight: 500,
+              color: "var(--ink-3)",
+            }}
+          >
+            Reframe
+          </h3>
+          <Button variant="secondary" size="sm" onClick={() => setReframing(null)}>
+            Done
+          </Button>
+        </div>
+        {adjust}
+      </section>
+    ) : null;
+  const touchReframe = !!rimg && touch;
+  const pushedView = touchReframe ? (
+    <div
+      data-reframe="pushed"
+      style={{
+        flex: 1,
+        minHeight: 0,
+        overflowY: "auto",
+        padding: "16px 20px 24px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 16,
+      }}
+    >
+      {adjust}
+      <p
+        style={{
+          margin: 0,
+          fontSize: 15,
+          lineHeight: 1.45,
+          color: "var(--ink-2)",
+          textWrap: "pretty",
+        }}
+      >
+        What the frame shows is what your post shows.
+      </p>
+    </div>
+  ) : null;
 
   return (
     <Sheet
@@ -1189,9 +1401,17 @@ export function Composer({
       width={COMPOSER_SHEET_WIDTH}
       // Ruling 665: the caller's failure message, above the action row, with the draft intact.
       error={fail}
+      // Item 10, 1695: on touch the reframe is a second view inside the same sheet (item 14).
+      pushed={touchReframe ? { title: "Reframe", onBack: () => setReframing(null) } : undefined}
       // Ruling 480: the action row is a footer in the dialog's flex column, never an overlay.
       actions={
-        tier === "compact" ? (
+        touchReframe ? (
+          <div style={{ ...col, display: "flex" }}>
+            <Button full={tier === "compact"} onClick={() => setReframing(null)}>
+              Done
+            </Button>
+          </div>
+        ) : tier === "compact" ? (
           <div style={{ ...col, display: "flex" }}>{publishBtn}</div>
         ) : (
           <>
@@ -1203,26 +1423,33 @@ export function Composer({
         )
       }
     >
-      {header}
-      {stacked ? (
+      {touchReframe ? (
+        pushedView
+      ) : stacked ? (
         <Fragment>
+          {header}
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px 20px 24px" }}>
             <div style={{ ...col, display: "flex", flexDirection: "column", gap: 24 }}>
               {fields}
-              {preview && (
+              {(preview || inlineReframe) && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      letterSpacing: "0.06em",
-                      textTransform: "uppercase",
-                      fontWeight: 500,
-                      color: "var(--ink-3)",
-                    }}
-                  >
-                    How it will appear
-                  </div>
-                  {preview}
+                  {inlineReframe}
+                  {preview && (
+                    <Fragment>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          letterSpacing: "0.06em",
+                          textTransform: "uppercase",
+                          fontWeight: 500,
+                          color: "var(--ink-3)",
+                        }}
+                      >
+                        Preview
+                      </div>
+                      {preview}
+                    </Fragment>
+                  )}
                 </div>
               )}
             </div>
@@ -1230,6 +1457,7 @@ export function Composer({
         </Fragment>
       ) : (
         <Fragment>
+          {header}
           <div
             style={{
               flex: 1,
@@ -1247,7 +1475,17 @@ export function Composer({
             >
               {fields}
             </div>
-            <div style={{ overflowY: "auto", padding: "20px 24px", background: "var(--bg)" }}>
+            <div
+              style={{
+                overflowY: "auto",
+                padding: "20px 24px",
+                background: "var(--bg)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+              }}
+            >
+              {inlineReframe}
               {preview}
             </div>
           </div>
