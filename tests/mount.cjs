@@ -1308,7 +1308,10 @@ async function runMountMedia(bt, bname, [w, h], theme) {
  * portrait dimensions renders in the portrait frame on the member page (the pane at expanded, its
  * own route below) and on the public page below two columns; above 1024 the public page's cover
  * keeps 1185's 21:9 across both columns. It replaces Addendum 3 item D's arm, which asserted the
- * 420px cover of ea35e8e's box that 1429 and 1643 retire.
+ * 420px cover of ea35e8e's box that 1429 and 1643 retire. H61-SP (Strand compile
+ * sha256-b1a458dac1bd562f, brief 60-SP item 21, 1717): the 21:9 box is a fixed box, so the portrait
+ * cover, past one ratio step of 21:9 (1.63:1 to 3.34:1), shows whole on --media-fill inside it
+ * (data-frame fixed-whole) where it was cropped to fill (fixed); the box's own shape is unchanged.
  */
 async function runMountCovers(bt, bname, [w, h], theme) {
   const tag = `${bname}-${w}x${h}-${theme}-mount-covers`;
@@ -1352,9 +1355,9 @@ async function runMountCovers(bt, bname, [w, h], theme) {
       record(
         tag +
           (two
-            ? " the public event page's cover is 21:9 across both columns (1185)"
+            ? " the public event page's cover is 21:9 across both columns (1185), the portrait cover whole inside it (item 21, 1717)"
             : " the public event page's cover with stored portrait dimensions renders in the portrait frame (1548)"),
-        (two ? pub.frame === "fixed" : pub.set === "tall") && pw.length === 0,
+        (two ? pub.frame === "fixed-whole" : pub.set === "tall") && pw.length === 0,
         `${pub.frame}/${pub.set} ${Math.round(pub.w)}x${Math.round(pub.h)}` +
           (pw.length ? "; " + pw.join(", ") : ""),
       );
