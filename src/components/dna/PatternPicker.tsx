@@ -1,8 +1,13 @@
 // Ported from profile/strand-patch/Profile.jsx (B3-Profile-v3, ruling 132). Behavior unchanged.
+// H61-SP: `MastheadPattern` lives here since ProfileHeader became Strand's (compile
+// sha256-b1a458dac1bd562f, item 13), because this is the app part that enumerates the three tiles;
+// profile.ts and ProfileSurface read it from here.
 import type { CSSProperties } from "react";
 import { Icon } from "@/components/strand/Icon";
-import type { MastheadPattern } from "./ProfileHeader";
 import { assetBase } from "@/components/strand/cmeta";
+
+/** The three curated masthead tiles (guide amendment 4.4, ruling 132). */
+export type MastheadPattern = "kente" | "adinkra" | "mudcloth";
 
 /** Curated masthead patterns: three textile tiles, chosen, never uploaded (guide amendment 4.4). */
 export const PATTERNS: { id: MastheadPattern; label: string }[] = [

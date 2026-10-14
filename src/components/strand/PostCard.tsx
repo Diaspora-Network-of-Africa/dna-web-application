@@ -47,6 +47,17 @@
 // gallery, a strip, a carousel or a video, `full` otherwise, as compiled. `media` reaches
 // MediaBlock unchanged, so its new fields (width, height, focalPoint, crop, whole, items as tiles)
 // need nothing here. Record: docs/strand-ports/v1791654208929113-media.md.
+//
+// At compile sha256-b1a458dac1bd562f (brief 60-SP items 1 and 12; FC 5.2 item 1, 1651, 1652; RF 5.2
+// item 1, 1697; item 21, 1714; ratified 1728; handoff H61-SP): `below`, on the feed face, renders
+// after the footer inside the chassis at the card's padding and 12 gap (`data-below`), so a
+// reaction row, the latest comment and the thread sit inside the 1.5px C frame; nothing passes it
+// yet (the Feed card's comments are their own handoff). The discovery face keeps its own fixed 16:9
+// box and places `media.focalPoint` and `media.crop` through MediaBlock's exported imageFrame and
+// placement; under item 21 the box takes --media-fill and `data-frame` (fixed, or fixed-whole for a
+// flyer past one ratio step of 16:9, which shows whole). The face still opens the event, never the
+// viewer, so it does not render through MediaBlock. Record:
+// docs/strand-ports/sha256-b1a458dac1bd562f.md.
 import {
   Fragment,
   useRef,
@@ -61,7 +72,7 @@ import { CBadge } from "./CBadge";
 import { Icon } from "./Icon";
 import { Chip } from "./Chip";
 import { IconButton } from "./IconButton";
-import { MediaBlock, type MediaBlockProps } from "./MediaBlock";
+import { MediaBlock, imageFrame, placement, type MediaBlockProps } from "./MediaBlock";
 import { Menu, type MenuProps } from "./Menu";
 import type { CardC } from "./cmeta";
 
@@ -126,6 +137,9 @@ export type PostCardProps = {
   /** 1083 (correction 23). The card a pane is open on: a 2px --ink ring 2px outside the identity
    *  frame on a --bg gap, `data-selected` and `aria-current="true"`. Absent: unchanged. */
   selected?: boolean | undefined;
+  /** Brief 60-SP item 1 (1651, 1652): on the feed face, after the footer, inside the chassis and
+   *  its C frame, at the card's padding with a 12 gap. Absent, the card is unchanged. */
+  below?: ReactNode;
   /** Correction 25 (1102). `feed` (default) renders exactly as before; `discovery` is the
    *  fixed-size Convene face, which reads only the props below and `c`, `title`, `media`,
    *  `selected` and `style`. */
@@ -224,6 +238,7 @@ function FeedFace({
   reacted,
   onReact,
   selected,
+  below,
   style,
 }: PostCardProps) {
   const [, setHover] = useState(false);
@@ -608,6 +623,14 @@ function FeedFace({
           <IconButton name="share" label="Share" onClick={onShare} />
         </footer>
       )}
+      {below ? (
+        <div
+          data-below=""
+          style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}
+        >
+          {below}
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -688,6 +711,12 @@ function DiscoveryFace({
   const frame = c === "system" ? "var(--c-system)" : "var(--c-" + c + ")";
   const img = media ? (typeof media === "string" ? media : media.src) : undefined;
   const alt = media && typeof media === "object" ? media.alt || "" : "";
+  // Item 12 (1697) and item 21 (1714): the face's own fixed 16:9 box, the image placed through
+  // MediaBlock's imageFrame and placement by its focal point and crop; a flyer past one ratio step
+  // of 16:9 shows whole on --media-fill. A string, or an object with no framing, is centred as before.
+  const mo: MediaBlockProps = media && typeof media === "object" ? media : {};
+  const pf = imageFrame(mo.width, mo.height, mo.crop, "16/9");
+  const place = placement(pf, mo.focalPoint, mo.crop);
   // Correction 29's ask 1: Report closes the caller's items behind a rule; absent, neither.
   const items: MenuProps["items"] = onReport
     ? [
@@ -775,12 +804,13 @@ function DiscoveryFace({
     >
       <div
         data-media={img ? "image" : "none"}
+        data-frame={img ? pf.clamp : undefined}
         style={{
           position: "relative",
           aspectRatio: "16 / 9",
           borderRadius: "var(--radius-m)",
           overflow: "hidden",
-          background: "var(--bg-sunken)",
+          background: "var(--media-fill)",
           border: "var(--border-thin) solid var(--line)",
           display: "flex",
           alignItems: "center",
@@ -792,14 +822,8 @@ function DiscoveryFace({
           <img
             src={img}
             alt={alt}
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              display: "block",
-            }}
+            data-focal={mo.focalPoint || mo.crop ? "" : undefined}
+            style={{ ...place, position: "absolute", inset: 0, width: "100%", height: "100%" }}
           />
         ) : (
           <CBadge c={c === "system" ? "brand" : c} size={48} />

@@ -286,6 +286,9 @@
   --media-fill: var(
     --bg-sunken
   ); /* 1643: restated here because a var() alias resolves where it is declared; without this line the dark theme would inherit the light fill */
+  --c-system-tint: var(
+    --bg-sunken
+  ); /* 1673 item 17 (brief 60-SP, compile sha256-b1a458dac1bd562f): restated for the same reason; it read the light #F2EDE5 in the dark theme before */
   --glow-dia: 0 0 0 2px #141412, 0 0 0 4px #e8b830, 0 0 18px rgba(232, 184, 48, 0.4);
   /* MemberCard's portrait halo, the one value the dark theme overrides (compile v1791495246160097,
      tokens/colors.css; 1487): on the warm near-black ground an ink shadow has no delta against
@@ -332,6 +335,7 @@
 
   --weight-regular: 400;
   --weight-medium: 500;
+  --weight-semibold: 600; /* 1650 (brief 60-SP item 16): 1474's 600 on the console's current row, now a token (LAYER 1, a primitive) */
   --weight-bold: 700;
   --tracking-caps: 0.06em;
 }
@@ -397,7 +401,10 @@
   --sheet-expanded-width: min(60%, var(--sheet-side-max-width));
   --sheet-expanded-max-height: 80%;
   --sheet-composer-ratio: min(60%, var(--sheet-side-max-width)); /* 492 exception, 1200, 1219 */
-  --sheet-notification-width: 380px; /* 492 exception: the pointer notification panel */
+  --sheet-panel-width: 380px; /* 1704 (brief 60-SP item 18): the side panel width, written once; the notification panel and the account drawer read it (LAYER 2) */
+  --sheet-notification-width: var(
+    --sheet-panel-width
+  ); /* 492 exception: the pointer notification panel (now an alias, value unchanged) */
   --sheet-radius: var(--radius-l);
   --sheet-drag-dismiss: 120px;
 

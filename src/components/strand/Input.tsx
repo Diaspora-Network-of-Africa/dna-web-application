@@ -9,6 +9,14 @@
 // render an empty line; the unconditional `useId()`, where the compile reads `id || React.useId()`,
 // a conditional hook; and 92fbdc3's structure on every call that passes neither `suggestions` nor
 // `icon`, under Chat's ruling on 25 §5 (see `drawn` below).
+//
+// Re-synced at compile sha256-b1a458dac1bd562f (brief 60-SP items 8 and 9; HT 5.2 items 2 and 4;
+// handoff H61-SP): `tokens` on a multiline field completes the token at the caret through
+// TokenSuggest (the field becomes the combobox, the list a role=listbox of up to five rows), and
+// `note`, a quiet line separate from `hint` and `error`, --text-xs in --ink-2 after an info icon in
+// --ink-3, in a polite role=status region tied by aria-describedby. Not DIA (1300). A field with
+// `tokens` takes the compile's wrappers, as the combobox and the glyph do. Record:
+// docs/strand-ports/sha256-b1a458dac1bd562f.md.
 import {
   useEffect,
   useId,
@@ -23,6 +31,20 @@ import {
   type TextareaHTMLAttributes,
 } from "react";
 import { Icon } from "./Icon";
+import { TokenList, useTokenSuggest, type TokenOption, type TokenPlacement } from "./TokenSuggest";
+
+/** Brief 60-SP item 8 (HT 5.2 item 2). The token completion a multiline field takes. */
+export type InputTokens = {
+  options: readonly TokenOption[] | null | undefined;
+  open: boolean;
+  onChoose?: ((o: TokenOption) => void) | undefined;
+  onClose?: (() => void) | undefined;
+  /** The list's name (T2 "Tags"); default the field's label. */
+  label?: string | undefined;
+  /** below (default) or above, for a composer at the foot. */
+  placement?: TokenPlacement | undefined;
+  order?: "alpha" | "given" | undefined;
+};
 
 /** Correction 25 (1102). One suggestion in the combobox's list. */
 export type InputSuggestion = {
@@ -55,6 +77,12 @@ type Shared = {
   listbox?: "overlay" | "inline" | undefined;
   /** A leading glyph from Strand's set inside the field, e.g. "search" or "map-pin". */
   icon?: string | undefined;
+  /** Item 9 (HT 5.2 item 4): a quiet line separate from `hint` and `error`, --text-xs in --ink-2
+   *  after an info icon, in a polite role=status region tied by aria-describedby. Not DIA (1300).
+   *  Passing "" keeps the region mounted and empty, so the first line that arrives is announced. */
+  note?: string | undefined;
+  /** Item 8 (HT 5.2 item 2): on a multiline field, the token completion at the caret. */
+  tokens?: InputTokens | undefined;
 };
 export type InputProps = Shared &
   Omit<InputHTMLAttributes<HTMLInputElement>, "style" | "id"> &
@@ -95,10 +123,21 @@ export function Input({
   noMatch,
   listbox = "overlay",
   icon,
+  note,
+  tokens,
   ...rest
 }: InputProps) {
   const autoId = useId();
   const uid = id || autoId;
+  const noteId = uid + "-note";
+  const tk = useTokenSuggest({
+    options: tokens ? tokens.options : [],
+    open: !!(tokens && multiline && tokens.open),
+    onChoose: tokens?.onChoose,
+    onClose: tokens?.onClose,
+    order: tokens?.order,
+    id: uid,
+  });
   const [focus, setFocus] = useState(false);
   const [listOpen, setListOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -183,8 +222,19 @@ export function Input({
   const common = {
     id: uid,
     "aria-invalid": invalid,
-    "aria-describedby": message || hint ? descId : undefined,
+    "aria-describedby":
+      [message || hint ? descId : null, note != null ? noteId : null].filter(Boolean).join(" ") ||
+      undefined,
   };
+  const tokenProps =
+    tokens && multiline
+      ? {
+          ...tk.fieldProps,
+          onKeyDown: (e: KeyboardEvent<Field>) => {
+            if (!tk.keyDown(e) && userKey) (userKey as (e: KeyboardEvent<Field>) => void)(e);
+          },
+        }
+      : {};
   const handlers = {
     onFocus: (e: FocusEvent<Field>) => {
       setFocus(true);
@@ -297,6 +347,7 @@ export function Input({
       {...common}
       {...(rest as TextareaHTMLAttributes<HTMLTextAreaElement>)}
       {...handlers}
+      {...tokenProps}
       style={field}
     />
   ) : (
@@ -315,7 +366,7 @@ export function Input({
   // under itself, so its line and everything below it move. The wrappers therefore render only
   // when a prop that needs them is passed (the combobox's list, or the leading glyph); every other
   // call keeps 92fbdc3's structure. Divergent, with the mismatch filed for Strand in docs/GAPS.md.
-  const drawn = combo || !!icon;
+  const drawn = combo || !!icon || !!(tokens && multiline);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, ...style }}>
       {label && (
@@ -349,6 +400,13 @@ export function Input({
             {fieldEl}
           </div>
           {list}
+          {tokens && multiline ? (
+            <TokenList
+              state={tk}
+              label={tokens.label || (typeof label === "string" ? label : undefined)}
+              placement={tokens.placement || "below"}
+            />
+          ) : null}
         </div>
       ) : (
         fieldEl
@@ -363,6 +421,31 @@ export function Input({
           }}
         >
           {message || hint}
+        </div>
+      )}
+      {note != null && (
+        <div
+          id={noteId}
+          role="status"
+          aria-live="polite"
+          data-note=""
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 6,
+            fontSize: "var(--text-xs)",
+            lineHeight: "var(--text-xs-lh)",
+            color: "var(--ink-2)",
+            textWrap: "pretty",
+            ...(note ? {} : { marginTop: -6 }),
+          }}
+        >
+          {note ? (
+            <>
+              <Icon name="info" size={14} style={{ color: "var(--ink-3)", marginTop: 2 }} />
+              <span style={{ minWidth: 0 }}>{note}</span>
+            </>
+          ) : null}
         </div>
       )}
     </div>

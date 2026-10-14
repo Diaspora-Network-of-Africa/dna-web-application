@@ -19,6 +19,21 @@
 //   Never full screen. The composer takes the same width through its own token (1200, 1219).
 // Production addition: keyboardHeight (px, from visualViewport) insets the dialog above the
 // software keyboard so the sheet sits above it, and marks the panel with data-kb="1".
+//
+// Re-synced at compile sha256-b1a458dac1bd562f (brief 60-SP items 14 and 18; RF 5.2 item 5, 60-S;
+// 1704; handoff H61-SP). `pushed`, a second view inside the same sheet, as one prop
+// `{ title, onBack, backLabel }`: a title row reads Back (IconButton arrow-left, R8) before the
+// pushed title in the display face, with Close beside it; Escape goes back rather than closing
+// while a view is pushed; focus moves to the pushed heading when the view arrives and back to the
+// sheet's own `[data-sheet-heading]` when it returns. The body and footer are the caller's for the
+// view. This Sheet draws no title row of its own (callers draw theirs in `children`), so the pushed
+// row is the one row the part draws, above `children`, and a caller hides its own head while a view
+// is pushed. `size="account"` (1704) reads --sheet-panel-width above compact, so the account drawer
+// no longer passes a number; `size="notification"` reads --sheet-notification-width and
+// `size="composer"` --sheet-composer-ratio, the width the composer already passed. The compile's
+// `tier` is this Sheet's `variant`, so a caller keeps its compact switch. The compile's z-index per
+// size is not drawn here: showModal() stacks the top layer by open order (499). Absent, unchanged.
+// Record: docs/strand-ports/sha256-b1a458dac1bd562f.md.
 import {
   useCallback,
   useEffect,
@@ -29,6 +44,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { IconButton } from "./IconButton";
 
 export const SHEET_DUR = 300;
 
@@ -38,11 +54,23 @@ export const SHEET_HEIGHT = "80%";
 export const SHEET_WIDTH = "var(--sheet-expanded-width)";
 export const COMPOSER_SHEET_WIDTH = "var(--sheet-composer-ratio)";
 
+/** Brief 60-SP item 14 (RF 5.2 item 5): a second view inside the same sheet. */
+export type SheetPushed = {
+  title: string;
+  onBack: () => void;
+  /** R8, default "Back". */
+  backLabel?: string | undefined;
+};
+
 export type SheetProps = {
   open: boolean;
   onClose?: (() => void) | undefined;
   variant?: "sheet" | "drawer";
   label?: string;
+  /** 492's named exceptions (611) and 1704's: the side-sheet width each reads above compact.
+   *  `account` is --sheet-panel-width; `notification` --sheet-notification-width; `composer`
+   *  --sheet-composer-ratio. `width` still wins when both are passed. */
+  size?: "default" | "composer" | "notification" | "account" | undefined;
   /** Side-sheet width. Defaults to --sheet-expanded-width; the composer passes --sheet-composer-ratio (equal, 1219). */
   width?: number | string | undefined;
   /** Bottom-sheet height. Defaults to the canonical 80%. */
@@ -61,8 +89,18 @@ export type SheetProps = {
   initialFocus?: RefObject<HTMLElement | null> | undefined;
   /** Overrides where focus returns on close. Defaults to whatever was focused when it opened. */
   returnFocus?: RefObject<HTMLElement | null> | HTMLElement | null | undefined;
+  /** Item 14: a second view inside the same sheet; Back and the title replace the caller's title row,
+   *  Escape goes back, focus moves to the pushed heading and back again. Absent, unchanged. */
+  pushed?: SheetPushed | undefined;
   children?: ReactNode;
   style?: CSSProperties | undefined;
+};
+
+const SIZE_WIDTH: Record<NonNullable<SheetProps["size"]>, string> = {
+  default: "var(--sheet-expanded-width)",
+  composer: "var(--sheet-composer-ratio)",
+  notification: "var(--sheet-notification-width)",
+  account: "var(--sheet-panel-width)",
 };
 
 const FOCUSABLE =
@@ -82,6 +120,7 @@ export function Sheet({
   onClose,
   variant = "sheet",
   label,
+  size = "default",
   width,
   height,
   contained,
@@ -91,6 +130,7 @@ export function Sheet({
   error,
   initialFocus,
   returnFocus,
+  pushed,
   children,
   style,
 }: SheetProps) {
@@ -101,6 +141,31 @@ export function Sheet({
   const dlg = useRef<HTMLDialogElement>(null);
   const panel = useRef<HTMLElement>(null);
   const opener = useRef<HTMLElement | null>(null);
+  const pushedHeading = useRef<HTMLHeadingElement>(null);
+  // Item 14: the pushed view's Back, read through a ref so the key handlers below need no rebind.
+  const pushedRef = useRef(pushed);
+  pushedRef.current = pushed;
+  const back = () => {
+    const p = pushedRef.current;
+    if (p) p.onBack();
+  };
+  // Focus moves to the pushed heading when a view arrives and back to the sheet's own heading when it
+  // returns; the first render takes Sheet's ordinary open focus below.
+  const pushedKey = pushed ? pushed.title : "";
+  const firstPush = useRef(true);
+  useEffect(() => {
+    if (firstPush.current) {
+      firstPush.current = false;
+      return;
+    }
+    if (!open) return;
+    const target = pushedRef.current
+      ? pushedHeading.current
+      : panel.current?.querySelector<HTMLElement>("[data-sheet-heading]");
+    if (!target) return;
+    if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+    target.focus({ preventScroll: true });
+  }, [pushedKey, open]);
 
   // Mount, then the top layer, then the enter transition. The element stays mounted until the exit
   // finishes so the 300ms out is real rather than an unmount.
@@ -238,15 +303,18 @@ export function Sheet({
   useEffect(() => {
     if (!open || !mounted) return;
     const d = dlg.current;
+    // Item 14: while a view is pushed, Escape goes back rather than closing.
     const cancel = (e: Event) => {
       e.preventDefault();
-      onClose?.();
+      if (pushedRef.current) back();
+      else onClose?.();
     };
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (contained && d && !(e.target instanceof Node && d.contains(e.target))) {
           e.preventDefault();
-          onClose?.();
+          if (pushedRef.current) back();
+          else onClose?.();
         }
         return;
       }
@@ -353,7 +421,7 @@ export function Sheet({
   const ease = rm ? "0ms" : SHEET_DUR + "ms var(--ease)";
   const hidden = sheet ? "translateY(100%)" : "translateX(" + (left ? "-" : "") + "100%)";
   const len = (v: number | string) => (typeof v === "number" ? v + "px" : v);
-  const w = sheet ? "100%" : len(width ?? SHEET_WIDTH);
+  const w = sheet ? "100%" : len(width ?? SIZE_WIDTH[size]);
   const h = sheet
     ? keyboardHeight > 0
       ? "calc(100% - 8px)"
@@ -384,7 +452,8 @@ export function Sheet({
       onKeyDown={(e) => {
         if (e.key !== "Escape" || e.defaultPrevented) return;
         e.preventDefault();
-        onClose?.();
+        if (pushedRef.current) back();
+        else onClose?.();
       }}
       style={{
         position: contained ? "absolute" : "fixed",
@@ -447,6 +516,51 @@ export function Sheet({
             }}
           >
             <span style={{ width: 36, height: 4, borderRadius: 2, background: "var(--ink-4)" }} />
+          </div>
+        )}
+        {pushed && (
+          <div
+            data-sheet-title="pushed"
+            style={{
+              flex: "none",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "var(--space-2)",
+              padding: "calc(var(--space-3) / 2) var(--space-2)",
+              borderBottom: "var(--border-thin) solid var(--line)",
+            }}
+          >
+            <div
+              style={{
+                flex: 1,
+                minWidth: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--space-1)",
+              }}
+            >
+              <IconButton name="arrow-left" label={pushed.backLabel || "Back"} onClick={back} />
+              <h2
+                ref={pushedHeading}
+                tabIndex={-1}
+                style={{
+                  margin: 0,
+                  minWidth: 0,
+                  fontFamily: "var(--font-display)",
+                  fontSize: "var(--display-s)",
+                  lineHeight: "var(--display-s-lh)",
+                  fontWeight: "var(--weight-regular)" as unknown as number,
+                  outline: "none",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {pushed.title}
+              </h2>
+            </div>
+            {onClose && <IconButton name="x" label="Close" onClick={() => onClose()} />}
           </div>
         )}
         {children}

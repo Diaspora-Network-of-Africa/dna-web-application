@@ -14,7 +14,9 @@ import type { Audience } from "@/components/strand/AudienceSelect";
 import type { AttestationItem } from "@/components/dna/AttestationRail";
 import type { Attestation } from "@/components/strand/BadgeRow";
 import type { C } from "@/components/strand/cmeta";
-import type { MastheadPattern } from "@/components/dna/ProfileHeader";
+import type { MastheadPattern } from "@/components/dna/PatternPicker";
+import type { MediaFrame } from "@/components/strand/ProfileHeader";
+import { cropOf, focalPointOf } from "./post-view";
 import type { Stance } from "@/components/dna/StanceBlock";
 import type { Json } from "./database.types";
 import { uploadImage, type ImageSlot, type ImageUpload } from "./media";
@@ -156,6 +158,36 @@ export type ProfileSections = {
   convey?: ActivityRow[];
 };
 
+/** A media row's framing as a projection would carry it (351); profile_view returns none yet (G292). */
+export type ProfileFrameRow = {
+  width?: number | null | undefined;
+  height?: number | null | undefined;
+  focal_point?: unknown;
+  crop?: unknown;
+};
+
+/**
+ * Ruling 1729 (H61-SP): a null or absent frame is mapped to a missing frame here, never in the part.
+ * Strand's ProfileHeader takes `coverFrame` and `photoFrame` from the media rows; profile_view does
+ * not return them yet (G292), so every profile renders with the frame missing: the cover fills its
+ * band from its centre (1718) and the portrait is the Avatar (1719) until the projection carries the
+ * rows' framing.
+ */
+export function frameOf(row: ProfileFrameRow | null | undefined): MediaFrame | undefined {
+  if (!row || typeof row !== "object") return undefined;
+  const width = Number(row.width);
+  const height = Number(row.height);
+  const focalPoint = focalPointOf(row.focal_point);
+  const crop = cropOf(row.crop);
+  if (!(width > 0 && height > 0) && !focalPoint && !crop) return undefined;
+  return {
+    width: width > 0 ? width : null,
+    height: height > 0 ? height : null,
+    focalPoint,
+    crop,
+  };
+}
+
 export type ProfileMember = {
   id: string;
   handle: string;
@@ -163,7 +195,11 @@ export type ProfileMember = {
   headline?: string | undefined;
   avatar_path?: string | undefined;
   cover_path?: string | undefined;
+  /** Written by the legacy masthead; Strand's ProfileHeader reads `cover_frame` instead (item 13). Dead data until the column retires (G292). */
   cover_focus: string;
+  /** The media rows' framing, once profile_view returns it (G292); absent today. */
+  avatar_frame?: ProfileFrameRow | null | undefined;
+  cover_frame?: ProfileFrameRow | null | undefined;
   origin_country?: string | undefined;
   current_place?: string | undefined;
   current_country?: string | undefined;
@@ -210,6 +246,9 @@ export type ProfileView = {
   /** Signed URLs resolved client-side from the storage paths (private bucket; storage RLS decides). */
   avatarUrl?: string | undefined;
   coverUrl?: string | undefined;
+  /** 1729: the frames the header takes, mapped here from the member's rows; undefined is a missing frame. */
+  photoFrame?: MediaFrame | undefined;
+  coverFrame?: MediaFrame | undefined;
 };
 
 // Ruling 193: the vocabulary projection is no longer Profile's. Its type and its one read moved to
@@ -245,6 +284,8 @@ export async function loadProfile(handle: string, asPublic = false): Promise<Pro
   ]);
   view.avatarUrl = avatarUrl;
   view.coverUrl = coverUrl;
+  view.photoFrame = frameOf(view.member.avatar_frame);
+  view.coverFrame = frameOf(view.member.cover_frame);
   return view;
 }
 

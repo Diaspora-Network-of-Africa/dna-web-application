@@ -350,7 +350,9 @@ function ConsoleNav({
                   style={{
                     fontSize: 13,
                     lineHeight: 1.4,
-                    color: off ? "var(--ink-4)" : "var(--ink-3)",
+                    // 1649 (brief 60-SP item 15, compile sha256-b1a458dac1bd562f): the explanatory
+                    // line reads --ink-2; --ink-3 measured 4.00:1 on the current row's tint.
+                    color: off ? "var(--ink-4)" : "var(--ink-2)",
                     textWrap: "pretty",
                   }}
                 >

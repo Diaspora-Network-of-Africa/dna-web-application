@@ -9,21 +9,34 @@
 // return breaks and the button sends. The mention query is the trailing `@word` of the text; up to
 // five members whose name starts with it are offered, and a pick replaces the word with `@Name `.
 // Nothing here is stored anywhere: the unsent text is the caller's state for this tab (1351).
+//
+// At compile sha256-b1a458dac1bd562f (brief 60-SP items 3 and 8; FC 5.2 item 2; HT 5.2 item 2;
+// ratified 1728; handoff H61-SP): the comment composer is this part, not a second one.
+// `attach={false}` drops Attach and `mic={false}` drops the mic, so Send (or Save) always shows;
+// `fieldLabel` names the field (default "Message"; F18), `editingLabel` reads the editing strip
+// (default "Editing"; F19) and `cancelLabel` turns each strip's X into that word as a text act
+// (F19). The mention listbox runs through TokenSuggest (item 8): the field is the combobox, the list
+// a role=listbox, inline, in the caller's order; `tokens` completes `#` through the same behaviour,
+// floating above the field, and `note` is Input's quiet line (item 9) under the row. The mention
+// query and its matching stay this part's as before (the trailing `@word`, up to five, startsWith),
+// where the compile offers every member it is passed. Nothing passes the new props yet. Record:
+// docs/strand-ports/sha256-b1a458dac1bd562f.md.
 import {
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { Avatar } from "./Avatar";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
 import { Menu } from "./Menu";
 import { RecordControl, VoiceRecorder } from "./VoiceRecorder";
 import { mmss } from "./VoicePlayer";
+import { TokenList, useTokenSuggest, type TokenOption, type TokenPlacement } from "./TokenSuggest";
 import type { C } from "./cmeta";
 import { useMode, type Mode } from "@/lib/tier";
 
@@ -70,6 +83,29 @@ export type MessageComposerProps = {
   onRecordCancel?: (() => void) | undefined;
   /** The attach menu renders in place (a scaled frame) when false; default the body portal. */
   menuPortal?: boolean | undefined;
+  /** Item 3: false drops Attach. */
+  attach?: boolean | undefined;
+  /** Item 3: false drops the mic, so Send (or Save) always shows. `voice` names the attached note. */
+  mic?: boolean | undefined;
+  /** Item 3 (F18): the field's name. Default "Message". */
+  fieldLabel?: string | undefined;
+  /** Item 3 (F19): the editing strip's line. Default "Editing". */
+  editingLabel?: string | undefined;
+  /** Item 3 (F19): turns each strip's X into this word as a text act. */
+  cancelLabel?: string | undefined;
+  /** Item 8: `#` completion through TokenSuggest, floating above the field; replaces the mention listbox while passed, as compiled. */
+  tokens?:
+    | {
+        options: readonly TokenOption[] | null | undefined;
+        open: boolean;
+        onChoose?: ((o: TokenOption) => void) | undefined;
+        onClose?: (() => void) | undefined;
+        label?: string | undefined;
+        placement?: TokenPlacement | undefined;
+      }
+    | undefined;
+  /** Item 9: Input's quiet line under the row; "" keeps the region mounted and empty. */
+  note?: string | undefined;
   style?: CSSProperties | undefined;
 };
 
@@ -107,6 +143,13 @@ export function MessageComposer({
   onRecordStop,
   onRecordCancel,
   menuPortal = true,
+  attach: showAttach = true,
+  mic: showMic = true,
+  fieldLabel = "Message",
+  editingLabel = "Editing",
+  cancelLabel,
+  tokens,
+  note,
   style,
 }: MessageComposerProps) {
   const detected = useMode();
@@ -136,9 +179,35 @@ export function MessageComposer({
     onMention?.(m);
     field.current?.focus();
   };
+  // Item 8: one listbox for the token at the caret. `tokens` (the `#` completion) replaces the
+  // mention list while passed, as compiled; otherwise the mention candidates, in their given order.
+  const mopts = useMemo<TokenOption[]>(
+    () => candidates.map((m) => ({ value: m.id, label: m.name, avatar: m.src || true })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [candidates.map((m) => m.id).join("\u0001")],
+  );
+  const tk = useTokenSuggest(
+    tokens
+      ? {
+          options: tokens.options,
+          open: tokens.open,
+          onChoose: tokens.onChoose,
+          onClose: tokens.onClose,
+        }
+      : {
+          options: mopts,
+          open: mopts.length > 0,
+          onChoose: (o) => {
+            const m = candidates.find((c) => c.id === o.value);
+            if (m) pick(m);
+          },
+          order: "given",
+        },
+  );
   const hasContent = !!(value.trim() || media || voice);
   const canSend = (hasContent || editing) && !isRecording && !limited;
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (tk.keyDown(e)) return;
     if (e.key === "Enter" && !e.shiftKey && !touch) {
       e.preventDefault();
       if (canSend) onSend?.();
@@ -173,7 +242,11 @@ export function MessageComposer({
           </span>
         )}
       </span>
-      <IconButton name="x" label="Remove" input={mode} size={36} onClick={onRemove} />
+      {cancelLabel ? (
+        textBtn(cancelLabel, onRemove)
+      ) : (
+        <IconButton name="x" label="Remove" input={mode} size={36} onClick={onRemove} />
+      )}
     </div>
   );
   const textBtn = (label: string, onClick: (() => void) | undefined) => (
@@ -218,7 +291,7 @@ export function MessageComposer({
       }}
     >
       {quote && strip("Replying to " + quote.from, quote.text, onRemoveQuote)}
-      {editing && strip("Editing", null, onRemoveEdit)}
+      {editing && strip(editingLabel, null, onRemoveEdit)}
       {media && (
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
           <div style={{ width: 72, flex: "none" }}>{media.thumbnail}</div>
@@ -312,47 +385,18 @@ export function MessageComposer({
           You are sending quickly. Wait a moment before the next message.
         </div>
       )}
-      {mentionQuery !== null && candidates.length > 0 && (
-        <div
-          role="listbox"
-          aria-label="Mention a member"
-          data-mention-picker
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            borderRadius: "var(--radius-m)",
-            border: "1px solid var(--line)",
-            background: "var(--surface)",
-            overflow: "hidden",
-          }}
-        >
-          {candidates.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              role="option"
-              aria-selected={false}
-              onClick={() => pick(m)}
-              style={{
-                all: "unset",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--space-2)",
-                minHeight: "var(--target-primary)",
-                padding: "0 var(--space-3)",
-                fontSize: "var(--text-s)",
-                fontFamily: "inherit",
-              }}
-            >
-              <Avatar name={m.name} src={m.src} size={28} />
-              {m.name}
-            </button>
-          ))}
-        </div>
-      )}
-      <div style={{ display: "flex", alignItems: "flex-end", gap: "var(--space-1)" }}>
-        {!isRecording && !editing && (
+      {!tokens && tk.expanded ? (
+        <TokenList state={tk} label="Mention a member" placement="inline" />
+      ) : null}
+      <div
+        style={{
+          position: "relative",
+          display: "flex",
+          alignItems: "flex-end",
+          gap: "var(--space-1)",
+        }}
+      >
+        {!isRecording && !editing && showAttach && (
           <span ref={attachRef} style={{ display: "inline-flex", flex: "none" }}>
             <IconButton
               name="image"
@@ -389,8 +433,9 @@ export function MessageComposer({
           <textarea
             ref={field}
             rows={1}
-            aria-label="Message"
+            aria-label={fieldLabel}
             placeholder={editing ? "Edit your message" : "Message"}
+            {...tk.fieldProps}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={onKey}
@@ -427,7 +472,7 @@ export function MessageComposer({
             }}
           />
         )}
-        {(hasContent || editing) && !isRecording ? (
+        {(hasContent || editing || !showMic) && !isRecording ? (
           <IconButton
             name="send"
             label={editing ? "Save" : "Send"}
@@ -447,7 +492,39 @@ export function MessageComposer({
             onCancel={onRecordCancel}
           />
         )}
+        {tokens ? (
+          <TokenList
+            state={tk}
+            label={tokens.label || "Tags"}
+            placement={tokens.placement || "above"}
+          />
+        ) : null}
       </div>
+      {note != null ? (
+        <div
+          role="status"
+          aria-live="polite"
+          data-note=""
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 6,
+            padding: "0 var(--space-1)",
+            color: "var(--ink-2)",
+            textWrap: "pretty",
+            fontSize: "var(--text-xs)",
+            lineHeight: "var(--text-xs-lh)",
+            ...(note ? {} : { marginTop: "calc(-1 * var(--space-2))" }),
+          }}
+        >
+          {note ? (
+            <>
+              <Icon name="info" size={14} style={{ color: "var(--ink-3)", marginTop: 2 }} />
+              <span style={{ minWidth: 0 }}>{note}</span>
+            </>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

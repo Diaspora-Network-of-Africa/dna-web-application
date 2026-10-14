@@ -53,8 +53,9 @@ import {
   type LevelInfo,
 } from "./AccountPanels";
 
-/** Extraction section 1 and 8 item 2: the drawer's width above compact. */
-export const ACCOUNT_DRAWER_WIDTH = 380;
+// Extraction section 1 and 8 item 2: the drawer's width above compact is 380. Since compile
+// sha256-b1a458dac1bd562f (1704, brief 60-SP item 18) it is Sheet's `size="account"`, which reads
+// --sheet-panel-width, and no number is written here.
 
 export type PanelId = "security" | "privacy" | "notifications" | "preferences" | "blocked";
 
@@ -388,7 +389,7 @@ export function AccountDrawer({
       onClose={close}
       returnFocus={avatar}
       variant={compact ? "sheet" : "drawer"}
-      width={ACCOUNT_DRAWER_WIDTH}
+      size="account"
       label={title}
       actions={footer}
       error={error}

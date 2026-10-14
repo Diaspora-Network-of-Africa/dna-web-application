@@ -1207,7 +1207,9 @@ export function DiscoverySurface({
           topic={topic ?? undefined}
           reason={reasonFor(lane, item.reason)}
           going={goingFor(lane, item.event_id, src)}
-          media={post.media[0]?.src}
+          // Items 12 and 21 (1697, 1714, 1717): the face places the flyer by its stored size and
+          // framing; past one ratio step of 16:9 it shows whole on --media-fill.
+          media={post.media[0] ? { kind: "image", ...post.media[0] } : undefined}
           menu={menuFor(item, lane, src)}
           selected={paneOpen && paneId === item.event_id && (openLane ?? lane) === lane}
           onOpen={() => {
