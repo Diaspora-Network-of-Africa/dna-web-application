@@ -9555,3 +9555,41 @@ item 16's token has no consumer here, and item 15 lands as the explanatory line'
 current-row form (the `--c-connect-tint` ground, `--c-connect-text` at `--weight-semibold`, the 3px
 leading rule) is W75's port, not this handoff's. Closes when the admin's binding handoff ports
 `ConsoleShell` at a compile that carries 1474. Owner: Chat, by brief.
+
+## G294. Two full emoji pickers, one bound: the Messenger keeps Frimousse under 1776 while Strand's full view waits
+
+**Severity: low (nothing visible; a second implementation of one job, held by ruling). Opened 14 October
+2026 during H61-SP, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+Ruling 1776 (Notion D1879): the Messenger keeps `src/components/dna/ReactionPicker.tsx`, the Frimousse
+full picker (56-41E), as its full picker. Strand's `ReactionPicker` (compile `sha256-b1a458dac1bd562f`,
+brief 60-SP item 5) stays ported whole in `src/components/strand/ReactionPicker.tsx`; its quick view is
+bound by `MessageBubble`, and its full view is exported and bound by nothing. Nothing is deleted. So the
+tree holds two full-picker implementations and one is bound, which the one-implementation guardrail
+would otherwise refuse; 1776 holds it open because Strand's full view does not yet carry four things the
+Frimousse picker does today (`docs/strand-ports/sha256-b1a458dac1bd562f.md`, section 6):
+
+1. Search over the library's data: Strand matches names only, Frimousse matches labels and emojibase's
+   tags.
+2. Toned picks across the library: Strand's `withTone` tones nine literal hand characters, Frimousse
+   tones every emoji with skins.
+3. A virtualised grid: Frimousse renders rows as they scroll, Strand renders every cell of every group
+   in the DOM, about 3,700 buttons at emojibase 17.
+4. Arrow-key movement across the grid: Frimousse moves the active cell, Strand's grid is Tab only.
+
+Closes when a later Strand compile carries all four and its port binds Strand's full view in the
+Messenger and deletes the Frimousse picker in the same PR. Owner: Strand, by Chat's brief.
+
+## G295. `profile visitor stranger: withdraw returns to Connect with PATCH` failed once on `main`'s run 594 and passed on the next head
+
+**Severity: low (an intermittent failure on a mocked arm; no member-facing defect read). Opened 14
+October 2026 during H61-SP, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+Run 594 on `main` at `334a88c`, `matrix (chromium)`: one failure,
+`chromium-390x844-dark profile visitor stranger: withdraw returns to Connect with PATCH`
+(`tests/profile.cjs`, the record after the fixed 800 ms wait). The same check is green on #115's run
+38522046743 (head `251ba61`), whose diff does not touch the profile's relationship actions or the arm.
+Recorded as an intermittent failure on a mocked arm: the record waits a fixed 800 ms for the withdraw's
+PATCH and the return to Connect, and a slow cell can outlast it. Not fixed here (the arm is outside
+H61-SP's scope). Closes when the record waits on the write and the route rather than on the clock, or
+when the failure recurs and is root-caused. Owner: Chat, by brief.
