@@ -1,0 +1,481 @@
+{
+  "_": "Handoff 61-VT (1734, 1747, 1748). Read by tests/visibility-conformance.cjs: every function in public that anon or authenticated may execute and every view either may read, each in exactly one class (predicate, discovery, invoker, exempt). An invoker object's relations are classified under tables (predicate, owner, open, closed, scoped). Add an entry when a projection ships; the arm fails by name on one it does not find here.",
+  "functions": {
+    "profile_view": { "class": "discovery" },
+    "connect_cards": { "class": "discovery" },
+    "connect_where": { "class": "discovery" },
+    "send_introduction": { "class": "discovery" },
+    "event_public_page": { "class": "predicate" },
+
+    "convene_discovery": { "class": "invoker" },
+    "convene_places": { "class": "invoker" },
+    "event_going_names": { "class": "invoker" },
+    "event_page": { "class": "invoker" },
+    "event_presenters": { "class": "invoker" },
+    "event_speakers": { "class": "invoker" },
+
+    "connect_requests_pending": {
+      "class": "exempt",
+      "reason": "contact: the caller's own pending requests, scoped by private.is_blocked (186, 1748); no section is read"
+    },
+    "connection_request_intros": {
+      "class": "exempt",
+      "reason": "contact: who and why of a request the caller is party to, scoped by private.is_blocked (157, 186, 1748)"
+    },
+    "set_follow": {
+      "class": "exempt",
+      "reason": "contact write path, refuses across a block (1748); writes the caller's own edge"
+    },
+    "invite_event_party": {
+      "class": "exempt",
+      "reason": "host write path, refuses across a block (1748); no section is read"
+    },
+    "notifications_dot": {
+      "class": "exempt",
+      "reason": "owner-only: the caller's own notifications under notifications_recipient_select, with private.is_blocked"
+    },
+    "public_attestations": {
+      "class": "exempt",
+      "reason": "the signed-out corpus (141, 435): the anonymous rule with no viewer, the same answer for every caller"
+    },
+    "connect_filter_options": {
+      "class": "exempt",
+      "reason": "vocabulary: the ten filter axes' options, no member row read"
+    },
+    "vocabularies": {
+      "class": "exempt",
+      "reason": "vocabulary: fixed tables whose select policies are true"
+    },
+    "resolve_event_link": {
+      "class": "exempt",
+      "reason": "an alias or short code to an event id (1108); no member row read"
+    },
+    "event_alias_check": {
+      "class": "exempt",
+      "reason": "the host's own alias availability (1108); no member row read"
+    },
+    "claim_guest_registrations": {
+      "class": "exempt",
+      "reason": "owner-only write path: converts the caller's own guest rows (1033)"
+    },
+    "dismiss_discovery_item": {
+      "class": "exempt",
+      "reason": "owner-only write path: the caller's own dismissal (1044)"
+    },
+    "dismiss_suggestion": {
+      "class": "exempt",
+      "reason": "owner-only write path: the caller's own dismissal"
+    },
+    "email_unsubscribe": {
+      "class": "exempt",
+      "reason": "owner-only write path keyed by the recipient's own token: the member's own preference"
+    },
+    "mark_surface_seen": {
+      "class": "exempt",
+      "reason": "owner-only write path: the caller's own seen marker"
+    },
+    "note_lane_act": {
+      "class": "exempt",
+      "reason": "owner-only write path: the caller's own lane activity (1160)"
+    },
+    "notification_email_view": {
+      "class": "exempt",
+      "reason": "owner-only: the recipient's own notification rendered for email"
+    },
+    "notifications_mark_all_read": {
+      "class": "exempt",
+      "reason": "owner-only write path: the caller's own notifications"
+    },
+    "notifications_mark_seen": {
+      "class": "exempt",
+      "reason": "owner-only write path: the caller's own notifications"
+    },
+    "onboard_relationship": {
+      "class": "exempt",
+      "reason": "owner-only write path: the caller's own onboarding (Brief 5)"
+    },
+    "onboard_where": {
+      "class": "exempt",
+      "reason": "owner-only write path: the caller's own onboarding (Brief 5)"
+    },
+    "onboard_who": {
+      "class": "exempt",
+      "reason": "owner-only write path: the caller's own onboarding (Brief 5, Hotfix 01)"
+    },
+    "onboarding_state": {
+      "class": "exempt",
+      "reason": "owner-only: the caller's own onboarding state"
+    },
+    "publish_post": {
+      "class": "exempt",
+      "reason": "owner-only write path (security invoker): publishes for auth.uid() under the caller's own policies"
+    },
+    "rate_limit_check": {
+      "class": "exempt",
+      "reason": "owner-only: the caller's own counter"
+    },
+    "record_event": {
+      "class": "exempt",
+      "reason": "the recording layer's one write path (1284); reads no member row for a viewer"
+    },
+    "remove_event_party": {
+      "class": "exempt",
+      "reason": "host write path: the host's own event party rows"
+    },
+    "respond_to_event_role": {
+      "class": "exempt",
+      "reason": "owner-only write path: the caller answers their own invitation"
+    },
+    "respond_to_request": {
+      "class": "exempt",
+      "reason": "owner-only write path: the recipient answers their own request"
+    },
+    "withdraw_request": {
+      "class": "exempt",
+      "reason": "owner-only write path: the sender withdraws their own request"
+    },
+    "rsvp_event": {
+      "class": "exempt",
+      "reason": "owner-only write path (security invoker): the caller's own registration through private.rsvp_write (1030)"
+    },
+    "save_event_blocks": {
+      "class": "exempt",
+      "reason": "host write path: the host's own event blocks (1186)"
+    },
+    "save_profile_section": {
+      "class": "exempt",
+      "reason": "owner-only write path (security invoker): the one profile writer, acting for auth.uid()"
+    },
+    "session_revoke": {
+      "class": "exempt",
+      "reason": "owner-only write path: the caller's own session (H61-S1)"
+    },
+    "sessions_list": {
+      "class": "exempt",
+      "reason": "owner-only: the caller's own sessions (H61-S1)"
+    },
+    "set_notification_preference": {
+      "class": "exempt",
+      "reason": "owner-only write path: the caller's own preference"
+    },
+    "set_subscription": {
+      "class": "exempt",
+      "reason": "owner-only write path: the caller's own subscription (1039)"
+    },
+
+    "admin_change_history": {
+      "class": "exempt",
+      "reason": "admin: gated by private.is_admin at aal2 (1177, 1266)"
+    },
+    "admin_dia_note_read": {
+      "class": "exempt",
+      "reason": "admin: gated by private.is_admin at aal2 (1177, 1266)"
+    },
+    "admin_dia_note_write": {
+      "class": "exempt",
+      "reason": "admin: gated by private.is_admin at aal2 (1177, 1266)"
+    },
+    "admin_grant_role": {
+      "class": "exempt",
+      "reason": "admin: gated by private.is_admin at aal2 (1177, 1266)"
+    },
+    "admin_my_sessions": { "class": "exempt", "reason": "admin: the admin's own sessions (1177)" },
+    "admin_org_settings_read": {
+      "class": "exempt",
+      "reason": "admin: gated by private.is_admin at aal2 (1177, 1266)"
+    },
+    "admin_org_settings_save": {
+      "class": "exempt",
+      "reason": "admin: gated by private.is_admin at aal2 (1177, 1266)"
+    },
+    "admin_overview_company": {
+      "class": "exempt",
+      "reason": "admin: aggregates under private.is_admin at aal2 (1177, 1266)"
+    },
+    "admin_overview_levers": {
+      "class": "exempt",
+      "reason": "admin: aggregates under private.is_admin at aal2 (1177, 1266)"
+    },
+    "admin_overview_mobilization": {
+      "class": "exempt",
+      "reason": "admin: aggregates under private.is_admin at aal2 (1177, 1266)"
+    },
+    "admin_overview_network": {
+      "class": "exempt",
+      "reason": "admin: aggregates under private.is_admin at aal2 (1177, 1266)"
+    },
+    "admin_overview_window": {
+      "class": "exempt",
+      "reason": "admin: aggregates under private.is_admin at aal2 (1177, 1266)"
+    },
+    "admin_read_log": {
+      "class": "exempt",
+      "reason": "admin: gated by private.is_admin at aal2 (1177, 1266)"
+    },
+    "admin_revoke_role": {
+      "class": "exempt",
+      "reason": "admin: gated by private.is_admin at aal2 (1177, 1266)"
+    },
+    "admin_session_state": {
+      "class": "exempt",
+      "reason": "admin: the admin's own session state (1177)"
+    },
+    "admin_staff_settings_read": {
+      "class": "exempt",
+      "reason": "admin: gated by private.is_admin at aal2 (1177, 1266)"
+    },
+    "admin_staff_settings_save": {
+      "class": "exempt",
+      "reason": "admin: gated by private.is_admin at aal2 (1177, 1266)"
+    },
+
+    "messenger_archive": {
+      "class": "exempt",
+      "reason": "Messenger: the caller's own thread state (1330 to 1353)"
+    },
+    "messenger_delete": {
+      "class": "exempt",
+      "reason": "Messenger: the caller's own message (1330 to 1353)"
+    },
+    "messenger_delivered_to": {
+      "class": "exempt",
+      "reason": "Messenger: receipts inside a thread the caller is in (1330 to 1353)"
+    },
+    "messenger_dia_dismiss": {
+      "class": "exempt",
+      "reason": "Messenger: the caller's own DIA dismissal"
+    },
+    "messenger_dia_signals": {
+      "class": "exempt",
+      "reason": "Messenger: metadata of the caller's own threads, with private.is_blocked"
+    },
+    "messenger_edit": {
+      "class": "exempt",
+      "reason": "Messenger: the caller's own message (1330 to 1353)"
+    },
+    "messenger_event_thread_available": {
+      "class": "exempt",
+      "reason": "Messenger: the caller's own eligibility for an event thread (1384)"
+    },
+    "messenger_event_thread_join": {
+      "class": "exempt",
+      "reason": "Messenger write path: the caller joins an event thread (1384)"
+    },
+    "messenger_event_thread_open": {
+      "class": "exempt",
+      "reason": "Messenger write path: the host opens their event thread (1384)"
+    },
+    "messenger_mark_unread": {
+      "class": "exempt",
+      "reason": "Messenger: the caller's own thread state"
+    },
+    "messenger_media_access": {
+      "class": "exempt",
+      "reason": "Messenger: media access by thread membership, with private.viewer_blocks (1346)"
+    },
+    "messenger_media_forget": {
+      "class": "exempt",
+      "reason": "Messenger: the sweep's forget (G286 records its scope)"
+    },
+    "messenger_media_locate": {
+      "class": "exempt",
+      "reason": "Messenger: the key of a media object the caller may access (1346)"
+    },
+    "messenger_media_marked": {
+      "class": "exempt",
+      "reason": "Messenger: the sweep's listing (G286 records its scope)"
+    },
+    "messenger_media_record": {
+      "class": "exempt",
+      "reason": "Messenger write path: the caller's own upload (1346)"
+    },
+    "messenger_mute": { "class": "exempt", "reason": "Messenger: the caller's own thread state" },
+    "messenger_open_one_to_one": {
+      "class": "exempt",
+      "reason": "Messenger write path: a thread with a member who may be reached, with private.is_blocked (1330)"
+    },
+    "messenger_pin_message": { "class": "exempt", "reason": "Messenger: the caller's own pin" },
+    "messenger_pin_thread": { "class": "exempt", "reason": "Messenger: the caller's own pin" },
+    "messenger_react": {
+      "class": "exempt",
+      "reason": "Messenger write path: the caller's own reaction (1316)"
+    },
+    "messenger_read_to": { "class": "exempt", "reason": "Messenger: the caller's own read marker" },
+    "messenger_recent_reactions": {
+      "class": "exempt",
+      "reason": "Messenger: the caller's own recent reactions"
+    },
+    "messenger_report": {
+      "class": "exempt",
+      "reason": "Messenger write path: the caller's own report"
+    },
+    "messenger_report_view": { "class": "exempt", "reason": "Messenger: the caller's own report" },
+    "messenger_request_accept": {
+      "class": "exempt",
+      "reason": "Messenger write path: the recipient answers their own request, with private.is_blocked"
+    },
+    "messenger_request_block": {
+      "class": "exempt",
+      "reason": "Messenger write path: the recipient blocks from their own request"
+    },
+    "messenger_request_decline": {
+      "class": "exempt",
+      "reason": "Messenger write path: the recipient answers their own request"
+    },
+    "messenger_request_recover": {
+      "class": "exempt",
+      "reason": "Messenger write path: the recipient recovers their own request (1386)"
+    },
+    "messenger_request_send": {
+      "class": "exempt",
+      "reason": "Messenger write path: a request to a member who may be reached, with private.is_blocked (1330)"
+    },
+    "messenger_search": {
+      "class": "exempt",
+      "reason": "Messenger: search inside the caller's own threads (1353)"
+    },
+    "messenger_send": {
+      "class": "exempt",
+      "reason": "Messenger write path: a message in a thread the caller is in, with private.is_blocked"
+    },
+    "messenger_settings": { "class": "exempt", "reason": "Messenger: the caller's own settings" },
+    "messenger_settings_set": {
+      "class": "exempt",
+      "reason": "Messenger write path: the caller's own settings"
+    },
+    "messenger_space_thread_sync": {
+      "class": "exempt",
+      "reason": "Messenger write path: a Space's thread for its members"
+    },
+    "messenger_thread_create_group": {
+      "class": "exempt",
+      "reason": "Messenger write path: a group of members the caller may reach, with private.is_blocked"
+    },
+    "messenger_thread_invite": {
+      "class": "exempt",
+      "reason": "Messenger write path: an invitation inside the caller's own thread"
+    },
+    "messenger_thread_invite_accept": {
+      "class": "exempt",
+      "reason": "Messenger write path: the caller answers their own invitation"
+    },
+    "messenger_thread_invite_decline": {
+      "class": "exempt",
+      "reason": "Messenger write path: the caller answers their own invitation"
+    },
+    "messenger_thread_leave": {
+      "class": "exempt",
+      "reason": "Messenger write path: the caller leaves their own thread"
+    },
+    "messenger_thread_remove": {
+      "class": "exempt",
+      "reason": "Messenger write path: a lead removes a member from their thread"
+    },
+    "messenger_thread_rename": {
+      "class": "exempt",
+      "reason": "Messenger write path: a lead renames their group (1387)"
+    },
+    "messenger_thread_set_history": {
+      "class": "exempt",
+      "reason": "Messenger write path: a lead sets their thread's history"
+    },
+    "messenger_thread_set_role": {
+      "class": "exempt",
+      "reason": "Messenger write path: a lead sets a role in their thread"
+    },
+    "messenger_unarchive": {
+      "class": "exempt",
+      "reason": "Messenger: the caller's own thread state"
+    },
+    "messenger_unpin_message": { "class": "exempt", "reason": "Messenger: the caller's own pin" },
+    "messenger_unpin_thread": { "class": "exempt", "reason": "Messenger: the caller's own pin" },
+    "messenger_unreact": {
+      "class": "exempt",
+      "reason": "Messenger write path: the caller's own reaction"
+    }
+  },
+  "views": {
+    "feed": { "class": "invoker" },
+    "messenger_messages_view": { "class": "invoker" },
+    "messenger_requests_view": { "class": "invoker" },
+    "messenger_threads_view": { "class": "invoker" }
+  },
+  "tables": {
+    "members": { "class": "predicate" },
+    "member_about": { "class": "predicate" },
+    "member_origin": { "class": "predicate" },
+    "member_intent": { "class": "predicate" },
+    "member_intents": { "class": "predicate" },
+    "member_focus_areas": { "class": "predicate" },
+    "member_industries": { "class": "predicate" },
+    "member_regional_expertise": { "class": "predicate" },
+    "member_skills": { "class": "predicate" },
+    "member_languages": { "class": "predicate" },
+    "member_links": { "class": "predicate" },
+    "member_interests": { "class": "predicate" },
+    "member_stance_details": { "class": "predicate" },
+    "attestations": { "class": "predicate" },
+
+    "discovery_dismissals": { "class": "owner" },
+    "member_follows": { "class": "owner" },
+    "member_lane_activity": { "class": "owner" },
+    "member_subscriptions": { "class": "owner" },
+    "member_visibility": { "class": "owner" },
+    "message_requests": { "class": "owner" },
+
+    "convene_families": { "class": "open" },
+    "convene_lanes": { "class": "open" },
+    "convene_lenses": { "class": "open" },
+    "event_role_kinds": { "class": "open" },
+
+    "member_homes": { "class": "owner" },
+
+    "posts": {
+      "class": "scoped",
+      "reason": "a post's audience is the post's own: posts_member_select composes private.is_blocked with the post's audience (everyone, connections, anchored)"
+    },
+    "events": {
+      "class": "scoped",
+      "reason": "an event is read through its published post, its Space, its host or a named party: events_member_select, events_event_host_select, events_named_party_select"
+    },
+    "event_delivery": {
+      "class": "scoped",
+      "reason": "physical delivery rows of a readable event; the meeting link is withheld (521): event_delivery_physical_select"
+    },
+    "event_parties": {
+      "class": "scoped",
+      "reason": "accepted parties of a readable event, the host's rows, or the caller's own: event_parties_accepted_select, event_parties_event_host_select, event_parties_named_member_select"
+    },
+    "event_registrations": {
+      "class": "scoped",
+      "reason": "private.can_see_registrant composes private.is_blocked with the registration's own audience override (1030): event_registrations_member_select; hosts read their own event's rows"
+    },
+    "convene_picks": {
+      "class": "scoped",
+      "reason": "a pick on a readable event: convene_picks_member_select"
+    },
+    "threads": {
+      "class": "scoped",
+      "reason": "thread membership: private.thread_member_in (1330 to 1353)"
+    },
+    "thread_members": {
+      "class": "scoped",
+      "reason": "thread membership: private.thread_member_in (1330 to 1353)"
+    },
+    "messages": {
+      "class": "scoped",
+      "reason": "thread membership and joined_seq: private.message_visible (1330 to 1353)"
+    },
+    "message_mentions": {
+      "class": "scoped",
+      "reason": "rows of a readable message: message_mentions_member_select"
+    },
+    "message_reactions": {
+      "class": "scoped",
+      "reason": "rows of a readable message: message_reactions_member_select"
+    }
+  },
+  "policies": [
+    { "schema": "storage", "table": "objects", "name": "profile_media_objects_viewer_select" }
+  ]
+}
