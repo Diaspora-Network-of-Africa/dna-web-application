@@ -1,0 +1,107 @@
+# Migrations by approval (handoff 62-MIG, ruling 1827; rulings 562, 764, 382, 225, 466, 553).
+#
+# One migration file, from one named commit, into the canonical project, after the founder approves
+# the run. Dispatch only: this workflow has no push and no pull_request trigger, and
+# tests/migrate-workflow.cjs, run by pages.yml, fails if one is ever added. The job runs in the
+# canonical-migrations Environment, whose required reviewer is the founder, so a dispatch pauses
+# until the founder approves it in GitHub; the database URL is that Environment's secret
+# MIGRATE_DB_URL, read by this workflow alone and passed to the one step that needs it.
+#
+# Inputs: version (14 digits), ref (a full 40-character commit sha, the commit the file is read
+# from, never the default branch's head) and mode (rehearse or apply). Rehearse runs the file and
+# the ledger row in one transaction and rolls it back; apply commits it after the ledger's md5 is
+# checked against the file's. The route, in ten lines, is docs/MIGRATIONS.md; the refusals and the
+# transaction are scripts/migrate.sh.
+name: Migrate
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The migration version to apply, 14 digits (the file is supabase/migrations/{version}_*.sql at ref).
+        required: true
+        type: string
+      ref:
+        description: The commit the file is read from, a full 40-character sha. Must be an ancestor of a branch in this repository.
+        required: true
+        type: string
+      mode:
+        description: rehearse runs the file in one transaction and rolls it back; apply commits it with its ledger row.
+        required: true
+        type: choice
+        options:
+          - rehearse
+          - apply
+
+# One migration run at a time, and a later dispatch waits rather than cancelling an earlier one.
+concurrency:
+  group: migrate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  migrate:
+    name: ${{ inputs.mode }} ${{ inputs.version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: canonical-migrations
+    steps:
+      - name: The inputs are their shape
+        env:
+          VERSION: ${{ inputs.version }}
+          REF: ${{ inputs.ref }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -uo pipefail
+          ok=1
+          [[ "$VERSION" =~ ^[0-9]{14}$ ]] || { echo "::error::version must be 14 digits, not '$VERSION'"; ok=0; }
+          [[ "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::ref must be a full 40-character lowercase commit sha, not '$REF'"; ok=0; }
+          [[ "$MODE" = rehearse || "$MODE" = apply ]] || { echo "::error::mode must be rehearse or apply, not '$MODE'"; ok=0; }
+          [ "$ok" = 1 ] || exit 1
+          echo "$MODE $VERSION from $REF"
+      # The named commit, with every branch fetched so the ancestry check below can read them. The
+      # file is read from this checkout and never from the default branch's head.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+      - name: Every branch, for the ancestry check
+        run: git fetch --prune --quiet origin '+refs/heads/*:refs/remotes/origin/*'
+      # The approval is read before anything touches the database. A run with no approval recorded
+      # (an Environment with no required reviewer) is refused here, so the secret is never used on
+      # a run nobody approved (562).
+      - name: Who dispatched, and who approved
+        id: who
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -uo pipefail
+          approvals="$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/approvals" 2>&1)" || {
+            echo "::error::could not read this run's approvals: ${approvals}"
+            exit 1
+          }
+          approver="$(printf '%s' "$approvals" | jq -r '[.[] | select(.state == "approved") | select(any(.environments[]?; .name == "canonical-migrations")) | .user.login] | unique | join(", ")')"
+          if [ -z "$approver" ]; then
+            echo "::error::no approval for the canonical-migrations Environment is recorded on this run. The Environment needs a required reviewer (ruling 562); nothing was written."
+            exit 1
+          fi
+          echo "dispatched by ${ACTOR}; approved by ${approver}"
+          echo "approver=${approver}" >> "$GITHUB_OUTPUT"
+      - name: psql
+        run: command -v psql > /dev/null || sudo apt-get install -y --no-install-recommends postgresql-client
+      # The one step that holds the secret.
+      - name: ${{ inputs.mode }} ${{ inputs.version }} (scripts/migrate.sh)
+        env:
+          MODE: ${{ inputs.mode }}
+          VERSION: ${{ inputs.version }}
+          REF: ${{ inputs.ref }}
+          ACTOR: ${{ github.actor }}
+          APPROVER: ${{ steps.who.outputs.approver }}
+          MIGRATE_DB_URL: ${{ secrets.MIGRATE_DB_URL }}
+        run: scripts/migrate.sh
