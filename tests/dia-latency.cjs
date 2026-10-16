@@ -35,7 +35,7 @@ const OUT = process.env.OUT || "";
 const appSource = fs.readFileSync(path.join(__dirname, "..", "src", "lib", "supabase.ts"), "utf8");
 const SUPABASE_URL = (
   process.env.SUPABASE_URL ||
-  (appSource.match(/"(https:\/\/[a-z0-9]+\.supabase\.co)"/) || [])[1] ||
+  (appSource.match(/"(https:\/\/[a-z0-9.-]+)"/) || [])[1] ||
   ""
 ).replace(/\/$/, "");
 const PUBLISHABLE_KEY =
