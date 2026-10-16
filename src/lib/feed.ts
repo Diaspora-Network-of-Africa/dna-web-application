@@ -474,6 +474,7 @@ export async function hydratePosts(
       c_category: p.c_category,
       verb,
       author_kind: p.author_kind === "space" ? "space" : "member",
+      author_id: p.author_id,
       author_name: authorName,
       author_handle: p.author_kind === "member" && seen ? (fa.handle ?? undefined) : undefined,
       author_avatar:
@@ -579,22 +580,25 @@ export async function loadPostsByIds(member: Member, ids: string[]): Promise<Pos
   return unique.map((id) => byId.get(id)).filter((v): v is PostView => v !== undefined);
 }
 
-/** The member's own save and react state for a set of posts: existence only, never a count. */
+/**
+ * The member's own save state for a set of posts: existence only, never a count. The react mark
+ * left here under handoff 62-A: the card's reaction, the summary and the member's intents come from
+ * post_reaction_rows in src/lib/reactions.ts, one call per page (1799, 1822).
+ */
 export async function loadMarks(
   memberId: string,
   postIds: string[],
-): Promise<{ saved: Set<string>; reacted: Set<string> }> {
+): Promise<{ saved: Set<string> }> {
   const sb = getSupabase();
   const saved = new Set<string>();
-  const reacted = new Set<string>();
-  if (!sb || postIds.length === 0) return { saved, reacted };
-  const [s, r] = await Promise.all([
-    sb.from("post_saves").select("post_id").eq("member_id", memberId).in("post_id", postIds),
-    sb.from("post_reactions").select("post_id").eq("member_id", memberId).in("post_id", postIds),
-  ]);
-  for (const row of s.data ?? []) saved.add(row.post_id);
-  for (const row of r.data ?? []) reacted.add(row.post_id);
-  return { saved, reacted };
+  if (!sb || postIds.length === 0) return { saved };
+  const { data } = await sb
+    .from("post_saves")
+    .select("post_id")
+    .eq("member_id", memberId)
+    .in("post_id", postIds);
+  for (const row of data ?? []) saved.add(row.post_id);
+  return { saved };
 }
 
 export async function setSaved(memberId: string, postId: string, on: boolean): Promise<void> {
@@ -606,24 +610,6 @@ export async function setSaved(memberId: string, postId: string, on: boolean): P
   } else {
     const { error } = await sb
       .from("post_saves")
-      .delete()
-      .eq("member_id", memberId)
-      .eq("post_id", postId);
-    if (error) throw error;
-  }
-}
-
-export async function setReacted(memberId: string, postId: string, on: boolean): Promise<void> {
-  const sb = getSupabase();
-  if (!sb) return;
-  if (on) {
-    const { error } = await sb
-      .from("post_reactions")
-      .insert({ member_id: memberId, post_id: postId });
-    if (error && error.code !== "23505") throw error;
-  } else {
-    const { error } = await sb
-      .from("post_reactions")
       .delete()
       .eq("member_id", memberId)
       .eq("post_id", postId);

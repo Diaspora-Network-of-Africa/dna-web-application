@@ -8,9 +8,18 @@
 import { hasSentence } from "@/components/strand/NotificationListItem";
 import { C_ORDER, type C } from "@/components/strand/cmeta";
 import type { Database, Tables } from "./database.types";
+import { deliverImageUrl } from "./media";
 import { getSupabase } from "./supabase";
 import { loadVocabularies, type NotificationKindRow } from "./vocabularies";
 import { whenLabel } from "./when";
+
+/** 62-A (1820): a person an intent row names, with the signed photo URL for the people-led row. */
+export type NotificationPerson = {
+  id: string;
+  name: string;
+  handle: string;
+  avatar?: string | undefined;
+};
 
 export type NotificationRow = Tables<"notifications">;
 
@@ -32,7 +41,17 @@ export type NotificationView = NotificationRow & {
   destination?: string | undefined;
   /** Fix PR 10 item 8 (1637): the sentence verbatim where the app owns a kind's copy. */
   text?: string | undefined;
+  /** 62-A (1317, 1802, 1820): the actor then the grouped actors an intent row names, in order. */
+  people?: NotificationPerson[] | undefined;
+  /** 62-A: more people than the two the row shows exist; never a count. */
+  others?: boolean | undefined;
 };
+
+/** The post's first words for N.object (SPEC 10.2): one line, cut at eight words. */
+export function firstWords(body: string | null | undefined, words = 8): string {
+  const w = (body ?? "").trim().split(/\s+/).filter(Boolean);
+  return w.length <= words ? w.join(" ") : w.slice(0, words).join(" ") + "…";
+}
 
 /**
  * The kinds the panel renders (1318): a vocabulary row that says `renders` and a sentence in the row
@@ -72,9 +91,23 @@ export async function loadNotifications(memberId: string, limit = 50): Promise<N
     ...ids("space"),
     ...rows.filter((r) => r.actor_kind === "space").map((r) => r.actor_id as string),
   ];
-  const memberActorIds = rows
-    .filter((r) => r.actor_kind === "member" && r.actor_id)
-    .map((r) => r.actor_id as string);
+  // 62-A (1317): an intent row names its actor and the actors grouped into it, which nothing read
+  // before this; every one is a members core row the viewer may read.
+  const isIntent = (k: string) => k === "intent_help" || k === "intent_build";
+  const groupedIds = rows
+    .filter((r) => isIntent(r.kind))
+    .flatMap((r) => (Array.isArray(r.grouped_actor_ids) ? r.grouped_actor_ids : []));
+  const memberActorIds = [
+    ...new Set([
+      ...rows
+        .filter((r) => r.actor_kind === "member" && r.actor_id)
+        .map((r) => r.actor_id as string),
+      ...groupedIds,
+    ]),
+  ];
+  const postIds = rows
+    .filter((r) => isIntent(r.kind) && r.object_kind === "post")
+    .map((r) => r.object_id as string);
   // Brief 10 (736, 1027): an event_party object is the member's own event_parties row, readable
   // under its policy, and its event's title; the verb comes from the event_roles vocabulary (1018),
   // never from a literal here (ruling 194: a read that fails leaves the row's verb absent).
@@ -82,7 +115,7 @@ export async function loadNotifications(memberId: string, limit = 50): Promise<N
   // Fix PR 10 item 8 (1637): a thread's name through messenger_threads_view, the Messenger's one
   // read projection, never threads directly; a thread the viewer no longer reads answers no row.
   const threadIds = ids("thread");
-  const [spaces, events, opps, actors, roles, parties, threads] = await Promise.all([
+  const [spaces, events, opps, actors, roles, parties, threads, intentPosts] = await Promise.all([
     spaceIds.length
       ? sb.from("spaces").select("id,title").in("id", spaceIds)
       : Promise.resolve({ data: [] as { id: string; title: string }[] }),
@@ -93,8 +126,10 @@ export async function loadNotifications(memberId: string, limit = 50): Promise<N
       ? sb.from("opportunities").select("id,title").in("id", ids("opportunity"))
       : Promise.resolve({ data: [] as { id: string; title: string }[] }),
     memberActorIds.length
-      ? sb.from("members").select("id,name,handle").in("id", memberActorIds)
-      : Promise.resolve({ data: [] as { id: string; name: string; handle: string }[] }),
+      ? sb.from("members").select("id,name,handle,avatar_path").in("id", memberActorIds)
+      : Promise.resolve({
+          data: [] as { id: string; name: string; handle: string; avatar_path: string | null }[],
+        }),
     ids("space").length
       ? sb
           .from("space_roles")
@@ -108,7 +143,34 @@ export async function loadNotifications(memberId: string, limit = 50): Promise<N
     threadIds.length
       ? sb.from("messenger_threads_view").select("thread_id,name").in("thread_id", threadIds)
       : Promise.resolve({ data: [] as { thread_id: string | null; name: string | null }[] }),
+    // 62-A: the post an intent row is about, under the posts policy, for N.object's first words.
+    postIds.length
+      ? sb.from("feed").select("id,body").in("id", postIds)
+      : Promise.resolve({ data: [] as { id: string | null; body: string | null }[] }),
   ]);
+  const postBody = new Map(
+    (intentPosts.data ?? []).filter((p) => !!p.id).map((p) => [p.id as string, p.body ?? ""]),
+  );
+  // 62-A (1820): one signed delivery URL per person photo the intent rows name.
+  const avatarUrls = new Map<string, string | undefined>();
+  for (const a of actors.data ?? []) {
+    const path = a.avatar_path;
+    if (!path || avatarUrls.has(path)) continue;
+    avatarUrls.set(
+      path,
+      await deliverImageUrl("profile-media", path, { width: 80, height: 80, resize: "cover" }),
+    );
+  }
+  const personOf = (id: string): NotificationPerson | null => {
+    const a = (actors.data ?? []).find((x) => x.id === id);
+    if (!a) return null;
+    return {
+      id: a.id,
+      name: a.name,
+      handle: a.handle,
+      avatar: a.avatar_path ? avatarUrls.get(a.avatar_path) : undefined,
+    };
+  };
   const thread = new Map(
     (threads.data ?? [])
       .filter((t) => !!t.thread_id && !!t.name)
@@ -161,6 +223,13 @@ export async function loadNotifications(memberId: string, limit = 50): Promise<N
     }
     const kindRow = kinds.get(r.kind);
     const c = kindRow?.c_from_object ? r.c_category : kindRow?.c;
+    // 62-A: the people an intent row names, the actor first then the grouped actors in the order
+    // they folded in; the row shows two and says "and others" past that, never a count.
+    const peopleIds = isIntent(r.kind)
+      ? [r.actor_id ?? "", ...(Array.isArray(r.grouped_actor_ids) ? r.grouped_actor_ids : [])]
+      : [];
+    const people = peopleIds.map(personOf).filter((p): p is NotificationPerson => !!p);
+    const intentObject = isIntent(r.kind) ? firstWords(postBody.get(oid)) || undefined : undefined;
     // 1637: the row reads, verbatim, `{name} invited you to {group}.`
     const text =
       r.kind === "thread_invitation" && actor && objectName
@@ -174,9 +243,11 @@ export async function loadNotifications(memberId: string, limit = 50): Promise<N
       actor: actor || "A member",
       actorHandle:
         r.actor_kind === "member" ? (actorHandle.get(r.actor_id ?? "") ?? undefined) : undefined,
-      object: objectName || undefined,
+      object: objectName || intentObject || undefined,
       detail,
       eventId: partyRow?.event_id,
+      people: people.length ? people : undefined,
+      others: people.length > 2 ? true : undefined,
     };
   });
   // 194: an invitation whose thread no longer reads (declined, removed) renders nothing rather

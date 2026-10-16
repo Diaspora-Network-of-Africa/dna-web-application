@@ -109,6 +109,8 @@ export type PostView = {
   /** The verb that created an object; null for an untyped Convey post. */
   verb: C | null;
   author_kind: "member" | "space";
+  /** Handoff 62-A: the author's id, so the Feed knows the viewer's own post (the author's sheet, 1813). */
+  author_id?: string | undefined;
   author_name: string;
   /** Ruling 416: the handle line under the name, only when the viewer may see the core row. */
   author_handle?: string | undefined;

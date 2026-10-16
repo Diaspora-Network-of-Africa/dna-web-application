@@ -226,7 +226,22 @@ export function NotificationPanel({
     if (n.kind === "thread_invitation" && n.objectId) {
       setOpen(false);
       void navigate({ to: "/messages/$thread", params: { thread: n.objectId } });
+      return;
     }
+    // 62-A (1802, SPEC 10.2): an intent opens the post with the author's sheet on that tab.
+    if ((n.kind === "intent_help" || n.kind === "intent_build") && n.objectId) {
+      setOpen(false);
+      void navigate({
+        to: "/posts/$id",
+        params: { id: n.objectId },
+        search: { who: n.kind === "intent_help" ? "help" : "build" },
+      });
+    }
+  };
+  // 62-A (1820): a name or a lone photo on a people-led row opens that profile.
+  const goPerson = (handle: string) => {
+    setOpen(false);
+    void navigate({ to: "/m/$handle", params: { handle }, search: {} });
   };
   const onRow = async (
     id: string,
@@ -392,6 +407,13 @@ export function NotificationPanel({
                 ? () => void onRow(n.id, n.read_at !== null, n)
                 : undefined
             }
+            people={n.people}
+            others={n.others}
+            onPerson={goPerson}
+            onPeople={() =>
+              void onRow(n.id, n.read_at !== null, { ...n, objectId: n.object_id ?? undefined })
+            }
+            input={pointer ? "pointer" : "touch"}
           />
         ))
       ) : list.isPending ? (

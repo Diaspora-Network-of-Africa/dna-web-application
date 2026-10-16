@@ -11,16 +11,42 @@
 // vocabulary row through `c` and `destination`; whether a kind renders is the row's `renders` and
 // `hasSentence` below together. What stays is the per-kind sentence in `parts()`: that is the Strand
 // row part, the words a row of each kind reads, and a kind with no sentence here does not render.
+//
+// Handoff 62-A (SPEC-62-FEED-CARD 10.2; rulings 1802, 1817, 1820, 1823; proposal 10, recorded in
+// docs/strand-ports/sha256-b1a458dac1bd562f.md): `intent_help` and `intent_build` read N.help1 to
+// N.help3 and N.build1 to N.build2 from the people the caller passes, and a row that carries
+// `people` is people-led: the photos lead in a fixed 58 column (one at 40, or two at 32 overlapping
+// by a fifth), each name in the sentence its own link, and the C marks the post's line under the
+// sentence, never a photo. Existing kinds keep their badge-led row until H62-B moves them.
 import { useState, type CSSProperties, type ReactNode } from "react";
+import { Avatar } from "./Avatar";
 import { Button } from "./Button";
 import { CBadge } from "./CBadge";
 import type { C } from "./cmeta";
 
 type Part = string | [string, 1];
 
+/** N.help1 to N.help3, N.build1 and N.build2: the names, then the verb that agrees with them. */
+function intentSentence(kind: string, names: readonly string[], others: boolean): Part[] {
+  const list = names.slice(0, 2);
+  const one = list.length === 1 && !others;
+  const out: Part[] = [];
+  list.forEach((n, i) => {
+    if (i === 1) out.push(others ? ", " : " and ");
+    out.push([n, 1]);
+  });
+  if (others) out.push(" and others");
+  if (kind === "intent_help") out.push(" can help with your post");
+  else out.push(one ? " wants to build with you" : " want to build with you");
+  return out;
+}
+
 function parts(row: {
   kind: string;
   actor?: string | undefined;
+  /** 62-A: the people an intent row names, in the row's order; `others` when more exist. */
+  names?: readonly string[] | undefined;
+  others?: boolean | undefined;
   /** The object's name and its qualifier. The Connect kinds name neither; a kind that reads them
    *  gains its sentence here when its row part ships (G242). */
   object?: string | undefined;
@@ -47,6 +73,11 @@ function parts(row: {
       return row.text
         ? [row.text]
         : [[row.actor ?? "", 1], " invited you to " + (row.object ?? "") + "."];
+    case "intent_help":
+    case "intent_build": {
+      const names = row.names && row.names.length ? row.names : [row.actor ?? "A member"];
+      return intentSentence(row.kind, names, !!row.others);
+    }
     default:
       return [""];
   }
@@ -78,6 +109,18 @@ export type NotificationListItemProps = {
   onClick?: (() => void) | undefined;
   /** 736: `role_invitation` carries one Respond act beside the row; absent, no act renders. */
   onRespond?: (() => void) | undefined;
+  /** 62-A (1820): the people the row names, in order; with them the row is people-led. */
+  people?:
+    | readonly { id: string; name: string; handle: string; avatar?: string | undefined }[]
+    | undefined;
+  /** 62-A: more people than the two shown exist ("and others"); never a count. */
+  others?: boolean | undefined;
+  /** 62-A: one photo or a name opens that profile. */
+  onPerson?: ((handle: string) => void) | undefined;
+  /** 62-A: two photos are one control that opens the sheet (R.open). */
+  onPeople?: (() => void) | undefined;
+  /** 62-A: touch gives the post's line a 44 target; pointer --target-min. */
+  input?: "touch" | "pointer" | undefined;
   style?: CSSProperties | undefined;
 };
 
@@ -94,14 +137,54 @@ export function NotificationListItem({
   unread,
   onClick,
   onRespond,
+  people,
+  others,
+  onPerson,
+  onPeople,
+  input,
   style,
 }: NotificationListItemProps) {
   const [hover, setHover] = useState(false);
-  const text: ReactNode[] = parts({ kind, actor, object, detail, text: sentence }).map((p, i) =>
+  const names = people?.map((p) => p.name);
+  const handleOf = new Map((people ?? []).map((p) => [p.name, p.handle]));
+  const text: ReactNode[] = parts({
+    kind,
+    actor,
+    object,
+    detail,
+    text: sentence,
+    names,
+    others,
+  }).map((p, i) =>
     Array.isArray(p) ? (
-      <b key={i} style={{ fontWeight: 700 }}>
-        {p[0]}
-      </b>
+      people && handleOf.has(p[0]) ? (
+        // 62-A (1820): a name in the sentence is its own link, underlined --line-strong.
+        <a
+          key={i}
+          href={"/m/" + handleOf.get(p[0])}
+          aria-label={p[0] + "’s profile"}
+          data-person-link={handleOf.get(p[0])}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!onPerson || e.metaKey || e.ctrlKey || e.shiftKey) return;
+            e.preventDefault();
+            onPerson(handleOf.get(p[0]) ?? "");
+          }}
+          style={{
+            fontWeight: 700,
+            color: "inherit",
+            textDecoration: "underline",
+            textDecorationColor: "var(--line-strong)",
+            textUnderlineOffset: 2,
+          }}
+        >
+          {p[0]}
+        </a>
+      ) : (
+        <b key={i} style={{ fontWeight: 700 }}>
+          {p[0]}
+        </b>
+      )
     ) : (
       p
     ),
@@ -182,6 +265,149 @@ export function NotificationListItem({
       )}
     </>
   );
+  if (people && people.length > 0) {
+    // 62-A (SPEC 10.2, proposal 10): the people-led row. The photos lead in a fixed 58 column; one
+    // photo opens that profile, two are one control that opens the sheet; the sentence, then the
+    // post's line led by the C badge at 20, which is the row's own target; then the time and the
+    // unread dot. The C never sits on a photo (1823).
+    const two = people.slice(0, 2);
+    const photos = (
+      <span style={{ display: "inline-flex", alignItems: "center" }}>
+        {two.map((p, i) => (
+          <Avatar
+            key={p.id}
+            name={p.name}
+            src={p.avatar}
+            size={two.length === 1 ? 40 : 32}
+            style={{
+              marginLeft: i === 0 ? 0 : -6,
+              boxShadow: "0 0 0 1.5px var(--bg)",
+              position: "relative",
+              zIndex: 2 - i,
+            }}
+          />
+        ))}
+      </span>
+    );
+    const first = two[0];
+    const column = (
+      <button
+        type="button"
+        aria-label={two.length === 1 && first ? first.name + "’s profile" : "See who reacted"}
+        data-notification-people={String(two.length)}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (two.length === 1 && first) onPerson?.(first.handle);
+          else onPeople?.();
+        }}
+        style={{
+          all: "unset",
+          boxSizing: "border-box",
+          cursor: "pointer",
+          width: 58,
+          minHeight: 44,
+          display: "inline-flex",
+          alignItems: "center",
+          flex: "none",
+        }}
+      >
+        {photos}
+      </button>
+    );
+    const lineHeight = input === "touch" ? 44 : "var(--target-min)";
+    return (
+      <div
+        data-kind={kind}
+        data-unread={unread ? "1" : undefined}
+        data-destination={destination}
+        data-people-led=""
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{ ...rowStyle, cursor: "default", padding: "10px 16px" }}
+      >
+        {column}
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+            paddingTop: 2,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 15,
+              lineHeight: 1.4,
+              fontWeight: unread ? 500 : 400,
+              textWrap: "pretty",
+            }}
+          >
+            {text}
+          </span>
+          <button
+            type="button"
+            onClick={onClick}
+            aria-label={(destination ? destination + ": " : "") + (object ?? "")}
+            data-notification-object=""
+            style={{
+              all: "unset",
+              boxSizing: "border-box",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              minHeight: lineHeight,
+              margin: input === "touch" ? "-10px 0" : 0,
+              fontSize: 13,
+              color: "var(--ink-3)",
+              lineHeight: 1.4,
+              minWidth: 0,
+              textAlign: "left",
+            }}
+          >
+            {c && <CBadge c={c} size={20} />}
+            <span
+              style={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                minWidth: 0,
+              }}
+            >
+              {object ?? destination}
+            </span>
+          </button>
+        </span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flex: "none" }}>
+          {time && (
+            <span style={{ fontSize: 13, color: "var(--ink-3)", lineHeight: 1.4 }}>{time}</span>
+          )}
+          {unread && (
+            <span
+              role="img"
+              aria-label="Unread"
+              data-unread-dot
+              style={{
+                width: "var(--target-min)",
+                height: "var(--target-min)",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flex: "none",
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{ width: 8, height: 8, borderRadius: 999, background: "var(--ink)" }}
+              />
+            </span>
+          )}
+        </span>
+      </div>
+    );
+  }
   if (kind === "role_invitation" && onRespond) {
     // Correction 15 (736): the row and its act are two controls, so the row is a div and not a
     // button here; the sentence is the row's hit target and Respond is the act, whose accessible

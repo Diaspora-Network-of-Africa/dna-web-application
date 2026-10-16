@@ -480,6 +480,27 @@ async function runLiveDbArms({ record, skip }) {
       "H61-VT (1747): the blocker reads the blocked party's connections section: no row",
     vtReverseAnchored:
       "H61-VT (1747): the blocker reads the blocked party's anchored section across the shared anchor: no row",
+    h62a: "H62-A (1817): post_react sets Asante, changes it to Celebrate, and removes it when the held kind is chosen again; one row throughout",
+    h62aOther:
+      "H62-A (1821, 1818): post_react with other and a picker emoji stores the vocabulary base, and a seventh distinct reaction from one member still yields one row",
+    h62aOtherRefused:
+      "H62-A control: other with a character the vocabulary does not hold is refused with 22023",
+    h62aIntent:
+      "H62-A (1798, 1802): post_intent turns I can help on with a line, stores the line trimmed, and off removes the row",
+    h62aReaderKeys:
+      "H62-A (1797, 1799): a reader's summary carries exactly intents, kinds, more, other, own and people, and the reader's sheet carries no intent, no line and no figure",
+    h62aAuthorRefused:
+      "H62-A (1799): post_reactors_author raises 42501 for a member who did not author the post",
+    h62aAuthor:
+      "H62-A control (1799): the author reads exact figures per kind with every row named",
+    h62aNotify:
+      "H62-A (1802, 1317, 1316): an intent writes one intent_help row for the author under the post's C with a group key per post, a second on after an off folds into it rather than adding one, and the public reactions wrote none",
+    h62aBlocked:
+      "H62-A (186, 198): across a block the author's list carries no name for the blocked member and the blocked member reads no post at all",
+    h62aPrivate:
+      "H62-A (141, 1734): a reactor private.visible_to does not admit for the author reaches the author's list with no name, handle or photo",
+    h62aCarry:
+      "H62-A (1826): every post_reactions row that predates 20261015120100 reads asante with no emoji",
     // The conformance arm's checks (tests/visibility-conformance.cjs), listed here so that a run
     // that cannot connect reports each of them UNPROVEN by name (G143, 228).
     ...Object.fromEntries(Object.entries(CONFORMANCE).map(([k, v]) => ["conformance" + k, v])),
@@ -1166,6 +1187,373 @@ async function runLiveDbArms({ record, skip }) {
         record(names.vtAnchored, anchored.blocked === 0, show(anchored));
         record(names.vtReverseAnchored, anchored.blocker === 0, show(anchored));
       }
+    });
+
+    // ------------------------------------------------------------------------------------------
+    // H62-A (1796 to 1826). The reaction layer's two writers and three projections, in one rolled
+    // back transaction: the owner publishes a post (or the arm finds one of theirs); the member
+    // reacts, changes, removes, reacts with a picker emoji, toggles an intent with a line; the
+    // reader's answers are checked for their keys and never a figure; the author's list raises
+    // for the member and carries exact figures for the owner; the intent's notification row is
+    // read as the owner; then the member blocks the owner (the app's own path, 216) and the
+    // owner turns the member Private, each with its control. Nothing here reads post_reactions
+    // directly except the 1826 carry-over count, which runs as live_arms and reports unproven
+    // where the grant refuses (228).
+    // ------------------------------------------------------------------------------------------
+    await inTransaction(client, async () => {
+      await actAsSelf(client);
+      const present = await client.query(
+        "select (to_regclass('public.post_intents') is not null and to_regproc('public.post_react') is not null) as ok",
+      );
+      if (!present.rows[0] || present.rows[0].ok !== true) {
+        unreachedIn("h62a", "20261015120100_h62a_feed_reactions.sql is not on the project yet");
+        skip(names.h62a, "20261015120100_h62a_feed_reactions.sql is not on the project yet");
+        return;
+      }
+      const carry = await attempt(
+        client,
+        "select count(*)::int as n, count(*) filter (where kind = 'asante' and emoji is null)::int as asante from public.post_reactions where created_at < '2026-10-16'",
+      );
+      if (carry.ok)
+        record(
+          names.h62aCarry,
+          carry.rows[0].n === carry.rows[0].asante,
+          carry.rows[0].asante + " of " + carry.rows[0].n + " rows read asante",
+        );
+      else
+        skip(
+          names.h62aCarry,
+          "live_arms cannot read post_reactions as itself: " + carry.code + " " + carry.message,
+        );
+
+      await actAs(client, owner.id);
+      let post = await client.query(
+        "select id from public.feed where author_kind = 'member' and author_id = $1 and status = 'published' limit 1",
+        [owner.id],
+      );
+      let postId = post.rows[0] ? post.rows[0].id : null;
+      if (!postId) {
+        const pub = await attempt(client, "select public.publish_post($1::jsonb) as id", [
+          JSON.stringify({
+            body: "H62-A reactions arm. Rolled back by the same run.",
+            author_kind: "member",
+            author_id: owner.id,
+            audience: "everyone",
+            host_context: "live-checks",
+          }),
+        ]);
+        postId = pub.ok ? pub.rows[0].id : null;
+      }
+      if (!postId) {
+        unreachedIn("h62a", "no post by the owner could be read or published");
+        skip(names.h62a, "no post by the owner could be read or published");
+        return;
+      }
+      const react = async (kind, emoji, picked) =>
+        attempt(client, "select public.post_react($1::uuid, $2, $3, $4) as r", [
+          postId,
+          kind,
+          emoji ?? null,
+          !!picked,
+        ]);
+      const summaryOf = async () => {
+        const r = await attempt(client, "select public.post_reaction_rows(array[$1::uuid]) as s", [
+          postId,
+        ]);
+        return r.ok ? r.rows[0].s[postId] || null : null;
+      };
+      const show = (x) => JSON.stringify(x);
+
+      // 1. React, change, remove. The post may carry other members' reactions (the 36 carried
+      //    rows among them) and the member may already hold one: the arm clears the member's own
+      //    first and reads the member's `own` throughout, never the post's whole kind list.
+      await actAs(client, member.id);
+      const s0 = await summaryOf();
+      if (s0 && s0.own) await react(s0.own.kind, s0.own.emoji);
+      const a1 = await react("asante");
+      const s1 = await summaryOf();
+      const a2 = await react("celebrate");
+      const s2 = await summaryOf();
+      const a3 = await react("celebrate");
+      const s3 = await summaryOf();
+      record(
+        names.h62a,
+        a1.ok &&
+          a1.rows[0].r &&
+          a1.rows[0].r.kind === "asante" &&
+          !!s1 &&
+          s1.own &&
+          s1.own.kind === "asante" &&
+          s1.kinds.includes("asante") &&
+          a2.ok &&
+          a2.rows[0].r &&
+          a2.rows[0].r.kind === "celebrate" &&
+          !!s2 &&
+          s2.own &&
+          s2.own.kind === "celebrate" &&
+          s2.kinds.includes("celebrate") &&
+          a3.ok &&
+          a3.rows[0].r === null &&
+          !!s3 &&
+          s3.own === null,
+        "held before: " +
+          show(s0 && s0.own) +
+          " | " +
+          [a1, a2, a3]
+            .map((x) => (x.ok ? show(x.rows[0].r) : x.code + " " + x.message))
+            .join(" | ") +
+          " | own after: " +
+          show(s3 && s3.own),
+      );
+
+      // 2. other with a picker emoji (the dataset's thumbs up carries U+FE0F; the toned form drops
+      //    it), then five more distinct reactions: still one row, read through the summary.
+      const o1 = await react("other", "\u{1F44D}\u{1F3FD}", true);
+      const base = o1.ok && o1.rows[0].r ? o1.rows[0].r.emoji : null;
+      for (const k of ["learned", "standing", "asante", "celebrate", "learned"]) await react(k);
+      const s4 = await summaryOf();
+      record(
+        names.h62aOther,
+        o1.ok &&
+          !!base &&
+          /^\u{1F44D}\uFE0F?$/u.test(base) &&
+          !!s4 &&
+          s4.own &&
+          s4.own.kind === "learned" &&
+          s4.kinds.includes("learned") &&
+          s4.own.emoji === null,
+        (o1.ok ? "stored " + show(base) : o1.code + " " + o1.message) +
+          "; after six more: " +
+          show(s4 && s4.own) +
+          " kinds " +
+          show(s4 && s4.kinds),
+      );
+      const bad = await react("other", "not an emoji");
+      record(
+        names.h62aOtherRefused,
+        !bad.ok && bad.code === "22023",
+        bad.ok ? "accepted" : bad.code + " " + bad.message,
+      );
+
+      // 3. Intent on with a line, read back by the author, then off.
+      const i1 = await attempt(
+        client,
+        "select public.post_intent($1::uuid, 'help', true, $2) as r",
+        [postId, "  I can introduce you to two people.  "],
+      );
+      await actAs(client, owner.id);
+      const au1 = await attempt(client, "select public.post_reactors_author($1::uuid) as r", [
+        postId,
+      ]);
+      const intentRow = au1.ok
+        ? (au1.rows[0].r.rows || []).find((x) => x.class === "intent" && x.kind === "help")
+        : null;
+      await actAs(client, member.id);
+      const i2 = await attempt(client, "select public.post_intent($1::uuid, 'help', false) as r", [
+        postId,
+      ]);
+      const s5 = await summaryOf();
+      record(
+        names.h62aIntent,
+        i1.ok &&
+          Array.isArray(i1.rows[0].r) &&
+          i1.rows[0].r.includes("help") &&
+          !!intentRow &&
+          intentRow.line === "I can introduce you to two people." &&
+          i2.ok &&
+          Array.isArray(i2.rows[0].r) &&
+          !i2.rows[0].r.includes("help") &&
+          !!s5 &&
+          Array.isArray(s5.intents) &&
+          s5.intents.length === 0,
+        (i1.ok ? "on " + show(i1.rows[0].r) : i1.code + " " + i1.message) +
+          "; line " +
+          show(intentRow && intentRow.line) +
+          "; off " +
+          (i2.ok ? show(i2.rows[0].r) : i2.code),
+      );
+
+      // 4. The reader's keys: the summary and the sheet, as the member, with the intent on again.
+      await attempt(client, "select public.post_intent($1::uuid, 'build', true) as r", [postId]);
+      const s6 = await summaryOf();
+      const vis = await attempt(client, "select public.post_reactors_visible($1::uuid) as r", [
+        postId,
+      ]);
+      const visRows = vis.ok && Array.isArray(vis.rows[0].r) ? vis.rows[0].r : [];
+      const keysOk =
+        !!s6 && Object.keys(s6).sort().join() === "intents,kinds,more,other,own,people";
+      const rowKeys = visRows.length ? Object.keys(visRows[0]).sort().join() : "";
+      record(
+        names.h62aReaderKeys,
+        keysOk &&
+          vis.ok &&
+          visRows.length >= 1 &&
+          rowKeys === "avatar_path,emoji,handle,headline,id,kind,name,relationship,through,you" &&
+          !visRows.some((x) => x.kind === "help" || x.kind === "build") &&
+          !JSON.stringify(visRows).match(/"(line|class|figures|count|n)":/),
+        "summary keys " + show(s6 && Object.keys(s6).sort()) + "; row keys " + rowKeys,
+      );
+
+      // 5. The author's list: refused for the member, exact for the owner.
+      const auMember = await attempt(client, "select public.post_reactors_author($1::uuid) as r", [
+        postId,
+      ]);
+      record(
+        names.h62aAuthorRefused,
+        !auMember.ok && auMember.code === "42501",
+        auMember.ok ? "answered" : auMember.code + " " + auMember.message,
+      );
+      await actAs(client, owner.id);
+      const au2 = await attempt(client, "select public.post_reactors_author($1::uuid) as r", [
+        postId,
+      ]);
+      const fig = au2.ok ? au2.rows[0].r.figures : null;
+      const memberRows = au2.ok ? (au2.rows[0].r.rows || []).filter((x) => x.id === member.id) : [];
+      record(
+        names.h62aAuthor,
+        au2.ok &&
+          !!fig &&
+          fig.learned === 1 &&
+          fig.build === 1 &&
+          fig.help === 0 &&
+          fig.all >= 2 &&
+          memberRows.length === 2 &&
+          memberRows.every((x) => x.name === member.name && x.handle === member.handle),
+        au2.ok
+          ? "figures " + show(fig) + "; member rows " + memberRows.length
+          : au2.code + " " + au2.message,
+      );
+
+      // 6. The notification: one intent_build row under the post's C with the group key, folded on
+      //    a second on after an off; the public reactions wrote none.
+      const n1 = await client.query(
+        "select kind, c_category, object_kind::text as object_kind, object_id, group_key, grouped_actor_ids from public.notifications where recipient_member_id = $1 and object_id = $2 and kind like 'intent_%' order by created_at",
+        [owner.id, postId],
+      );
+      await actAs(client, member.id);
+      await attempt(client, "select public.post_intent($1::uuid, 'build', false) as r", [postId]);
+      await attempt(client, "select public.post_intent($1::uuid, 'build', true) as r", [postId]);
+      await actAs(client, owner.id);
+      const n2 = await client.query(
+        "select kind from public.notifications where recipient_member_id = $1 and object_id = $2 and kind = 'intent_build'",
+        [owner.id, postId],
+      );
+      const n3 = await client.query(
+        "select count(*)::int as n from public.notifications where recipient_member_id = $1 and object_id = $2 and kind not like 'intent_%'",
+        [owner.id, postId],
+      );
+      const postC = await client.query(
+        "select c_category::text as c from public.feed where id = $1",
+        [postId],
+      );
+      const buildRow = n1.rows.find((r) => r.kind === "intent_build");
+      record(
+        names.h62aNotify,
+        !!buildRow &&
+          buildRow.object_kind === "post" &&
+          buildRow.object_id === postId &&
+          buildRow.group_key === "post:" + postId &&
+          buildRow.c_category === (postC.rows[0] && postC.rows[0].c) &&
+          n2.rows.length === 1 &&
+          n3.rows[0].n === 0,
+        "intent rows " +
+          show(n1.rows.map((r) => [r.kind, r.group_key])) +
+          "; build rows after off and on " +
+          n2.rows.length +
+          "; non-intent rows " +
+          n3.rows[0].n,
+      );
+
+      // 7. The block: the member blocks the owner (the owner insert policy), then the owner's list
+      //    carries no row for the member and the member reads no post; unblocked, both return.
+      await actAs(client, member.id);
+      const block = await attempt(
+        client,
+        "insert into public.member_blocks (blocker_id, blocked_id) values ($1::uuid, $2::uuid)",
+        [member.id, owner.id],
+      );
+      const visBlocked = await attempt(
+        client,
+        "select public.post_reactors_visible($1::uuid) as r",
+        [postId],
+      );
+      await actAs(client, owner.id);
+      const auBlocked = await attempt(client, "select public.post_reactors_author($1::uuid) as r", [
+        postId,
+      ]);
+      const blockedRows = auBlocked.ok
+        ? (auBlocked.rows[0].r.rows || []).filter(
+            (x) => x.id === member.id || x.name === member.name,
+          )
+        : [];
+      await actAs(client, member.id);
+      const unblock = await attempt(
+        client,
+        "delete from public.member_blocks where blocker_id = $1::uuid and blocked_id = $2::uuid",
+        [member.id, owner.id],
+      );
+      await actAs(client, owner.id);
+      const auAfter = await attempt(client, "select public.post_reactors_author($1::uuid) as r", [
+        postId,
+      ]);
+      const afterRows = auAfter.ok
+        ? (auAfter.rows[0].r.rows || []).filter((x) => x.id === member.id)
+        : [];
+      record(
+        names.h62aBlocked,
+        block.ok &&
+          !visBlocked.ok &&
+          visBlocked.code === "42501" &&
+          auBlocked.ok &&
+          blockedRows.length === 0 &&
+          unblock.ok &&
+          afterRows.length >= 1,
+        (block.ok ? "" : "block " + block.code + "; ") +
+          "member reads " +
+          (visBlocked.ok ? "rows" : visBlocked.code) +
+          "; author's rows naming the member under the block " +
+          blockedRows.length +
+          ", after " +
+          afterRows.length,
+      );
+
+      // 8. Private: the member turns Private; unless the two accounts are connected (where
+      //    visible_to admits a private member), the author's list carries the row with no name.
+      await actAs(client, member.id);
+      const priv = await attempt(
+        client,
+        "update public.members set profile_private = true where id = $1",
+        [member.id],
+      );
+      await actAs(client, owner.id);
+      const auPriv = await attempt(client, "select public.post_reactors_author($1::uuid) as r", [
+        postId,
+      ]);
+      const privRows = auPriv.ok ? auPriv.rows[0].r.rows || [] : [];
+      const namedStill = privRows.some((x) => x.id === member.id);
+      const roleRows = privRows.filter(
+        (x) => x.id === null && x.name === null && x.handle === null && x.avatar_path === null,
+      );
+      const connected = await attempt(
+        client,
+        "select exists (select 1 from public.member_connections c where c.member_id = $1 and c.other_id = $2) as ok",
+        [owner.id, member.id],
+      );
+      if (namedStill && connected.ok && connected.rows[0].ok === true)
+        skip(
+          names.h62aPrivate,
+          "owner-test and member-test are connected, so visible_to admits the private member by design",
+        );
+      else
+        record(
+          names.h62aPrivate,
+          priv.ok && auPriv.ok && !namedStill && roleRows.length >= 1,
+          (priv.ok ? "" : "private " + priv.code + "; ") +
+            "named " +
+            namedStill +
+            "; role rows " +
+            roleRows.length,
+        );
     });
 
     // ------------------------------------------------------------------------------------------

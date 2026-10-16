@@ -9593,3 +9593,102 @@ Recorded as an intermittent failure on a mocked arm: the record waits a fixed 80
 PATCH and the return to Connect, and a slow cell can outlast it. Not fixed here (the arm is outside
 H61-SP's scope). Closes when the record waits on the write and the route rather than on the clock, or
 when the failure recurs and is root-caused. Owner: Chat, by brief.
+
+## G296. Strand proposal 2: `ReactionPicker` quick view with the six, a recents strip and a pinned plus
+
+**Severity: low (a composed part; no member-facing defect). Opened 16 October 2026 during H62-A, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+SPEC-62-FEED-CARD 3 and 12 (proposal 2, ruling 1821): the Feed's quick bar is the four public
+reactions, a rule, the two intents, a rule and up to five recents newest first in one strip that
+scrolls sideways, with the plus pinned outside the strip. Strand's `ReactionPicker` quick view draws
+the Messenger's eight through `ReactionMark` with More inside the scrolling row (1818 says the six
+never render through `ReactionGlyph`), so the bar is composed in `src/components/dna/ReactionBar.tsx`
+from buttons, `Tooltip` and `IconButton`, with the same hooks (`data-reaction-bar`,
+`data-reaction-strip`, `data-reaction-entry`, `data-reaction-more`). Closes when a compile carries
+`ReactionPicker view="quick"` with `entries`, `recents` and `onMore` as proposed and the bar is
+rebound to it with no change to geometry or names. Owner: Chat, by Strand brief.
+
+## G297. Strand proposals 3 and 4: `ReactionRow` in-row mode and PostCard's `summary` slot
+
+**Severity: low (a composed part and one port divergence). Opened 16 October 2026 during H62-A, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+SPEC-62-FEED-CARD 5 and 12 (proposals 3 and 4, ruling 1822): the reaction summary is one control in
+the feed footer between Respond and Save: the glyph cluster in fixed order, the neutral other mark,
+up to two photos overlapping by a fifth, and at medium and expanded one names line that never wraps.
+Strand's `ReactionRow` draws pills, so the control is composed in
+`src/components/dna/ReactionSummary.tsx`, and `PostCard` carries a `summary` prop rendered in the
+footer's spacer (`data-footer-summary`), recorded as a divergence in
+`docs/strand-ports/sha256-b1a458dac1bd562f.md`. Closes when a compile carries `ReactionRow
+mode="in-row"` and `PostCard summary`, and the Feed rebinds to them. Owner: Chat, by Strand brief.
+
+## G298. Strand proposals 5 and 6: `WhoReactedSheet` and `PersonRow` with the reaction at the row's end
+
+**Severity: low (a composed part). Opened 16 October 2026 during H62-A, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+SPEC-62-FEED-CARD 6, 7 and 12 (proposals 5 and 6; rulings 1808, 1811, 1813, 1820, 1823): the
+reader's sheet and the author's sheet, and the one row part under them (photo, name, headline, the
+relationship in words, View profile outside the network, the quoted intent line, the reaction in a 28
+ring at the row's end, the role variant with no photo and no link). Composed in
+`src/components/dna/WhoReactedSheet.tsx` from `Sheet`, `Tabs`, `Avatar` and `Button`. Closes when a
+compile carries both parts and the Feed rebinds. Owner: Chat, by Strand brief.
+
+## G299. Strand proposal 7: `IntentPrompt`
+
+**Severity: low (a composed part). Opened 16 October 2026 during H62-A, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+SPEC-62-FEED-CARD 4 and 12 (proposal 7): the prompt's title, its one line with the author linked,
+one optional field, Send and Skip; a Sheet on touch and a Popover on pointer. Composed in
+`src/components/dna/IntentPrompt.tsx`. Closes when a compile carries `IntentPrompt`. Owner: Chat, by
+Strand brief.
+
+## G300. Strand proposal 10: `NotificationListItem` people-led
+
+**Severity: low (one port divergence). Opened 16 October 2026 during H62-A, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+SPEC-62-FEED-CARD 10.2 and 12 (proposal 10; rulings 1802, 1817, 1820, 1823): a notification that
+names people leads with their photos in a fixed 58 column, each name in the sentence its own link,
+and the C marks the post's line under the sentence, never a photo. The tree's `NotificationListItem`
+carries that row for the rows passed `people` (today `intent_help` and `intent_build`), as a
+divergence recorded in `docs/strand-ports/sha256-b1a458dac1bd562f.md`; the existing kinds keep the
+badge-led row until H62-B moves them. Closes when a compile carries `NotificationListItem
+kind="people"`. Owner: Chat, by Strand brief.
+
+## G301. Strand proposal 12: `PersonLink`, the avatar and the name as one link
+
+**Severity: low (a composed part and one port divergence). Opened 16 October 2026 during H62-A, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+SPEC-62-FEED-CARD 11 and 12 (proposal 12, ruling 1820): one part wherever a member's name renders,
+`Avatar` and the name in one link named "{name}’s profile". Composed in
+`src/components/dna/PersonLink.tsx`; `PostCard` applies the link to its own avatar and name through
+`authorHref` and `onAuthor` until it takes `onAuthor` from a compile (recorded in the port record).
+Closes when a compile carries `PersonLink` and PostCard's `onAuthor`, and the sheets, the prompt,
+the card header and the notification sentence rebind. Owner: Chat, by Strand brief.
+
+## G302. Strand proposal 14: `Tabs` with a figure in the label
+
+**Severity: low (a composed label). Opened 16 October 2026 during H62-A, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+SPEC-62-FEED-CARD 7 and 12 (proposal 14, ruling 1799): the author's sheet alone shows a figure, in
+each tab's label. The tree's `Tabs` takes a label string, so `WhoReactedSheet` composes
+"{label} {n}" into it. Closes when a compile carries `Tabs count`, bound by the author's sheet and
+no other surface. Owner: Chat, by Strand brief.
+
+## G303. The author's sheet's footer act (A.panel) has no destination until H62-D
+
+**Severity: low (a disabled control with its label). Opened 16 October 2026 during H62-A, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+SPEC-62-FEED-CARD 7 (ruling 1806): A.panel, "See this post’s figures", opens the author's panel
+drawn in B62-Feed-v1. The panel is H62-D's; until then `WhoReactedSheet` renders the act disabled
+(`data-author-panel`) with no destination, as HANDOFF-62-A section 4 asks. Closes when H62-D binds
+it. Owner: Chat, by brief.
+
+## G304. A Feed reaction of kind `other` stores the base character; the Messenger keeps the skin tone
+
+**Severity: low (a stored tone the Feed does not carry; no reader sees a wrong glyph). Opened 16 October 2026 during H62-A, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+HANDOFF-62-A section 1 item 3 asks for `post_reactions.emoji` as a foreign key to
+`message_reaction_emoji`, which holds base characters only, so `private.post_reaction_write` reads a
+skin tone modifier off the picked character as `private.message_react` does and stores the base
+(20261015120100). The Messenger stores the toned character (1577); the Feed's summary, sheets and
+recents therefore show the base of a toned pick. Closes with a ruling on whether a Feed reaction
+carries the tone and, if so, a column for it beside the base. Owner: Chat, by ruling.
