@@ -32,6 +32,7 @@
 // carries the same policy with script-src 'self' and no nonce.
 import { createIsomorphicFn } from "@tanstack/react-start";
 import { nonceInScope } from "./csp-nonce.server";
+import { SUPABASE_URL } from "./supabase";
 
 /**
  * This response's nonce on the server; undefined on the client, where the meta tag carries it, and
@@ -42,8 +43,11 @@ export const cspNonce = createIsomorphicFn()
   .server((): string | undefined => nonceInScope())
   .client((): string | undefined => undefined);
 
-const SUPABASE = "https://dgspjevjoblujcoljvkn.supabase.co";
-const SUPABASE_WS = "wss://dgspjevjoblujcoljvkn.supabase.co";
+// Handoff 62-A2 (rulings 1829, 1830): the Supabase sources are the client's own URL, the custom
+// domain auth.diasporanetwork.africa, so the policy and the client cannot name different hosts.
+// The static-asset copy in public/_headers carries the same host written out.
+const SUPABASE = SUPABASE_URL.replace(/\/$/, "");
+const SUPABASE_WS = SUPABASE.replace(/^https:/, "wss:");
 
 export function contentSecurityPolicy(nonce: string | undefined): string {
   const script = nonce ? `script-src 'self' 'nonce-${nonce}'` : "script-src 'self'";

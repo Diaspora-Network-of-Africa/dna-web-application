@@ -9924,3 +9924,31 @@ explainer promises, reachable from both sides and suggested where a connection n
 knows both places (1862). H-BS7-STANCE shipped the gap entry only and no ranking change. Closes
 when Connect's ranking reads `bridge` with its own reasons, proven on the deployed preview, before
 the first real member invite. Owner: Chat, by brief.
+
+## G320. The expired-link line on sign-in is Code's wording, awaiting Design's verbatim (496)
+
+**Severity: low (one status line, in one state nothing reached before). Opened 16 October 2026 during H62-A2, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+A sign-up, magic-link, invite or email-change hash on our domain that does not verify lands the
+signed-out visitor on sign-in with `COPY.linkExpired`, "This link no longer works. It has been used,
+or its hour has passed. Sign in to continue." (`src/lib/auth-flow.ts`). H62-A2 Done Means 3 allows
+new copy only where none exists, and none did: the fragment landing of the same types reaches
+sign-in with nothing said, and still does (Done Means 2). The line is Code's wording, not a pass's,
+so ruling 496 has no verbatim for it yet. The two states that keep the existing silence are a
+member already signed in on this device whose email-change hash does not verify (the route the link
+named renders, as it does today) and the fragment landing itself. Closes when Design's wording
+replaces the line, or a ruling accepts it. Owner: Chat, by ruling.
+
+## G321. `dna_notify_deliver_minutely` wakes `notify-deliver` at the supabase.co host
+
+**Severity: low (the host keeps serving; nothing is broken). Opened 16 October 2026 during H62-A2, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+H62-A2 Done Means 4 moves the app's client URL and every CSP or allowlist entry off
+`dgspjevjoblujcoljvkn.supabase.co` to `https://auth.diasporanetwork.africa`. One URL in the tree
+is out of its reach: `20261008120400_n39a_notification_delivery.sql` schedules the cron job's
+`net.http_post` against `https://dgspjevjoblujcoljvkn.supabase.co/functions/v1/notify-deliver`.
+An applied migration is never amended (466) and H62-A2 carries no migration, so the job keeps
+waking the function at the supabase.co host, which keeps serving. A database-to-function call
+needs no custom domain; the gap is that the tree names the host in one more place than the
+handoff's list. Closes with a migration that reschedules the job at the custom domain under
+`docs/MIGRATIONS.md`, if a ruling wants it, or with a ruling that leaves it. Owner: Chat, by ruling.

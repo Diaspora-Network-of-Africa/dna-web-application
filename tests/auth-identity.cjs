@@ -14,8 +14,7 @@ const fs = require("fs");
 const path = require("path");
 
 const src = fs.readFileSync(path.join(__dirname, "../src/lib/supabase.ts"), "utf8");
-const SUPABASE_URL =
-  process.env.SUPABASE_URL || (src.match(/"(https:\/\/[a-z]+\.supabase\.co)"/) || [])[1];
+const SUPABASE_URL = process.env.SUPABASE_URL || (src.match(/"(https:\/\/[a-z0-9.-]+)"/) || [])[1];
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const EMAIL = process.env.IDENTITY_EMAIL || "";
 

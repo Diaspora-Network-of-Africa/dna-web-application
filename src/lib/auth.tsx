@@ -13,8 +13,9 @@ import { useNavigate } from "@tanstack/react-router";
 import type { Session, SupabaseClient, User } from "@supabase/supabase-js";
 import type { Database } from "./database.types";
 import { getSupabase } from "./supabase";
-import { markRecoveryPending } from "./recovery";
-import { noteProviderSignIn } from "./auth-flow";
+import { emailLinkOpen, emailLinkSettled } from "./email-link";
+import { markRecoveryExpired, markRecoveryPending } from "./recovery";
+import { noteExpiredLink, noteProviderSignIn } from "./auth-flow";
 
 /**
  * Handoff 30-D item 9 (ruling 1033): once a session exists, the member takes any guest rows for
@@ -149,8 +150,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       claimedFor.current = uid;
       void claimGuestRegistrations(sb);
     };
-    void sb.auth.getSession().then(async ({ data }) => {
-      if (active) claimOnce(data.session);
+    // Handoff 62-A2: a link on our domain is being exchanged for a session (src/lib/email-link.ts);
+    // the first read waits for its answer, so `ready` never arrives signed out for a member the
+    // link is about to sign in. A hash that did not verify lands where the fragment landing's
+    // expired state lands. A recovery is already on /reset/new, the flag the URL set having held
+    // it there through the root gate, so marking it expired is what renders "This link no longer
+    // works"; every other type goes to sign-in with its status line, unless this device already
+    // holds a session, where the route the link named stands as it does today.
+    void emailLinkSettled().then(async (link) => {
+      if (!active) return;
+      const { data } = await sb.auth.getSession();
+      if (!active) return;
+      if (link && !link.verified) {
+        if (link.type === "recovery") markRecoveryExpired();
+        else if (!data.session) {
+          noteExpiredLink();
+          void navigate({ to: "/sign-in", replace: true });
+        }
+      }
+      claimOnce(data.session);
       const member = await withProfile(data.session);
       if (!active) return;
       // Ruling 1746: the session check below can remove the session while this profile read is in
@@ -162,6 +180,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     const { data: sub } = sb.auth.onAuthStateChange((event, session) => {
       if (!active) return;
+      // Handoff 62-A2: while the hash exchange is open, INITIAL_SESSION arrives empty and the
+      // exchange's own SIGNED_IN or PASSWORD_RECOVERY arrives before its promise answers. Neither
+      // is the state to publish; the read above publishes once, when the answer is known.
+      if (emailLinkOpen()) return;
       // Ruling 240: the second reading of a recovery, for the case where the fragment was consumed
       // before this app's own capture could see it. The gate in the root route acts on the flag.
       if (event === "PASSWORD_RECOVERY") markRecoveryPending();
@@ -182,7 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       active = false;
       sub.subscription.unsubscribe();
     };
-  }, []);
+  }, [navigate]);
   // W27: after a profile save the shell re-reads the members row, so the name it carries (header,
   // greeting, account panel) is the one just saved rather than the one read at sign-in.
   const refreshMember = useCallback(async () => {

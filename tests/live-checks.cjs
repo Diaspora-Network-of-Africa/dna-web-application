@@ -25,8 +25,7 @@ const SHARED_ID = process.env.SHARED_ID || "b3000000-0000-4000-8000-000000000001
 
 // The client's defaults for the canonical project (publishable by design), unless overridden.
 const src = fs.readFileSync(path.join(__dirname, "../src/lib/supabase.ts"), "utf8");
-const SUPABASE_URL =
-  process.env.SUPABASE_URL || (src.match(/"(https:\/\/[a-z]+\.supabase\.co)"/) || [])[1];
+const SUPABASE_URL = process.env.SUPABASE_URL || (src.match(/"(https:\/\/[a-z0-9.-]+)"/) || [])[1];
 const KEY =
   process.env.SUPABASE_PUBLISHABLE_KEY || (src.match(/"(sb_publishable_[A-Za-z0-9_-]+)"/) || [])[1];
 
@@ -101,6 +100,25 @@ async function get(url, headers = {}) {
     );
   } else {
     const H = { apikey: KEY, Authorization: "Bearer " + KEY };
+    // Handoff 62-A2 (rulings 1829, 1830): the client speaks to the canonical project at its custom
+    // domain, and the project answers there. The URL is read out of src/lib/supabase.ts above, so
+    // the first check is what the deployment's bundle carries; the second is the host answering.
+    // On main both fail: the client named the supabase.co host.
+    record(
+      "handoff 62-A2: the client's Supabase URL is the custom domain, auth.diasporanetwork.africa",
+      new URL(SUPABASE_URL).host === "auth.diasporanetwork.africa",
+      SUPABASE_URL,
+    );
+    try {
+      const health = await get(SUPABASE_URL + "/auth/v1/health", { apikey: KEY });
+      record(
+        "handoff 62-A2: Auth answers on the custom domain",
+        health.status === 200 && /GoTrue|auth/i.test(health.text),
+        "status " + health.status + " " + health.text.slice(0, 80),
+      );
+    } catch (e) {
+      record("handoff 62-A2: Auth answers on the custom domain", false, String(e).slice(0, 160));
+    }
     const rest = async (q) => {
       const r = await get(SUPABASE_URL + "/rest/v1/" + q, H);
       let body = null;
@@ -1729,6 +1747,16 @@ async function get(url, headers = {}) {
         !/script-src[^;]*'unsafe-inline'/.test(csp) &&
         /frame-ancestors 'none'/.test(csp),
       "status " + feedRes.status + " csp " + csp.slice(0, 120),
+    );
+    // Handoff 62-A2: the policy's Supabase sources are the custom domain, derived from the client's
+    // own URL (src/lib/csp.ts), and the supabase.co host is named nowhere in it. On main the
+    // connect-src named the supabase.co host.
+    record(
+      "handoff 62-A2: /feed's connect-src names auth.diasporanetwork.africa and never the supabase.co host",
+      /connect-src[^;]*https:\/\/auth\.diasporanetwork\.africa[\s;]/.test(csp + ";") &&
+        /connect-src[^;]*wss:\/\/auth\.diasporanetwork\.africa[\s;]/.test(csp + ";") &&
+        !/supabase\.co/.test(csp),
+      csp.slice(0, 200),
     );
     record(
       "ruling 438: /feed carries X-Frame-Options DENY",

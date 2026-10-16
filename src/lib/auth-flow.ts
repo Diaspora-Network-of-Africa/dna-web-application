@@ -76,6 +76,13 @@ export const COPY = {
   signUpLead: "An email address and a password. Your name, a username and a photo come next.",
   /** Ruling 496, verbatim (B8 item 5): sign-up could not be created. */
   signUpFailed: "We couldn't create your account just now. Nothing you entered is lost. Try again.",
+  /**
+   * Handoff 62-A2: a sign-up, magic-link, invite or email-change hash that did not verify lands on
+   * sign-in with this line. New copy, named in the PR: no state existed for it, because the fragment
+   * landing of the same types reached sign-in with nothing said.
+   */
+  linkExpired:
+    "This link no longer works. It has been used, or its hour has passed. Sign in to continue.",
   providerError: (p: Provider) =>
     `${PROVIDER_LABEL[p]} could not sign you in just now. Try again, or use your email and password.`,
   providerCancelled: (p: Provider) =>
@@ -141,6 +148,32 @@ export function forgetProvider(): void {
   }
 }
 
+const EXPIRED_LINK_KEY = "dna.auth.expired-link";
+
+/**
+ * Handoff 62-A2: the marker for an email link whose hash did not verify, set by the auth provider
+ * before it sends the visitor to sign-in and read once by that route. A marker rather than a URL
+ * parameter, so the shell's own redirect to sign-in cannot drop it on the way.
+ */
+export function noteExpiredLink(): void {
+  try {
+    window.sessionStorage.setItem(EXPIRED_LINK_KEY, "1");
+  } catch {
+    /* storage unavailable: the visitor lands on sign-in with nothing said, as before 62-A2. */
+  }
+}
+
+/** True once per expired link: reads the marker and forgets it. */
+export function consumeExpiredLink(): boolean {
+  try {
+    const v = window.sessionStorage.getItem(EXPIRED_LINK_KEY);
+    if (v) window.sessionStorage.removeItem(EXPIRED_LINK_KEY);
+    return !!v;
+  } catch {
+    return false;
+  }
+}
+
 export type ProviderReturn = { provider: Provider; kind: "cancelled" | "error" } | null;
 
 /**
@@ -195,7 +228,7 @@ export function stripAuthFragment(): void {
   if (typeof window === "undefined") return;
   if (!window.location.hash && !window.location.search.includes("error")) return;
   const url = new URL(window.location.href);
-  for (const key of ["error", "error_code", "error_description", "code", "type"])
+  for (const key of ["error", "error_code", "error_description", "code", "type", "token_hash"])
     url.searchParams.delete(key);
   url.hash = "";
   window.history.replaceState(window.history.state, "", url.pathname + url.search);
