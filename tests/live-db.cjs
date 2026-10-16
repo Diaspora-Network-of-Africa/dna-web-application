@@ -1264,8 +1264,12 @@ async function runLiveDbArms({ record, skip }) {
       };
       const show = (x) => JSON.stringify(x);
 
-      // 1. React, change, remove.
+      // 1. React, change, remove. The post may carry other members' reactions (the 36 carried
+      //    rows among them) and the member may already hold one: the arm clears the member's own
+      //    first and reads the member's `own` throughout, never the post's whole kind list.
       await actAs(client, member.id);
+      const s0 = await summaryOf();
+      if (s0 && s0.own) await react(s0.own.kind, s0.own.emoji);
       const a1 = await react("asante");
       const s1 = await summaryOf();
       const a2 = await react("celebrate");
@@ -1280,20 +1284,24 @@ async function runLiveDbArms({ record, skip }) {
           !!s1 &&
           s1.own &&
           s1.own.kind === "asante" &&
-          s1.kinds.join() === "asante" &&
+          s1.kinds.includes("asante") &&
           a2.ok &&
           a2.rows[0].r &&
           a2.rows[0].r.kind === "celebrate" &&
           !!s2 &&
           s2.own &&
           s2.own.kind === "celebrate" &&
-          s2.kinds.join() === "celebrate" &&
+          s2.kinds.includes("celebrate") &&
           a3.ok &&
           a3.rows[0].r === null &&
           !!s3 &&
-          s3.own === null &&
-          s3.kinds.length === 0,
-        [a1, a2, a3].map((x) => (x.ok ? show(x.rows[0].r) : x.code + " " + x.message)).join(" | ") +
+          s3.own === null,
+        "held before: " +
+          show(s0 && s0.own) +
+          " | " +
+          [a1, a2, a3]
+            .map((x) => (x.ok ? show(x.rows[0].r) : x.code + " " + x.message))
+            .join(" | ") +
           " | own after: " +
           show(s3 && s3.own),
       );
@@ -1312,8 +1320,8 @@ async function runLiveDbArms({ record, skip }) {
           !!s4 &&
           s4.own &&
           s4.own.kind === "learned" &&
-          s4.kinds.join() === "learned" &&
-          s4.other === false,
+          s4.kinds.includes("learned") &&
+          s4.own.emoji === null,
         (o1.ok ? "stored " + show(base) : o1.code + " " + o1.message) +
           "; after six more: " +
           show(s4 && s4.own) +
