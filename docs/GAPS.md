@@ -9692,3 +9692,19 @@ skin tone modifier off the picked character as `private.message_react` does and 
 (20261015120100). The Messenger stores the toned character (1577); the Feed's summary, sheets and
 recents therefore show the base of a toned pick. Closes with a ruling on whether a Feed reaction
 carries the tone and, if so, a column for it beside the base. Owner: Chat, by ruling.
+
+## G305. No engine in the matrix runs iOS's long-press text selection
+
+**Severity: low (a proof's reach, not a surface). Opened 16 October 2026 during H62-A1, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+On iPhone Safari a 500 ms hold on React began a text selection across the control and the text
+above it, and the selection held the touch so the quick bar could not be tapped (H62-A1). The hold
+is driven as a real touch in the shell arm at every touch cell, Chromium through CDP
+`Input.dispatchTouchEvent` and WebKit through the pointer events a touch raises, and neither
+headless engine begins a selection on it: the loupe is UIKit's gesture in iOS WebKit, which
+neither Playwright's Linux WebKit nor the macOS gate's Mac port runs. So the line that fails on
+main is the contract iOS reads, the control and its row answering `user-select: none` and
+`-webkit-touch-callout: none` with the body still selectable, and the selection-empty and
+glyph-tap lines pass on main as well as after the fix. The founder's device check is the proof of
+the behaviour itself. Closes when an arm runs on iOS WebKit, or when a ruling accepts the style
+contract as the standing proof. Owner: Chat, by ruling.

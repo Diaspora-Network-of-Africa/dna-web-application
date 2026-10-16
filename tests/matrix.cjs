@@ -5967,9 +5967,36 @@ async function runShell(browserType, bname, [w, h]) {
     await page.waitForTimeout(300);
     // 62-A (SPEC 3, 1821): the bar opens from React by a hover on pointer or a 500 ms hold on
     // touch; the six in fixed order, then the recents, then the plus pinned outside the strip.
+    // H62-A1: on iPhone Safari the hold began a text selection across React and the text above it
+    // (16 October, 04:56 PDT), and the selection held the touch so the bar could not be tapped. At
+    // a touch cell the hold is a real touch where the engine gives one, Chromium through CDP
+    // Input.dispatchTouchEvent held 700 ms, and the pointer events a touch raises on WebKit, whose
+    // Linux port has no CDP. Neither headless engine runs iOS's loupe gesture (G305), so the line
+    // that fails on main is the contract the gesture reads: React and its row answer user-select
+    // none, and -webkit-touch-callout none where the engine knows the property, while the body
+    // stays selectable; beside it, the hold leaves the page selection empty with the bar open, and
+    // the bar's first glyph takes a touch tap.
     const reactBtn = second.locator('[data-testid="react"]');
-    await reactBtn.scrollIntoViewIfNeeded();
-    if (w < 1024) {
+    const holdReact = async () => {
+      await reactBtn.scrollIntoViewIfNeeded();
+      await page.evaluate(() => {
+        const s = document.getSelection();
+        if (s) s.removeAllRanges();
+      });
+      if (w >= 1024) {
+        await reactBtn.hover();
+        return;
+      }
+      if (bname === "chromium") {
+        const cdp = await ctx.newCDPSession(page);
+        const b = await reactBtn.boundingBox();
+        const point = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point] });
+        await page.waitForTimeout(700);
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await cdp.detach();
+        return;
+      }
       await reactBtn.dispatchEvent("pointerdown", {
         pointerType: "touch",
         isPrimary: true,
@@ -5981,12 +6008,62 @@ async function runShell(browserType, bname, [w, h]) {
         isPrimary: true,
         bubbles: true,
       });
-    } else {
-      await reactBtn.hover();
-    }
+    };
+    await holdReact();
     const bar = second.locator("[data-reaction-bar]");
     await bar.waitFor({ timeout: 10000 });
     await page.waitForTimeout(350);
+    if (w < 1024) {
+      const held = await second.evaluate((card) => {
+        const s = document.getSelection();
+        const btn = card.querySelector('[data-testid="react"]');
+        const read = (el) => {
+          if (!el) return null;
+          const cs = getComputedStyle(el);
+          return {
+            select: cs.userSelect,
+            webkitSelect: cs.webkitUserSelect,
+            // Chromium does not know the property and answers undefined; WebKit answers its value.
+            callout: cs.webkitTouchCallout === undefined ? "unknown" : cs.webkitTouchCallout,
+          };
+        };
+        let body = null;
+        const walk = document.createTreeWalker(card, NodeFilter.SHOW_TEXT);
+        let n;
+        while ((n = walk.nextNode()))
+          if (n.textContent.trim().length > 30) {
+            body = n.parentElement;
+            break;
+          }
+        return {
+          selection: s ? { type: s.type, text: s.toString() } : null,
+          react: read(btn),
+          row: read(btn && btn.closest("footer")),
+          body: read(body),
+          bodyText: body ? body.textContent.slice(0, 40) : null,
+        };
+      });
+      const refuses = (r) =>
+        !!r &&
+        r.select === "none" &&
+        r.webkitSelect === "none" &&
+        (r.callout === "unknown" || r.callout === "none");
+      record(
+        tag + " H62-A1: a 500 ms hold on React leaves the page selection empty with the bar open",
+        !!held.selection && held.selection.type === "None" && held.selection.text === "",
+        JSON.stringify(held.selection),
+      );
+      record(
+        tag +
+          " H62-A1: React and its row refuse selection and the callout; the body stays selectable",
+        refuses(held.react) &&
+          refuses(held.row) &&
+          !!held.body &&
+          held.body.select !== "none" &&
+          held.body.webkitSelect !== "none",
+        JSON.stringify({ react: held.react, row: held.row, body: held.body }),
+      );
+    }
     const order = await bar
       .locator("[data-reaction-entry]")
       .evaluateAll((els) => els.map((e) => e.getAttribute("data-reaction-entry")));
@@ -6020,6 +6097,30 @@ async function runShell(browserType, bname, [w, h]) {
         scrolled,
       }),
     );
+    if (w < 1024) {
+      // H62-A1: the bar's first glyph takes a touch tap once the hold is released, and the bar is
+      // held open again for the pick below, which then changes Asante to Celebrate.
+      const asante = bar.locator('[data-reaction-entry="asante"]');
+      // Centred in the shell's scroller, so the tab bar at the bottom does not sit over the glyph.
+      await asante.evaluate((el) => el.scrollIntoView({ block: "center", inline: "nearest" }));
+      await page.waitForTimeout(200);
+      const ab = await asante.boundingBox();
+      await page.touchscreen.tap(ab.x + ab.width / 2, ab.y + ab.height / 2);
+      await page.waitForTimeout(400);
+      const tapped = db.reactions.filter((r) => r.post_id === "seed-1" && r.member_id === UID);
+      record(
+        tag +
+          " H62-A1: after the hold the bar's first glyph takes a touch tap: Asante lands through post_react and the bar closes",
+        tapped.length === 1 &&
+          tapped[0].kind === "asante" &&
+          (await second.locator("[data-reaction-bar]").count()) === 0 &&
+          (await reactBtn.getAttribute("aria-pressed")) === "true",
+        JSON.stringify(tapped.map((r) => r.kind)),
+      );
+      await holdReact();
+      await bar.waitFor({ timeout: 10000 });
+      await page.waitForTimeout(350);
+    }
     await bar.locator('[data-reaction-entry="celebrate"]').click();
     await page.waitForTimeout(400);
     const ownOnSeed1 = db.reactions.filter((r) => r.post_id === "seed-1" && r.member_id === UID);
