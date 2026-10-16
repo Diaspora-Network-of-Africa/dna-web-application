@@ -260,6 +260,12 @@ function FeedFace({
   const [, setHover] = useState(false);
   // 62-A (SPEC 2.2, 1633): React's hold on touch and hover on pointer open the bar; the release
   // that ends a hold is swallowed, so a hold reads and never reacts.
+  // H62-A1: on iPhone Safari the hold began a text selection across React and the text above it,
+  // and the selection held the touch so the bar could not be tapped (16 October, 04:56 PDT). iOS
+  // begins its loupe only on a selectable hit node, so the feed footer (the action row) and the
+  // React control answer user-select none and -webkit-touch-callout none, and nothing above the
+  // row changes: the post body stays selectable. The contextmenu guard below stays for the long
+  // press's menu on engines that raise one.
   const reactHold = useRef<number | null>(null);
   const reactHeld = useRef(false);
   const reactPress = onReactOpen
@@ -654,6 +660,9 @@ function FeedFace({
             paddingTop: 8,
             borderTop: "1px solid var(--line)",
             pointerEvents: preview ? "none" : "auto",
+            userSelect: "none",
+            WebkitUserSelect: "none",
+            WebkitTouchCallout: "none",
           }}
         >
           <IconButton
@@ -663,6 +672,7 @@ function FeedFace({
             aria-pressed={!!reacted}
             onClick={reactClick}
             data-testid="react"
+            style={{ userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }}
             {...reactPress}
           />
           <IconButton
