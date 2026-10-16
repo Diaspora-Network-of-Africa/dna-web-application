@@ -678,6 +678,31 @@ async function runAccountFlows(browserType, bname, vp, theme) {
     record(tag + ": no page errors", errors.length === 0, errors.slice(0, 3).join(" | "));
   } catch (e) {
     record(tag + ": flow completed", false, String(e && e.message ? e.message : e).slice(0, 300));
+    try {
+      const refusal = await page.locator('[data-testid="password-refusal"]').allInnerTexts();
+      const fields = await page.evaluate(() =>
+        Array.from(document.querySelectorAll('[data-testid="password"] input')).map((i) => [
+          i.getAttribute("autocomplete"),
+          i.value,
+          i.getAttribute("aria-invalid"),
+        ]),
+      );
+      console.log(
+        "DIAG " +
+          tag +
+          " " +
+          JSON.stringify({
+            refusal,
+            fields,
+            tokenCalls: ac.tokenCalls,
+            updateCalls: ac.updateCalls,
+            logoutScopes: ac.logoutScopes,
+            errors,
+          }).slice(0, 6000),
+      );
+    } catch (d) {
+      console.log("DIAG " + tag + " unavailable " + String(d).slice(0, 200));
+    }
     await shot(page, `${tag.replace(/ /g, "-")}-failed`).catch(() => undefined);
   } finally {
     await browser.close();
