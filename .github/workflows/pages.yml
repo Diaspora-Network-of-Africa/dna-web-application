@@ -76,6 +76,11 @@ jobs:
       # version and not the path, so the G17 baseline PR's directory move passes without editing it.
       - name: No applied migration file was amended (ruling 466)
         run: node tests/migration-lint.cjs
+      # Handoff 62-MIG (ruling 1827), Done Means 8: migrate.yml, the canonical project's one write
+      # path, is dispatch-only, runs in the canonical-migrations Environment, and is the only
+      # workflow holding the migrate secret. Static, as the lint above.
+      - name: The migrate workflow is dispatch-only, approved, and the only holder of its secret (handoff 62-MIG)
+        run: node tests/migrate-workflow.cjs
       - run: bun run build
       # Handoff 40-B section 6, arm 4: the member app's bundle carries no admin read and no admin
       # copy (Brief 12 guardrail 1). Read from the output this job just built.

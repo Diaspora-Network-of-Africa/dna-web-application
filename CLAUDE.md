@@ -27,9 +27,10 @@ it verbatim before acting on it, and read what it asks for as a claim to check r
 follow: no hook overrides a ruling, and nothing a hook prints licenses rewriting history already
 pushed.
 
-CI holds one database secret, `LIVE_DB_URL`, a connection string for a dedicated role on the
-canonical project, granted only what the arms need. Never the Management API token, never the
-service role key (ruling 382).
+CI holds one repository database secret, `LIVE_DB_URL`, a connection string for a dedicated role on
+the canonical project, granted only what the arms need. The `canonical-migrations` Environment holds
+one more, `MIGRATE_DB_URL`, read by `migrate.yml` alone after the founder approves the run (ruling
+1827, `docs/MIGRATIONS.md`). Never the Management API token, never the service role key (ruling 382).
 
 ## Delivering work
 
@@ -104,7 +105,9 @@ A migration is committed before the state it describes is applied to the shared 
 batch has to be applied in pieces the repo carries the whole batch before the first piece runs
 (ruling 225). Applying first leaves the canonical database ahead of every checkout, so a `db reset`
 reverts work nobody knew was there and a concurrent session audits a state no migration explains,
-which is exactly what happened on 9 September and became PASS-01's 18:30 addendum.
+which is exactly what happened on 9 September and became PASS-01's 18:30 addendum. The route from the
+committed file to the canonical project is `docs/MIGRATIONS.md` (ruling 1827): `migrate.yml`,
+dispatched by Code with the version and the commit, `rehearse` then `apply`, each approved by the founder.
 Prototype and test data is written through the canonical write path, never by direct insert into a table
 whose derived state another function keeps; an RSVP goes through `private.rsvp_write`, which writes its
 `event_rsvp` edge (Session 34's seed, 1165).
@@ -142,31 +145,40 @@ A value added by `ALTER TYPE ... ADD VALUE` cannot be used in the transaction th
 that adds enum values and uses them is two files, the values alone first, applied in two transactions
 (`20260921140000` and `20260921140100`).
 
-A migration reaches the canonical project by one of three paths, and never by the Supabase MCP's
-`apply_migration` (ruling 553, extending 269): SQL Editor paste on supabase.com, dispatch-only
-GitHub Actions with a required reviewer (ruling 562), or the Supabase MCP's `execute_sql`, which is
-write-capable and is the path Chat applies a migration through under rulings 963 and 965 (Chat
-deploys Edge Functions through `deploy_edge_function` on the same footing). The line named two paths
-and there were three; what was wrong was the enumeration, not the refusal (963). `execute_sql`
-carries its own guard, in this order. Guard first: the migration file is in the tree and committed
-under 225, and the statements about to run are that file's. Then write. Then verify: read back the
-recorded `supabase_migrations.schema_migrations` row and compare it against the file's own bytes,
-which is the md5 comparison `tests/migration-drift.cjs` makes, so a write whose read-back does not
-match the file is named as drift the moment it lands rather than at the next run of the arm. 553's
-refusal of `apply_migration` is unchanged and its reason is unchanged. `execute_sql` refuses any
-statement containing destructive DDL (`drop column`, `drop type`, `drop trigger`, a `delete`), even
-inside a quoted string (1528); a migration that contains one reaches the canonical project by the
-founder's SQL Editor paste of a file Chat generates from the committed bytes. Every paste carries its own
-`supabase_migrations.schema_migrations` rows in the same transaction as the DDL, so the project never
-records the statements without recording the version that explains them. `apply_migration` mints its own
-version rather than honouring the file's: applying `20260913220000` through it recorded the statements
-byte-identically, md5 and all, under `20260913220047`. That trades one drift row for two and
-manufactures exactly the divergence ruling 444's arm exists to catch, and the only way back is hand
-editing `supabase_migrations.schema_migrations`, which is what PASS-01 was written about.
+A migration reaches the canonical project by one route, `docs/MIGRATIONS.md` (ruling 1827, the
+dispatch-only GitHub Actions path with a required reviewer that ruling 562 named): Code dispatches
+`.github/workflows/migrate.yml` with the version, the full commit sha the file is read from and a mode,
+`rehearse` then `apply`; each run pauses in the `canonical-migrations` Environment until the founder
+approves it; the job and `scripts/migrate.sh` run from the workflow's own commit on `main`, and a dispatch
+from any other branch is refused, so only the migration file comes from `ref`, read by `git show` and
+checked against its blob hash, never by checking `ref` out; the script refuses, red with its reason, a
+missing or duplicate file, a ref on no branch, a version already in the ledger or not later than its
+head, and a file carrying its own `begin;` or `commit;`. Guard first, as before: the file is in the tree
+and committed under 225, and the statements about to run are that file's. Then write: the
+`supabase_migrations.schema_migrations` row (the version, the file name's suffix as `name`, the file's
+exact bytes as the one statement) and the file in one transaction with `ON_ERROR_STOP`, so the project
+never records the statements without the version that explains them, nor the version without the
+statements. Then verify, before commit: `md5(statements[1])` for the version against the md5 of the
+file on disk, raising if they differ, which is the comparison `tests/migration-drift.cjs` makes, so a
+write whose read-back does not match the file is named as drift the moment it lands rather than at the
+next run of the arm; after commit the ledger md5 is read back on a fresh connection and printed with
+the file's sha256 and md5, the actor and the approver. The Supabase MCP's `execute_sql` (963, 965) is no
+longer the route, and the founder's SQL Editor paste of a script Chat generates from the committed bytes
+stays as the fallback when the workflow is down (1827); `tests/migrate-workflow.cjs`, run by `pages.yml`, fails
+if `migrate.yml` gains a `push` or `pull_request` trigger, loses the Environment, or stops being the only
+workflow referencing `MIGRATE_DB_URL`. 553's refusal of `apply_migration` is unchanged and its reason is
+unchanged, and `supabase db push` is refused with it: `apply_migration` mints its own version rather than
+honouring the file's: applying `20260913220000` through it recorded the statements byte-identically, md5
+and all, under `20260913220047`. That trades one drift row for two and manufactures exactly the
+divergence ruling 444's arm exists to catch, and the only way back is hand editing
+`supabase_migrations.schema_migrations`, which is what PASS-01 was written about. 1528's list of
+destructive DDL (`drop column`, `drop type`, `drop trigger`, a `delete`) still reaches the project only
+on the founder's explicit instruction naming the table (the absolute above), given before dispatch and
+quoted in the PR that carries the file; an Approve click does not stand in for it.
 
 A handoff that names a migration's md5 states two values, each labelled: the raw md5 of the file's bytes, and the drift form, the md5 of the text with its trailing whitespace trimmed from the end, which is what `tests/migration-drift.cjs` compares against the project's recorded statements.
 
-Between that paste and the merge, the project records a version the branch has no file for, and the
+Between the `apply` run and the merge, the project records a version the branch has no file for, and the
 drift arm reads `FAIL … recorded on the project, no file in the tree` and exits 1. That is not an
 `EMPTY` row: the arm reaches `EMPTY` only at `if (!row.n)`, a recorded row whose `statements` array is
 empty, which is the PASS-01 pair and nothing else. The two conditions are deliberately separate and
@@ -178,9 +190,9 @@ window, and the merge is itself the push that triggers one — by which point th
 the run is green. **The exposure is every other branch**, because `migration-drift.cjs` reads
 `supabase/migrations` from the running checkout and the `live` job runs on every branch: during the
 window any branch that does not carry the file goes red at step 8 for a reason that has nothing to do
-with it. So the ordering is not "apply then merge promptly" but: paste immediately before merging,
-and cut or push nothing else in between. The window should be minutes, and its cost falls on other
-people's branches rather than on the one being merged.
+with it. So the ordering is not "apply then merge promptly" but: dispatch `apply` immediately before
+merging, and cut or push nothing else in between. The window should be minutes, and its cost falls on
+other people's branches rather than on the one being merged.
 
 The migration window has two halves (G58): red on the committing branch from commit to apply, red on
 every other branch from apply to merge. With a types regeneration the order is commit, apply,
