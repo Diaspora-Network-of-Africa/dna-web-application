@@ -37,8 +37,7 @@ const M = require("./matrix.cjs");
 const { record, unproven, BASE } = M;
 
 const src = fs.readFileSync(path.join(__dirname, "../src/lib/supabase.ts"), "utf8");
-const SUPABASE_URL =
-  process.env.SUPABASE_URL || (src.match(/"(https:\/\/[a-z]+\.supabase\.co)"/) || [])[1];
+const SUPABASE_URL = process.env.SUPABASE_URL || (src.match(/"(https:\/\/[a-z0-9.-]+)"/) || [])[1];
 const KEY =
   process.env.SUPABASE_PUBLISHABLE_KEY || (src.match(/"(sb_publishable_[A-Za-z0-9_-]+)"/) || [])[1];
 
