@@ -58,6 +58,15 @@ const RECOVERY_HASH =
   "&expires_in=3600&refresh_token=recovery-r&token_type=bearer&type=recovery";
 const EXPIRED_HASH =
   "#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired";
+/**
+ * Handoff 62-A2: a link on our domain carries the hash in the query, `?token_hash=…&type=…`, and
+ * the app exchanges it at /auth/v1/verify itself. The hash values are arbitrary: what the mock
+ * answers is set per arm (`auth.verifyExpired`), and what the arm checks is that the exchange was
+ * made, once, with the hash and the type the link carried.
+ */
+const LIVE_HASH = "pkce_hash_live";
+const USED_HASH = "pkce_hash_used";
+const tokenHashQuery = (hash, type) => "?token_hash=" + hash + "&type=" + type;
 
 /**
  * Auth endpoints on top of the shared mock. Playwright matches the most recently registered route
@@ -129,6 +138,17 @@ async function handleAuth(route, auth) {
       return json({ code: 400, error_code: "invalid_credentials", msg: "Invalid login" }, 400);
     return json(RECOVERY_SESSION);
   }
+  if (p === "/auth/v1/verify") {
+    // Handoff 62-A2: the hash exchange. A live hash answers the session, as GoTrue does; a used or
+    // expired one answers GoTrue's 403, which the app reads as the link no longer working.
+    auth.verifyCalls.push(req.postDataJSON() || {});
+    if (auth.verifyExpired)
+      return json(
+        { code: 403, error_code: "otp_expired", msg: "Email link is invalid or has expired" },
+        403,
+      );
+    return json(RECOVERY_SESSION);
+  }
   if (p === "/auth/v1/user" && method === "PUT") {
     auth.updateCalls.push(req.postDataJSON());
     if (auth.updateWeak)
@@ -173,6 +193,8 @@ function makeAuth() {
     signupCalls: [],
     tokenCalls: [],
     updateCalls: [],
+    verifyCalls: [],
+    verifyExpired: false,
     logoutScopes: [],
     recoverFails: false,
     recoverDelay: 0,
@@ -638,6 +660,166 @@ async function runAuthFlows(browserType, bname, [w, h], theme) {
       await noOverflow(page, tag + ": expired link");
     } catch (e) {
       record(tag + ": expired link flow completed", false, String(e).slice(0, 200));
+    }
+    await browser.close();
+  }
+
+  // 10. Handoff 62-A2 (rulings 1829, 1830): a recovery link on our domain. The hash is in the
+  //     query, the app exchanges it at /auth/v1/verify with the type the link named, the address
+  //     drops the hash, the form renders and never the Feed, the gate holds a walk to the Feed, and
+  //     the session the exchange produced sets the password as a fragment's does. On main no route
+  //     reads a hash, so the exchange never happens and the landing renders the expired state.
+  {
+    const { browser, page, auth } = await open(browserType, [w, h], theme);
+    try {
+      await page.goto(BASE + "/reset/new" + tokenHashQuery(LIVE_HASH, "recovery"), {
+        waitUntil: "domcontentloaded",
+      });
+      await page.waitForSelector('[data-testid="reset-new"]', { timeout: 15000 });
+      await hydrated(page);
+      record(
+        tag +
+          ": a recovery hash on our domain is exchanged at verify, once, with its hash and type",
+        auth.verifyCalls.length === 1 &&
+          auth.verifyCalls[0].token_hash === LIVE_HASH &&
+          auth.verifyCalls[0].type === "recovery",
+        JSON.stringify(auth.verifyCalls).slice(0, 160),
+      );
+      record(
+        tag + ": a live recovery hash reaches the form on /reset/new",
+        new URL(page.url()).pathname.replace(/\/$/, "") === "/reset/new" &&
+          (await page.locator('[data-testid="reset-new"]').count()) === 1 &&
+          (await page.locator('[data-testid="reset-expired"]').count()) === 0,
+        page.url(),
+      );
+      record(
+        tag + ": the hash has left the address",
+        !page.url().includes("token_hash") && !page.url().includes("type="),
+        page.url(),
+      );
+      record(
+        tag + ": the Feed never rendered for a hash",
+        (await page.locator('[data-testid="compose"]').count()) === 0,
+      );
+      await page.goto(BASE + "/feed", { waitUntil: "domcontentloaded" });
+      await page.waitForSelector('[data-testid="reset-new"]', { timeout: 15000 });
+      await hydrated(page);
+      record(
+        tag + ": the session a hash produced is held at /reset/new",
+        new URL(page.url()).pathname.replace(/\/$/, "") === "/reset/new",
+        page.url(),
+      );
+      await page.fill('input[autocomplete="new-password"] >> nth=0', "correct horse battery");
+      await page.fill('input[autocomplete="new-password"] >> nth=1', "correct horse battery");
+      await page.click('button[type="submit"]');
+      await page.waitForSelector('[data-testid="reset-done"]', { timeout: 15000 });
+      record(
+        tag + ": the session a hash produced sets the password and signs out other devices",
+        auth.updateCalls.length === 1 && auth.logoutScopes.includes("others"),
+        `updateUser ${auth.updateCalls.length} logout ${JSON.stringify(auth.logoutScopes)}`,
+      );
+    } catch (e) {
+      record(
+        tag + ": recovery hash landing flow completed",
+        false,
+        String(e).slice(0, 400) + " | " + (await recoveryState(page, auth)),
+      );
+    }
+    await browser.close();
+  }
+
+  // 11. Handoff 62-A2: a used or expired recovery hash. The exchange is made and refused, and the
+  //     landing is the existing "This link no longer works" state, with the hash off the address.
+  //     On main the same state renders without any exchange, which is why the first check exists.
+  {
+    const { browser, page, auth } = await open(browserType, [w, h], theme);
+    try {
+      auth.verifyExpired = true;
+      await page.goto(BASE + "/reset/new" + tokenHashQuery(USED_HASH, "recovery"), {
+        waitUntil: "domcontentloaded",
+      });
+      await page.waitForSelector('[data-testid="reset-expired"]', { timeout: 15000 });
+      await hydrated(page);
+      record(
+        tag + ": a used recovery hash is exchanged at verify, once, and refused",
+        auth.verifyCalls.length === 1 && auth.verifyCalls[0].token_hash === USED_HASH,
+        JSON.stringify(auth.verifyCalls).slice(0, 160),
+      );
+      const text = await page.locator('[data-testid="reset-expired"]').innerText();
+      record(
+        tag + ": a used recovery hash lands on This link no longer works",
+        text.includes("This link no longer works") &&
+          text.includes("Nothing about your account has changed."),
+      );
+      record(
+        tag + ": the used hash has left the address",
+        !page.url().includes("token_hash"),
+        page.url(),
+      );
+    } catch (e) {
+      record(tag + ": expired recovery hash flow completed", false, String(e).slice(0, 200));
+    }
+    await browser.close();
+  }
+
+  // 12. Handoff 62-A2: a sign-up hash on the route the link named, /feed, where the fragment
+  //     landing of a confirmation lands today. The exchange carries the type, the member lands
+  //     signed in on that route, and no recovery gate holds them.
+  {
+    const { browser, page, auth } = await open(browserType, [w, h], theme);
+    try {
+      await page.goto(BASE + "/feed" + tokenHashQuery(LIVE_HASH, "signup"), {
+        waitUntil: "domcontentloaded",
+      });
+      await page.waitForSelector('[data-testid="compose"]', { timeout: 15000 });
+      await hydrated(page);
+      record(
+        tag + ": a sign-up hash is exchanged at verify, once, with its type",
+        auth.verifyCalls.length === 1 && auth.verifyCalls[0].type === "signup",
+        JSON.stringify(auth.verifyCalls).slice(0, 160),
+      );
+      record(
+        tag + ": a sign-up hash lands signed in on the route the link named, hash gone",
+        new URL(page.url()).pathname === "/feed" &&
+          !page.url().includes("token_hash") &&
+          (await page.locator('[data-testid="reset-new"]').count()) === 0,
+        page.url(),
+      );
+    } catch (e) {
+      record(tag + ": sign-up hash landing flow completed", false, String(e).slice(0, 200));
+    }
+    await browser.close();
+  }
+
+  // 13. Handoff 62-A2: a used or expired sign-up hash, signed out. The visitor lands on sign-in
+  //     with the one new line, as a status and never an alert, as a cancelled provider round trip
+  //     does. The fragment landing of the same case reaches sign-in with nothing said.
+  {
+    const { browser, page, auth } = await open(browserType, [w, h], theme);
+    try {
+      auth.verifyExpired = true;
+      await page.goto(BASE + "/feed" + tokenHashQuery(USED_HASH, "signup"), {
+        waitUntil: "domcontentloaded",
+      });
+      await page.waitForSelector('[data-testid="auth-status"]', { timeout: 15000 });
+      await hydrated(page);
+      const text = await page.locator('[data-testid="auth-status"]').innerText();
+      record(
+        tag + ": a used sign-up hash lands on sign-in and says the link no longer works",
+        new URL(page.url()).pathname === "/sign-in" &&
+          text.startsWith("This link no longer works.") &&
+          auth.verifyCalls.length === 1,
+        page.url() + " | " + text.slice(0, 60),
+      );
+      record(
+        tag + ": the expired-link line is a status, not an alert, and moves no focus",
+        (await page.locator('[data-testid="auth-alert"]').count()) === 0 &&
+          (await page.evaluate(
+            () => document.activeElement?.getAttribute("data-testid") !== "auth-status",
+          )),
+      );
+    } catch (e) {
+      record(tag + ": expired sign-up hash flow completed", false, String(e).slice(0, 200));
     }
     await browser.close();
   }

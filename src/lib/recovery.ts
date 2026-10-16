@@ -76,7 +76,8 @@ function params(source: string): URLSearchParams {
  * Reads the recovery fragment off the current URL and records it. Idempotent, and safe to call on
  * every load: a URL that carries no recovery leaves the stored state alone.
  *
- * A used or expired link comes back as `error_code=otp_expired` rather than a token. Provider
+ * A used or expired fragment link comes back as `error_code=otp_expired` rather than a token;
+ * a used or expired hash is learned when the exchange answers, and marked there. Provider
  * cancellation also arrives as `error=access_denied`, so that alone is not read as a recovery: it
  * counts only on /reset/new, where nothing else can have sent the member.
  */
@@ -89,7 +90,13 @@ export function captureRecoveryFromUrl(): RecoveryState {
   const error = hash.get("error") || query.get("error");
   const onLanding = window.location.pathname.replace(/\/$/, "") === "/reset/new";
 
-  if (type === "recovery" && (hash.get("access_token") || query.get("code"))) {
+  // Handoff 62-A2: a recovery link on our domain carries the hash in the query, and the app
+  // exchanges it itself (src/lib/email-link.ts); the flag is set from the URL before that exchange
+  // answers, so the gate holds from the first render whether the hash is live or not.
+  if (
+    type === "recovery" &&
+    (hash.get("access_token") || query.get("code") || query.get("token_hash"))
+  ) {
     markRecoveryPending();
     return "pending";
   }
