@@ -1,4 +1,17 @@
 // Regenerated from the canonical Supabase project (dgspjevjoblujcoljvkn) with the Supabase MCP
+// generate_typescript_types tool on handoff H62-A's branch (#116, the Feed card's reactions), on
+// main at efae54e (the merge of #117), after the founder applied 20261015120000 and then
+// 20261015120100 through migrate.yml (apply run approved from the Actions tab under rulings 1827 and
+// 1828) and Chat read the project back at 23:30 PDT on 15 October 2026: ledger head
+// 20261015120100_h62a_feed_reactions, md5 a34f71d27856384f3f06bbbcc2c9f970 equal to the file. What it
+// changes here: the tables member_reaction_picks, post_intents, post_reaction_glosses and
+// post_reaction_kinds, the kind and emoji columns of post_reactions with the emoji relationship, the
+// functions member_recent_reactions, post_intent, post_react, post_reaction_rows,
+// post_reactors_author and post_reactors_visible, and `post` in anchor_kind. Nothing else moves.
+// `export type Views` is restored by hand after every regeneration (CLAUDE.md).
+//
+// Before H62-A:
+// Regenerated from the canonical Supabase project (dgspjevjoblujcoljvkn) with the Supabase MCP
 // generate_typescript_types tool on handoff H61-S1's branch (#112, the Account drawer), on main at
 // 3725471 (the merge of #110), after the founder applied 20261013120000 by SQL Editor paste under
 // 1528 and Chat read it back at 01:20 PDT on 13 October 2026 with the recorded drift md5 equal to the
@@ -2029,6 +2042,39 @@ export type Database = {
           },
         ];
       };
+      member_reaction_picks: {
+        Row: {
+          emoji: string;
+          member_id: string;
+          picked_at: string;
+        };
+        Insert: {
+          emoji: string;
+          member_id: string;
+          picked_at?: string;
+        };
+        Update: {
+          emoji?: string;
+          member_id?: string;
+          picked_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "member_reaction_picks_emoji_fkey";
+            columns: ["emoji"];
+            isOneToOne: false;
+            referencedRelation: "message_reaction_emoji";
+            referencedColumns: ["emoji"];
+          },
+          {
+            foreignKeyName: "member_reaction_picks_member_id_fkey";
+            columns: ["member_id"];
+            isOneToOne: false;
+            referencedRelation: "members";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       member_regional_expertise: {
         Row: {
           member_id: string;
@@ -3278,6 +3324,59 @@ export type Database = {
         };
         Relationships: [];
       };
+      post_intents: {
+        Row: {
+          created_at: string;
+          kind: string;
+          line: string | null;
+          member_id: string;
+          post_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          kind: string;
+          line?: string | null;
+          member_id: string;
+          post_id: string;
+        };
+        Update: {
+          created_at?: string;
+          kind?: string;
+          line?: string | null;
+          member_id?: string;
+          post_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "post_intents_kind_fkey";
+            columns: ["kind"];
+            isOneToOne: false;
+            referencedRelation: "post_reaction_kinds";
+            referencedColumns: ["kind"];
+          },
+          {
+            foreignKeyName: "post_intents_member_id_fkey";
+            columns: ["member_id"];
+            isOneToOne: false;
+            referencedRelation: "members";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "post_intents_post_id_fkey";
+            columns: ["post_id"];
+            isOneToOne: false;
+            referencedRelation: "feed";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "post_intents_post_id_fkey";
+            columns: ["post_id"];
+            isOneToOne: false;
+            referencedRelation: "posts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       post_links: {
         Row: {
           created_at: string;
@@ -3381,23 +3480,94 @@ export type Database = {
           },
         ];
       };
+      post_reaction_glosses: {
+        Row: {
+          gloss: string;
+          kind: string;
+          language: string;
+        };
+        Insert: {
+          gloss: string;
+          kind: string;
+          language: string;
+        };
+        Update: {
+          gloss?: string;
+          kind?: string;
+          language?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "post_reaction_glosses_kind_fkey";
+            columns: ["kind"];
+            isOneToOne: false;
+            referencedRelation: "post_reaction_kinds";
+            referencedColumns: ["kind"];
+          },
+        ];
+      };
+      post_reaction_kinds: {
+        Row: {
+          class: string;
+          emoji: string;
+          kind: string;
+          label: string;
+          position: number;
+        };
+        Insert: {
+          class: string;
+          emoji: string;
+          kind: string;
+          label: string;
+          position: number;
+        };
+        Update: {
+          class?: string;
+          emoji?: string;
+          kind?: string;
+          label?: string;
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "post_reaction_kinds_emoji_fkey";
+            columns: ["emoji"];
+            isOneToOne: true;
+            referencedRelation: "message_reaction_emoji";
+            referencedColumns: ["emoji"];
+          },
+        ];
+      };
       post_reactions: {
         Row: {
           created_at: string;
+          emoji: string | null;
+          kind: string;
           member_id: string;
           post_id: string;
         };
         Insert: {
           created_at?: string;
+          emoji?: string | null;
+          kind?: string;
           member_id: string;
           post_id: string;
         };
         Update: {
           created_at?: string;
+          emoji?: string | null;
+          kind?: string;
           member_id?: string;
           post_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "post_reactions_emoji_fkey";
+            columns: ["emoji"];
+            isOneToOne: false;
+            referencedRelation: "message_reaction_emoji";
+            referencedColumns: ["emoji"];
+          },
           {
             foreignKeyName: "post_reactions_post_id_fkey";
             columns: ["post_id"];
@@ -4419,6 +4589,7 @@ export type Database = {
       };
       live_arms_admin_member: { Args: never; Returns: string };
       mark_surface_seen: { Args: { p_surface: string }; Returns: undefined };
+      member_recent_reactions: { Args: never; Returns: string[] };
       messenger_archive: { Args: { p_thread: string }; Returns: undefined };
       messenger_delete: { Args: { p_message: string }; Returns: Json };
       messenger_delivered_to: {
@@ -4767,6 +4938,22 @@ export type Database = {
         Returns: Json;
       };
       onboarding_state: { Args: never; Returns: Json };
+      post_intent: {
+        Args: { p_kind: string; p_line?: string; p_on: boolean; p_post: string };
+        Returns: Json;
+      };
+      post_react: {
+        Args: {
+          p_emoji?: string;
+          p_kind: string;
+          p_picked?: boolean;
+          p_post: string;
+        };
+        Returns: Json;
+      };
+      post_reaction_rows: { Args: { p_posts: string[] }; Returns: Json };
+      post_reactors_author: { Args: { p_post: string }; Returns: Json };
+      post_reactors_visible: { Args: { p_post: string }; Returns: Json };
       profile_view: {
         Args: { p_as_public?: boolean; p_handle?: string };
         Returns: Json;
@@ -4861,7 +5048,8 @@ export type Database = {
         | "story"
         | "event_party"
         | "thread"
-        | "message_request";
+        | "message_request"
+        | "post";
       audience: "everyone" | "connections" | "anchored";
       c_category: "connect" | "convene" | "collaborate" | "contribute" | "convey" | "system";
       contribute_instrument: "time" | "skills" | "in_kind";
@@ -5050,6 +5238,7 @@ export const Constants = {
         "event_party",
         "thread",
         "message_request",
+        "post",
       ],
       audience: ["everyone", "connections", "anchored"],
       c_category: ["connect", "convene", "collaborate", "contribute", "convey", "system"],
