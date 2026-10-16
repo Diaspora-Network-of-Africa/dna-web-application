@@ -14,6 +14,22 @@
     "event_presenters": { "class": "invoker" },
     "event_speakers": { "class": "invoker" },
 
+    "post_reaction_rows": { "class": "invoker" },
+    "post_reactors_visible": { "class": "invoker" },
+    "post_reactors_author": { "class": "invoker" },
+    "post_react": {
+      "class": "exempt",
+      "reason": "62-A write path (security invoker): the caller's one public reaction on a post the posts row policy admits, through private.post_reaction_write (1817)"
+    },
+    "post_intent": {
+      "class": "exempt",
+      "reason": "62-A write path (security invoker): the caller's own intent on a post the posts row policy admits, through private.post_intent_write, which notifies the author (1802)"
+    },
+    "member_recent_reactions": {
+      "class": "exempt",
+      "reason": "62-A: the caller's own picker recents and Messenger reactions (1821, 1405)"
+    },
+
     "connect_requests_pending": {
       "class": "exempt",
       "reason": "contact: the caller's own pending requests, scoped by private.is_blocked (186, 1748); no section is read"

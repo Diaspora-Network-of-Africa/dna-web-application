@@ -21,7 +21,8 @@ import { Toast } from "@/components/strand/Toast";
 import type { ComposerVerb } from "@/components/strand/cmeta";
 import type { Member } from "@/lib/auth";
 import { openComposer } from "@/lib/composer-store";
-import { loadFeed, loadMarks, loadPost, setReacted, setSaved } from "@/lib/feed";
+import { loadFeed, loadMarks, loadPost, setSaved } from "@/lib/feed";
+import { useFeedReactions } from "./FeedReactions";
 import type { FeedView } from "@/lib/feed-view";
 import { setHeaderLens } from "@/lib/header-lens-store";
 import { LENSES, lensSearch, parseLens, type LensId } from "@/lib/lens";
@@ -30,7 +31,7 @@ import type { PostView } from "@/lib/post-view";
 import { useShellScroll } from "@/lib/shell-scroll";
 import { record } from "@/lib/record";
 import { useEmptyStateSeen, useRecordOnChange } from "@/lib/record-hooks";
-import { useTier } from "@/lib/tier";
+import { useMode, useTier } from "@/lib/tier";
 import { COMPOSER_HOST } from "./AppShell";
 
 /** One share path and its toast. `shareUrl` hands a URL to the share sheet, or to the clipboard where
@@ -103,7 +104,8 @@ export function FeedSurface({ member, view }: { member: Member; view: FeedView }
   const router = useRouter();
   const tier = useTier();
   const expandedTier = tier === "expanded";
-  const search = useSearch({ strict: false }) as { lens?: string };
+  const search = useSearch({ strict: false }) as { lens?: string; who?: string };
+  const mode = useMode();
   const lens = parseLens(search.lens);
   const { share, toast: shareToast } = useShare();
   const { scrollerRef, scrolled } = useShellScroll();
@@ -196,32 +198,44 @@ export function FeedSurface({ member, view }: { member: Member; view: FeedView }
     mutationFn: ({ id, on }: { id: string; on: boolean }) => setSaved(member.id, id, on),
     onSettled: () => void invalidateMarks(),
   });
-  const react = useMutation({
-    mutationFn: ({ id, on }: { id: string; on: boolean }) => setReacted(member.id, id, on),
-    onSettled: () => void invalidateMarks(),
-  });
-  const [pending, setPending] = useState<{ saved: Set<string>; reacted: Set<string> }>({
-    saved: new Set(),
-    reacted: new Set(),
-  });
+  const [pending, setPending] = useState<Set<string>>(new Set());
   const savedOf = (id: string) =>
-    pending.saved.has(id) ? !marks.data?.saved.has(id) : !!marks.data?.saved.has(id);
-  const reactedOf = (id: string) =>
-    pending.reacted.has(id) ? !marks.data?.reacted.has(id) : !!marks.data?.reacted.has(id);
+    pending.has(id) ? !marks.data?.saved.has(id) : !!marks.data?.saved.has(id);
   useEffect(() => {
-    setPending({ saved: new Set(), reacted: new Set() });
+    setPending(new Set());
   }, [marks.data]);
-  const toggle = (kind: "saved" | "reacted", id: string) => {
-    const on = kind === "saved" ? !savedOf(id) : !reactedOf(id);
+  const toggleSaved = (id: string) => {
+    const on = !savedOf(id);
     setPending((p) => {
-      const next = new Set(p[kind]);
+      const next = new Set(p);
       if (next.has(id)) next.delete(id);
       else next.add(id);
-      return { ...p, [kind]: next };
+      return next;
     });
-    if (kind === "saved") save.mutate({ id, on });
-    else react.mutate({ id, on });
+    save.mutate({ id, on });
   };
+  // Handoff 62-A: the reaction layer, one summary read per page beside the marks (SPEC 5), the
+  // bar and the prompt in `below`, the sheets and the live region as overlays.
+  const shownPosts = [...(posts ?? []), ...(single.data ? [single.data] : [])];
+  const reactions = useFeedReactions({ member, ids, posts: shownPosts, tier, mode });
+  // SPEC 10.2 (1802): an intent notification lands on the author's sheet at that tab, once; the
+  // parameter leaves the address so a refresh does not reopen it.
+  const openedWho = useRef<string | null>(null);
+  useEffect(() => {
+    const who = search.who;
+    const id = view.kind === "direct" ? view.id : null;
+    if (!who || !id || openedWho.current === id + ":" + who) return;
+    if (!shownPosts.some((p) => p.id === id)) return;
+    openedWho.current = id + ":" + who;
+    reactions.openAuthorSheet(id, who);
+    void navigate({
+      to: "/posts/$id",
+      params: { id },
+      search: lensSearch(lens),
+      replace: true,
+      resetScroll: false,
+    });
+  });
 
   // Lens selection is a history entry (?lens=). Selecting from the pinned bar or the header slot
   // never moves the bar: on expanded the column scrolls so the first item of the new list sits
@@ -373,9 +387,12 @@ export function FeedSurface({ member, view }: { member: Member; view: FeedView }
           view={p}
           feed
           saved={savedOf(id)}
-          reacted={reactedOf(id)}
-          onSave={() => toggle("saved", id)}
-          onReact={() => toggle("reacted", id)}
+          onSave={() => toggleSaved(id)}
+          {...reactions.propsFor(p)}
+          onAuthor={() => {
+            if (p.author_handle)
+              void navigate({ to: "/m/$handle", params: { handle: p.author_handle }, search: {} });
+          }}
           onShare={() => void share(id)}
           onRespond={opts.inPlace && !opts.expanded ? () => openPost(id) : undefined}
           onClick={opts.inPlace ? () => openPost(id) : undefined}
@@ -605,9 +622,10 @@ export function FeedSurface({ member, view }: { member: Member; view: FeedView }
           </div>
         </>
       )}
-      {shareToast && (
+      {reactions.overlays}
+      {(shareToast || reactions.toast) && (
         <div style={toastStyle(tier)}>
-          <Toast>{shareToast}</Toast>
+          <Toast>{shareToast ?? reactions.toast}</Toast>
         </div>
       )}
     </div>

@@ -134,6 +134,18 @@ export type PostCardProps = {
   onCollapse?: (() => void) | undefined;
   reacted?: boolean | undefined;
   onReact?: (() => void) | undefined;
+  /** Handoff 62-A (SPEC 2.2, 1633; recorded in docs/strand-ports/sha256-b1a458dac1bd562f.md): on
+   *  the feed face a 500 ms hold on React (touch) or a pointer hover opens the quick bar; the tap
+   *  that ends a hold does nothing. Absent, React is the tap alone. */
+  onReactOpen?: (() => void) | undefined;
+  /** Handoff 62-A (SPEC 5, 1822; proposal 4, PostCard `summary`): a node in the feed footer's
+   *  space between Respond and Save, where the bare spacer was. Absent, the spacer. */
+  summary?: ReactNode;
+  /** Handoff 62-A (SPEC 11, 1820; proposal 12): the author's profile address. With it the avatar
+   *  and the name are one link named "{author}’s profile" that stops at the link; `onAuthor` takes
+   *  a plain click for the app's own navigation. Absent, the header is unchanged. */
+  authorHref?: string | undefined;
+  onAuthor?: ((e: MouseEvent<HTMLElement>) => void) | undefined;
   /** 1083 (correction 23). The card a pane is open on: a 2px --ink ring 2px outside the identity
    *  frame on a --bg gap, `data-selected` and `aria-current="true"`. Absent: unchanged. */
   selected?: boolean | undefined;
@@ -237,11 +249,64 @@ function FeedFace({
   onCollapse,
   reacted,
   onReact,
+  onReactOpen,
+  summary,
+  authorHref,
+  onAuthor,
   selected,
   below,
   style,
 }: PostCardProps) {
   const [, setHover] = useState(false);
+  // 62-A (SPEC 2.2, 1633): React's hold on touch and hover on pointer open the bar; the release
+  // that ends a hold is swallowed, so a hold reads and never reacts.
+  const reactHold = useRef<number | null>(null);
+  const reactHeld = useRef(false);
+  const reactPress = onReactOpen
+    ? {
+        onPointerDown: (e: { pointerType: string }) => {
+          if (e.pointerType === "mouse") return;
+          reactHeld.current = false;
+          if (reactHold.current) window.clearTimeout(reactHold.current);
+          reactHold.current = window.setTimeout(() => {
+            reactHeld.current = true;
+            onReactOpen();
+          }, 500);
+        },
+        onPointerUp: () => {
+          if (reactHold.current) window.clearTimeout(reactHold.current);
+          reactHold.current = null;
+        },
+        onPointerCancel: () => {
+          if (reactHold.current) window.clearTimeout(reactHold.current);
+          reactHold.current = null;
+          reactHeld.current = false;
+        },
+        onPointerLeave: () => {
+          if (reactHold.current) window.clearTimeout(reactHold.current);
+          reactHold.current = null;
+        },
+        onPointerEnter: (e: { pointerType: string }) => {
+          if (e.pointerType === "mouse") onReactOpen();
+        },
+        onContextMenu: (e: { preventDefault: () => void }) => e.preventDefault(),
+      }
+    : {};
+  const reactClick = () => {
+    if (reactHeld.current) {
+      reactHeld.current = false;
+      return;
+    }
+    onReact?.();
+  };
+  const authorLabel = author ? author + "’s profile" : undefined;
+  const authorClick = (e: MouseEvent<HTMLAnchorElement>) => {
+    e.stopPropagation();
+    if (!onAuthor) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    onAuthor(e);
+  };
   const sys = c === "system";
   // G42: the system category has three declared rungs and the card used to write two literals here
   // instead. The frame agreed with --c-system by accident (it holds --line-strong); the label did
@@ -300,13 +365,33 @@ function FeedFace({
       }}
     >
       <header style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        {author && (
-          <Avatar
-            name={author}
-            src={avatarSrc}
-            size={40}
-            style={authorKind === "space" ? { borderRadius: 6 } : undefined}
-          />
+        {author && authorHref ? (
+          // 62-A (1820): the photo is the same link as the name, hidden from the reading order so
+          // the header carries one "{author}’s profile" and not two.
+          <a
+            href={authorHref}
+            aria-hidden="true"
+            tabIndex={-1}
+            onClick={authorClick}
+            data-author-avatar=""
+            style={{ display: "inline-flex", flex: "none" }}
+          >
+            <Avatar
+              name={author}
+              src={avatarSrc}
+              size={40}
+              style={authorKind === "space" ? { borderRadius: 6 } : undefined}
+            />
+          </a>
+        ) : (
+          author && (
+            <Avatar
+              name={author}
+              src={avatarSrc}
+              size={40}
+              style={authorKind === "space" ? { borderRadius: 6 } : undefined}
+            />
+          )
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
           {author && (
@@ -320,7 +405,19 @@ function FeedFace({
                 whiteSpace: "nowrap",
               }}
             >
-              {author}
+              {authorHref ? (
+                <a
+                  href={authorHref}
+                  aria-label={authorLabel}
+                  onClick={authorClick}
+                  data-author-link=""
+                  style={{ color: "inherit", textDecoration: "none" }}
+                >
+                  {author}
+                </a>
+              ) : (
+                author
+              )}
               {authorKind === "space" && (
                 <span style={{ fontWeight: 400, color: "var(--ink-3)" }}> · Space</span>
               )}
@@ -564,8 +661,9 @@ function FeedFace({
             label={reacted ? "Reacted" : "React"}
             active={reacted}
             aria-pressed={!!reacted}
-            onClick={onReact}
+            onClick={reactClick}
             data-testid="react"
+            {...reactPress}
           />
           <IconButton
             name="message-circle"
@@ -573,7 +671,12 @@ function FeedFace({
             onClick={onRespond}
             data-testid="respond"
           />
-          <span style={{ flex: 1 }} />
+          <span
+            data-footer-summary=""
+            style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center" }}
+          >
+            {summary}
+          </span>
           <IconButton
             name="bookmark"
             label={saved ? "Saved" : "Save"}

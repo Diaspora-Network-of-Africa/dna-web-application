@@ -92,6 +92,21 @@ export type Vocabularies = {
    * email view's row labels come from here.
    */
   notification_categories: { value: string; label: string }[];
+  /**
+   * Handoff 62-A (1798, 1818, 1819): the six reactions of a Feed post in the bar's order, each with
+   * its class (public or intent), its emoji character, its label verbatim and Asante's glosses keyed
+   * by language. No component keeps the six as literals; a bar that reads none renders empty.
+   */
+  post_reaction_kinds: PostReactionKindRow[];
+};
+
+/** One reaction kind (62-A). `glosses` is empty for every kind but asante. */
+export type PostReactionKindRow = {
+  value: string;
+  class: "public" | "intent";
+  emoji: string;
+  label: string;
+  glosses: Record<string, string>;
 };
 
 /**

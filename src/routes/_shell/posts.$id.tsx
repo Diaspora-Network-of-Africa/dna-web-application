@@ -1,11 +1,20 @@
 // /posts/:id (ruling 105): one history entry for an expanded card. Reached from the Feed it is the
 // same list with that card expanded in place; landed on directly it is the expanded card as page
 // content. The shell layout renders the Feed column for both, so this route owns only the URL and
-// the ?lens= search contract the Feed beneath keeps.
+// the ?lens= search contract the Feed beneath keeps. Handoff 62-A (1802, SPEC 10.2): ?who=help or
+// ?who=build is an intent notification's destination, the author's sheet open on that tab; the Feed
+// reads it once and drops it from the address.
 import { createFileRoute } from "@tanstack/react-router";
-import { validateLens } from "@/lib/lens";
+import { validateLens, type FeedSearch } from "@/lib/lens";
+
+export type PostSearch = FeedSearch & { who?: string };
 
 export const Route = createFileRoute("/_shell/posts/$id")({
-  validateSearch: validateLens,
+  validateSearch: (search: Record<string, unknown>): PostSearch => {
+    const out: PostSearch = validateLens(search);
+    const who = search["who"];
+    if (typeof who === "string" && /^[a-z_]{1,32}$/.test(who)) out.who = who;
+    return out;
+  },
   component: () => null,
 });

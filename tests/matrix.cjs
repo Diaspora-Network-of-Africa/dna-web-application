@@ -433,6 +433,30 @@ const VOCAB = {
     { value: "convey", label: "Convey" },
     { value: "system", label: "Account" },
   ],
+  // Handoff 62-A (1798, 1818, 1819): the six as 20261015120100 seeds them, with Asante's glosses.
+  post_reaction_kinds: [
+    {
+      value: "asante",
+      class: "public",
+      emoji: "🫶",
+      label: "Asante",
+      glosses: { en: "Thank you", fr: "Merci", pt: "Obrigado" },
+    },
+    { value: "celebrate", class: "public", emoji: "🎉", label: "Celebrate", glosses: {} },
+    { value: "learned", class: "public", emoji: "💡", label: "Learned from this", glosses: {} },
+    { value: "standing", class: "public", emoji: "🤝", label: "Standing with you", glosses: {} },
+    { value: "help", class: "intent", emoji: "🙋", label: "I can help", glosses: {} },
+    { value: "build", class: "intent", emoji: "🛠️", label: "Let’s build", glosses: {} },
+  ],
+};
+
+/** 62-A: the mock's names for a few picker characters (message_reaction_emoji's labels). */
+const EMOJI_LABELS = {
+  "🔥": "Fire",
+  "🚀": "Rocket",
+  "👍️": "Thumbs up",
+  "🌍️": "Globe showing Europe-Africa",
+  "✨": "Sparkles",
 };
 
 /** The projection's ten lanes, in convene_lanes order (1092, 1105; 1124 adds Filling up, 1172 withdraws Browse). */
@@ -981,7 +1005,12 @@ function makeMockDb() {
       unblockCalls: [],
     },
     saves: [],
+    // 62-A: a reaction row is { member_id, post_id, kind, emoji, created_at } and, for a seeded
+    // reactor other than the member, `person` (id, name, handle, avatar_path) and `network` (in
+    // the viewer's first degree); intents and picker picks beside them.
     reactions: [],
+    intents: [],
+    picks: [],
     drafts: new Map(),
     rpcPayloads: [],
     inferCalls: 0,
@@ -2204,6 +2233,166 @@ async function mockSupabase(page, db, opts = {}) {
     }
     // Handoff 55-A (1322, 1522): the two dots and the two marks, as the migrations answer them. The
     // dot is an unseen row of a kind the vocabulary renders; opening the panel marks every row seen.
+    // ---------------------------------------------------------------------------------------------
+    // Handoff 62-A: the reaction layer's six functions, as 20261015120100 shapes their answers.
+    // The viewer is UID; a seeded reactor carries `person` and `network`. No figure reaches a
+    // reader's answer; the author's answer carries the exact figures.
+    // ---------------------------------------------------------------------------------------------
+    const PUBLIC_KINDS = VOCAB.post_reaction_kinds
+      .filter((k) => k.class === "public")
+      .map((k) => k.value);
+    const ME = { id: UID, name: "Thandiwe Dube", handle: "thandiwe-dube", avatar_path: null };
+    const personOf = (r) =>
+      r.member_id === UID ? { ...ME, you: true } : { ...r.person, you: false };
+    const authorOf = (id) => (db.posts.find((x) => x.id === id) || {}).author_id;
+    if (p === "/rest/v1/rpc/post_reaction_rows") {
+      const b = req.postDataJSON() || {};
+      const out = {};
+      for (const id of b.p_posts || []) {
+        const rx = db.reactions.filter((r) => r.post_id === id);
+        const people = rx
+          .filter((r) => r.member_id === UID || r.network)
+          .sort((a, c) =>
+            a.member_id === UID
+              ? -1
+              : c.member_id === UID
+                ? 1
+                : (c.created_at || "").localeCompare(a.created_at || ""),
+          )
+          .slice(0, 2);
+        const own = rx.find((r) => r.member_id === UID);
+        out[id] = {
+          kinds: PUBLIC_KINDS.filter((k) => rx.some((r) => r.kind === k)),
+          other: rx.some((r) => r.kind === "other"),
+          people: people.map(personOf),
+          more: rx.length > people.length,
+          own: own ? { kind: own.kind, emoji: own.emoji || null } : null,
+          intents: db.intents
+            .filter((i) => i.post_id === id && i.member_id === UID)
+            .map((i) => i.kind),
+        };
+      }
+      return json(out);
+    }
+    if (p === "/rest/v1/rpc/post_react") {
+      const b = req.postDataJSON() || {};
+      db.rpcPayloads.push({ fn: "post_react", body: b });
+      const held = db.reactions.find((r) => r.post_id === b.p_post && r.member_id === UID);
+      const base = (e) => (e || "").replace(/\uFE0F/g, "");
+      if (
+        held &&
+        held.kind === b.p_kind &&
+        (b.p_kind !== "other" || base(held.emoji) === base(b.p_emoji))
+      ) {
+        db.reactions.splice(db.reactions.indexOf(held), 1);
+        return json(null);
+      }
+      const row = {
+        member_id: UID,
+        post_id: b.p_post,
+        kind: b.p_kind,
+        emoji: b.p_kind === "other" ? b.p_emoji : null,
+        created_at: new Date().toISOString(),
+      };
+      if (held) Object.assign(held, row);
+      else db.reactions.push(row);
+      if (b.p_picked && b.p_kind === "other") {
+        db.picks = [b.p_emoji, ...db.picks.filter((e) => e !== b.p_emoji)].slice(0, 5);
+      }
+      return json({ kind: row.kind, emoji: row.emoji });
+    }
+    if (p === "/rest/v1/rpc/post_intent") {
+      const b = req.postDataJSON() || {};
+      db.rpcPayloads.push({ fn: "post_intent", body: b });
+      const at = db.intents.findIndex(
+        (i) => i.post_id === b.p_post && i.member_id === UID && i.kind === b.p_kind,
+      );
+      if (b.p_on) {
+        if (at < 0)
+          db.intents.push({
+            member_id: UID,
+            post_id: b.p_post,
+            kind: b.p_kind,
+            line: b.p_line || null,
+          });
+        else if (b.p_line) db.intents[at].line = b.p_line;
+      } else if (at >= 0) db.intents.splice(at, 1);
+      return json(
+        db.intents.filter((i) => i.post_id === b.p_post && i.member_id === UID).map((i) => i.kind),
+      );
+    }
+    if (p === "/rest/v1/rpc/post_reactors_visible") {
+      const b = req.postDataJSON() || {};
+      const rows = db.reactions
+        .filter((r) => r.post_id === b.p_post)
+        .sort((a, c) => (a.member_id === UID ? -1 : c.member_id === UID ? 1 : 0))
+        .map((r) => ({
+          ...personOf(r),
+          headline: r.member_id === UID ? null : r.person.headline || null,
+          kind: r.kind,
+          emoji: r.emoji || null,
+          relationship:
+            r.member_id === UID
+              ? "self"
+              : r.network
+                ? "connected"
+                : r.through
+                  ? "through"
+                  : "outside",
+          through: r.through || null,
+        }));
+      return json(rows);
+    }
+    if (p === "/rest/v1/rpc/post_reactors_author") {
+      const b = req.postDataJSON() || {};
+      if (authorOf(b.p_post) !== UID)
+        return json(
+          {
+            code: "42501",
+            message: "post_reactors_author: not the author",
+            details: null,
+            hint: null,
+          },
+          403,
+        );
+      const rx = db.reactions.filter((r) => r.post_id === b.p_post);
+      const ix = db.intents.filter((i) => i.post_id === b.p_post);
+      const figures = {
+        all: rx.length + ix.length,
+        other: rx.filter((r) => r.kind === "other").length,
+      };
+      for (const k of VOCAB.post_reaction_kinds)
+        figures[k.value] =
+          rx.filter((r) => r.kind === k.value).length + ix.filter((i) => i.kind === k.value).length;
+      const rowOf = (r, cls, line) => ({
+        ...(r.member_id === UID || !r.person || r.person.withheld
+          ? r.member_id === UID
+            ? { ...ME, you: true, headline: null }
+            : { id: null, name: null, handle: null, avatar_path: null, headline: null, you: false }
+          : { ...r.person, you: false }),
+        class: cls,
+        kind: r.kind,
+        emoji: r.emoji || null,
+        line,
+        relationship:
+          r.member_id === UID
+            ? "self"
+            : r.person && !r.person.withheld
+              ? r.network
+                ? "connected"
+                : "outside"
+              : null,
+        through: null,
+      });
+      return json({
+        figures,
+        rows: [
+          ...rx.map((r) => rowOf(r, "reaction", null)),
+          ...ix.map((i) => rowOf({ ...i, person: i.person }, "intent", i.line || null)),
+        ],
+      });
+    }
+    if (p === "/rest/v1/rpc/member_recent_reactions") return json(db.picks.slice(0, 5));
     if (p === "/rest/v1/rpc/notifications_dot") {
       const renders = new Set(
         VOCAB.notification_kinds.filter((k) => k.renders).map((k) => k.value),
@@ -2343,6 +2532,18 @@ async function mockSupabase(page, db, opts = {}) {
         else if (or.includes("author_kind"))
           rows = rows.filter((p) => or.includes('"' + p.author_id + '"'));
         return single ? one(rows) : json(rows);
+      }
+      if (table === "message_reaction_emoji") {
+        // 62-A: the recents' names, read by character.
+        const ids = inIds("emoji") || [];
+        return json(
+          ids.filter((e) => EMOJI_LABELS[e]).map((e) => ({ emoji: e, label: EMOJI_LABELS[e] })),
+        );
+      }
+      if (table === "post_reactions" && (method === "POST" || method === "DELETE")) {
+        // 62-A (415's shape): authenticated holds no insert or delete grant; post_react is the path.
+        db.directReactionWrites = (db.directReactionWrites || 0) + 1;
+        return json({ code: "42501", message: "permission denied for table post_reactions" }, 403);
       }
       if (table === "post_saves" || table === "post_reactions") {
         const list = table === "post_saves" ? db.saves : db.reactions;
@@ -5430,6 +5631,73 @@ async function runShell(browserType, bname, [w, h]) {
   const page = await ctx.newPage();
   const db = makeMockDb();
   seedPosts(db, 8);
+  // 62-A: seed-1 (another member's post) carries three reactions, two from the viewer's network
+  // and one `other` from outside it; seed-0 (the viewer's own post) carries one, for the author's
+  // sheet; the viewer has five picker recents, so the bar's strip overflows at 390.
+  const F2 = "00000000-0000-4000-8000-0000000000f2";
+  const F3 = "00000000-0000-4000-8000-0000000000f3";
+  const F4 = "00000000-0000-4000-8000-0000000000f4";
+  const lerato = {
+    id: F2,
+    name: "Lerato Khumalo",
+    handle: "lerato-khumalo",
+    avatar_path: null,
+    headline: "Builder",
+  };
+  const ngozi = {
+    id: F3,
+    name: "Ngozi Okafor",
+    handle: "ngozi-okafor",
+    avatar_path: null,
+    headline: "Designer",
+  };
+  const kwame = {
+    id: F4,
+    name: "Kwame Mensah",
+    handle: "kwame-mensah",
+    avatar_path: null,
+    headline: "Engineer",
+  };
+  const at = (h) => new Date(Date.now() - h * 3600e3).toISOString();
+  db.reactions.push(
+    {
+      member_id: F2,
+      post_id: "seed-1",
+      kind: "celebrate",
+      emoji: null,
+      created_at: at(3),
+      person: lerato,
+      network: true,
+    },
+    {
+      member_id: F3,
+      post_id: "seed-1",
+      kind: "other",
+      emoji: "🔥",
+      created_at: at(2),
+      person: ngozi,
+      network: false,
+    },
+    {
+      member_id: F4,
+      post_id: "seed-1",
+      kind: "asante",
+      emoji: null,
+      created_at: at(1),
+      person: kwame,
+      network: true,
+    },
+    {
+      member_id: F2,
+      post_id: "seed-0",
+      kind: "asante",
+      emoji: null,
+      created_at: at(1),
+      person: lerato,
+      network: true,
+    },
+  );
+  db.picks = ["🔥", "🚀", "👍️", "🌍️", "✨"];
   await mockSupabase(page, db);
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -5603,12 +5871,165 @@ async function runShell(browserType, bname, [w, h]) {
     await page.waitForTimeout(400);
     await first.locator('[data-testid="react"]').click();
     await page.waitForTimeout(400);
+    // 62-A: one tap on React places Asante through post_react, never a direct insert (415).
+    const ownOnSeed0 = db.reactions.filter((r) => r.post_id === "seed-0" && r.member_id === UID);
     record(
       tag + " Save and React toggle own rows (aria-pressed), no count rendered",
       db.saves.length === 1 &&
-        db.reactions.length === 1 &&
+        ownOnSeed0.length === 1 &&
+        ownOnSeed0[0].kind === "asante" &&
+        !(db.directReactionWrites > 0) &&
         (await first.locator('[data-testid="save"]').getAttribute("aria-pressed")) === "true" &&
-        (await first.locator('[data-testid="react"]').getAttribute("aria-pressed")) === "true",
+        (await first.locator('[data-testid="react"]').getAttribute("aria-pressed")) === "true" &&
+        !/\b\d+ (likes|reactions|saves)\b/i.test(await first.textContent()),
+      "own rows on seed-0: " +
+        JSON.stringify(ownOnSeed0.map((r) => r.kind)) +
+        "; direct writes " +
+        (db.directReactionWrites || 0),
+    );
+    // 62-A (SPEC 5, 1822): the summary in the action row between Respond and Save on seed-1:
+    // glyphs in fixed order with the neutral other mark, up to two photos of the viewer's network,
+    // the names line at medium and expanded only, no digit anywhere.
+    const second = page.locator("[data-feed] article[data-c]").nth(1);
+    const summary = second.locator("[data-footer-summary] [data-reaction-summary]");
+    await summary.waitFor({ timeout: 10000 });
+    const summaryText = (await summary.textContent()) || "";
+    const names = second.locator("[data-summary-names]");
+    const namesText = (await names.count()) ? (await names.textContent()) || "" : "";
+    record(
+      tag +
+        (w < 640
+          ? " reaction summary in the action row: glyphs and photos, no names at compact"
+          : " reaction summary in the action row: glyphs, photos and the names line"),
+      (await summary.getAttribute("data-summary-kinds")) === "asante,celebrate" &&
+        (await summary.getAttribute("data-summary-other")) === "1" &&
+        (await second.locator("[data-reaction-summary] [data-summary-glyph]").count()) === 3 &&
+        (await summary.getAttribute("data-summary-people")) === "2" &&
+        (w < 640
+          ? (await names.count()) === 0
+          : namesText === "Kwame Mensah, Lerato Khumalo and others") &&
+        (await summary.getAttribute("aria-label")) ===
+          "Reactions: Kwame Mensah, Lerato Khumalo and others. See who reacted",
+      "kinds " +
+        (await summary.getAttribute("data-summary-kinds")) +
+        "; names " +
+        JSON.stringify(namesText),
+    );
+    record(
+      tag + " no digit inside the summary",
+      !/\d/.test(summaryText),
+      JSON.stringify(summaryText),
+    );
+    // The summary sits between Respond and Save.
+    const respondBox = await second.locator('[data-testid="respond"]').boundingBox();
+    const saveBox = await second.locator('[data-testid="save"]').boundingBox();
+    const summaryBox = await summary.boundingBox();
+    record(
+      tag + " the summary sits between Respond and Save",
+      !!respondBox &&
+        !!saveBox &&
+        !!summaryBox &&
+        summaryBox.x >= respondBox.x + respondBox.width &&
+        summaryBox.x + summaryBox.width <= saveBox.x + 1,
+      JSON.stringify({
+        respond: respondBox && respondBox.x,
+        summary: summaryBox && [summaryBox.x, summaryBox.width],
+        save: saveBox && saveBox.x,
+      }),
+    );
+    // 62-A (SPEC 6, 1813): any reader opens the reader's sheet without reacting; rows for every
+    // reactor the viewer may see, no tabs, no digit, no intent, View profile outside the network only.
+    await summary.click();
+    const who = page.locator('[role="dialog"][aria-label="Who reacted"]');
+    await who.waitFor({ timeout: 10000 });
+    await page.waitForTimeout(400);
+    const whoText = (await who.textContent()) || "";
+    record(
+      tag +
+        " the reader's sheet opens without reacting: rows, no tabs, no digit, View profile outside the network only",
+      (await who.locator('[data-who-reacted="reader"]').count()) === 1 &&
+        (await who.locator("[data-reactor-row]").count()) === 3 &&
+        (await who.locator('[role="tab"]').count()) === 0 &&
+        (await who.locator("[data-row-reaction]").count()) === 3 &&
+        (await who.locator("[data-view-profile]").count()) === 1 &&
+        (await who.locator('[data-view-profile="ngozi-okafor"]').count()) === 1 &&
+        (await who.locator('[data-person-link="kwame-mensah"]').count()) === 1 &&
+        !/\d/.test(whoText) &&
+        !whoText.includes("I can help") &&
+        !db.reactions.some((r) => r.post_id === "seed-1" && r.member_id === UID),
+      "rows " +
+        (await who.locator("[data-reactor-row]").count()) +
+        "; text " +
+        JSON.stringify(whoText.slice(0, 120)),
+    );
+    await page.keyboard.press("Escape");
+    await who.waitFor({ state: "detached", timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(300);
+    // 62-A (SPEC 3, 1821): the bar opens from React by a hover on pointer or a 500 ms hold on
+    // touch; the six in fixed order, then the recents, then the plus pinned outside the strip.
+    const reactBtn = second.locator('[data-testid="react"]');
+    await reactBtn.scrollIntoViewIfNeeded();
+    if (w < 1024) {
+      await reactBtn.dispatchEvent("pointerdown", {
+        pointerType: "touch",
+        isPrimary: true,
+        bubbles: true,
+      });
+      await page.waitForTimeout(700);
+      await reactBtn.dispatchEvent("pointerup", {
+        pointerType: "touch",
+        isPrimary: true,
+        bubbles: true,
+      });
+    } else {
+      await reactBtn.hover();
+    }
+    const bar = second.locator("[data-reaction-bar]");
+    await bar.waitFor({ timeout: 10000 });
+    await page.waitForTimeout(350);
+    const order = await bar
+      .locator("[data-reaction-entry]")
+      .evaluateAll((els) => els.map((e) => e.getAttribute("data-reaction-entry")));
+    record(
+      tag + " the bar: the six in fixed order, five recents newest first, the plus",
+      order.slice(0, 6).join(",") === "asante,celebrate,learned,standing,help,build" &&
+        order.slice(6).join(",") === "recent:🔥,recent:🚀,recent:👍️,recent:🌍️,recent:✨" &&
+        (await bar.locator("[data-reaction-more]").count()) === 1 &&
+        (await bar.locator('[data-reaction-entry="asante"]').getAttribute("aria-label")) ===
+          "Asante, thank you" &&
+        !db.reactions.some((r) => r.post_id === "seed-1" && r.member_id === UID),
+      order.join(","),
+    );
+    const plusBefore = await bar.locator("[data-reaction-more]").boundingBox();
+    const scrolled = await bar.locator("[data-reaction-strip]").evaluate((el) => {
+      el.scrollLeft = 120;
+      return el.scrollLeft;
+    });
+    await page.waitForTimeout(150);
+    const plusAfter = await bar.locator("[data-reaction-more]").boundingBox();
+    record(
+      tag + " the bar's plus does not move when the strip scrolls",
+      !!plusBefore &&
+        !!plusAfter &&
+        Math.abs(plusBefore.x - plusAfter.x) < 1 &&
+        Math.abs(plusBefore.y - plusAfter.y) < 1 &&
+        (w >= 640 || scrolled > 0),
+      JSON.stringify({
+        before: plusBefore && plusBefore.x,
+        after: plusAfter && plusAfter.x,
+        scrolled,
+      }),
+    );
+    await bar.locator('[data-reaction-entry="celebrate"]').click();
+    await page.waitForTimeout(400);
+    const ownOnSeed1 = db.reactions.filter((r) => r.post_id === "seed-1" && r.member_id === UID);
+    record(
+      tag + " a pick on the bar reacts through post_react and closes the bar",
+      ownOnSeed1.length === 1 &&
+        ownOnSeed1[0].kind === "celebrate" &&
+        (await second.locator("[data-reaction-bar]").count()) === 0 &&
+        (await reactBtn.getAttribute("aria-pressed")) === "true",
+      JSON.stringify(ownOnSeed1.map((r) => r.kind)),
     );
     // Read more expands the same card in place at /posts/:id; the Feed column's scroll is untouched.
     const scrollTop = () =>

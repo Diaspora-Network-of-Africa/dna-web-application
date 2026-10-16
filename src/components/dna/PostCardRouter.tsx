@@ -71,6 +71,15 @@ export type RouterOptions = {
   saved?: boolean | undefined;
   reacted?: boolean | undefined;
   onReact?: (() => void) | undefined;
+  /** 62-A (SPEC 2.2): a 500 ms hold on touch or a pointer hover on React opens the bar. */
+  onReactOpen?: (() => void) | undefined;
+  /** 62-A (SPEC 5): the reaction summary, rendered in the feed footer between Respond and Save. */
+  summary?: ReactNode;
+  /** 62-A (SPEC 1, 12; 1651, 1652): the quick bar and the intent prompt, in PostCard's `below`. */
+  below?: ReactNode;
+  /** 62-A (SPEC 11, 1820): the author's profile address; the avatar and the name open it. */
+  authorHref?: string | undefined;
+  onAuthor?: ((e: MouseEvent<HTMLElement>) => void) | undefined;
   onRespond?: (() => void) | undefined;
   onSave?: (() => void) | undefined;
   onShare?: (() => void) | undefined;
@@ -226,6 +235,11 @@ export function postCardProps(view: PostView, opts: RouterOptions = {}): PostCar
     saved: opts.saved,
     reacted: opts.reacted,
     onReact: opts.onReact,
+    onReactOpen: opts.onReactOpen,
+    summary: opts.summary,
+    below: opts.below,
+    authorHref: opts.authorHref,
+    onAuthor: opts.onAuthor,
     onRespond: opts.onRespond,
     onSave: opts.onSave,
     onShare: opts.onShare,
