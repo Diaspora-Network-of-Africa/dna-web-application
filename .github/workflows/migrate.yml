@@ -7,11 +7,15 @@
 # until the founder approves it in GitHub; the database URL is that Environment's secret
 # MIGRATE_DB_URL, read by this workflow alone and passed to the one step that needs it.
 #
-# Inputs: version (14 digits), ref (a full 40-character commit sha, the commit the file is read
-# from, never the default branch's head) and mode (rehearse or apply). Rehearse runs the file and
-# the ledger row in one transaction and rolls it back; apply commits it after the ledger's md5 is
-# checked against the file's. The route, in ten lines, is docs/MIGRATIONS.md; the refusals and the
-# transaction are scripts/migrate.sh.
+# Inputs: version (14 digits), ref (a full 40-character commit sha, the commit the migration file
+# is read out of) and mode (rehearse or apply). The job itself, scripts/migrate.sh included, runs
+# from the workflow's own commit, the default branch head the run was dispatched from, and refuses
+# a dispatch from any other ref; only the migration file comes from inputs.ref, read with
+# `git show` and checked against its blob hash, never by checking inputs.ref out. So a branch that
+# carries a different script, or none, changes nothing about what runs with the secret. Rehearse
+# runs the file and the ledger row in one transaction and rolls it back; apply commits it after the
+# ledger's md5 is checked against the file's. The route, in ten lines, is docs/MIGRATIONS.md; the
+# refusals and the transaction are scripts/migrate.sh.
 name: Migrate
 
 on:
@@ -22,7 +26,7 @@ on:
         required: true
         type: string
       ref:
-        description: The commit the file is read from, a full 40-character sha. Must be an ancestor of a branch in this repository.
+        description: The commit the migration file is read out of, a full 40-character sha. Must be an ancestor of a branch in this repository. The workflow and its script run from the default branch, not from this commit.
         required: true
         type: string
       mode:
@@ -49,26 +53,32 @@ jobs:
     timeout-minutes: 20
     environment: canonical-migrations
     steps:
-      - name: The inputs are their shape
+      - name: The inputs are their shape, and the run is the default branch's
         env:
           VERSION: ${{ inputs.version }}
           REF: ${{ inputs.ref }}
           MODE: ${{ inputs.mode }}
+          RUN_REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -uo pipefail
           ok=1
+          # Everything this job executes comes from the commit the dispatch ran the workflow file
+          # from. A dispatch from any other branch would run that branch's workflow and script with
+          # the secret, so it is refused here before the Environment's secret is in reach.
+          [[ "$RUN_REF" = "refs/heads/${DEFAULT_BRANCH}" ]] || { echo "::error::this workflow runs only from ${DEFAULT_BRANCH}; it was dispatched from '$RUN_REF'"; ok=0; }
           [[ "$VERSION" =~ ^[0-9]{14}$ ]] || { echo "::error::version must be 14 digits, not '$VERSION'"; ok=0; }
           [[ "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::ref must be a full 40-character lowercase commit sha, not '$REF'"; ok=0; }
           [[ "$MODE" = rehearse || "$MODE" = apply ]] || { echo "::error::mode must be rehearse or apply, not '$MODE'"; ok=0; }
           [ "$ok" = 1 ] || exit 1
           echo "$MODE $VERSION from $REF"
-      # The named commit, with every branch fetched so the ancestry check below can read them. The
-      # file is read from this checkout and never from the default branch's head.
+      # The workflow's own commit (github.sha, the default branch head this run was dispatched
+      # from), never inputs.ref: scripts/migrate.sh runs from here. Full history and every branch,
+      # so the script can read the migration file out of inputs.ref and check that it is on a branch.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
           fetch-depth: 0
-      - name: Every branch, for the ancestry check
+      - name: Every branch, for the file read and the ancestry check
         run: git fetch --prune --quiet origin '+refs/heads/*:refs/remotes/origin/*'
       # The approval is read before anything touches the database. A run with no approval recorded
       # (an Environment with no required reviewer) is refused here, so the secret is never used on

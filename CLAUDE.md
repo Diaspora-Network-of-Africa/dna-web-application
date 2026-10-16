@@ -149,10 +149,12 @@ A migration reaches the canonical project by one route, `docs/MIGRATIONS.md` (ru
 dispatch-only GitHub Actions path with a required reviewer that ruling 562 named): Code dispatches
 `.github/workflows/migrate.yml` with the version, the full commit sha the file is read from and a mode,
 `rehearse` then `apply`; each run pauses in the `canonical-migrations` Environment until the founder
-approves it; `scripts/migrate.sh` refuses, red with its reason, a missing or duplicate file, a ref on no
-branch, a version already in the ledger or not later than its head, and a file carrying its own `begin;`
-or `commit;`. Guard first, as before: the file is in the tree and committed under 225, and the statements
-about to run are that file's, read from the named commit and never from `main`'s head. Then write: the
+approves it; the job and `scripts/migrate.sh` run from the workflow's own commit on `main`, and a dispatch
+from any other branch is refused, so only the migration file comes from `ref`, read by `git show` and
+checked against its blob hash, never by checking `ref` out; the script refuses, red with its reason, a
+missing or duplicate file, a ref on no branch, a version already in the ledger or not later than its
+head, and a file carrying its own `begin;` or `commit;`. Guard first, as before: the file is in the tree
+and committed under 225, and the statements about to run are that file's. Then write: the
 `supabase_migrations.schema_migrations` row (the version, the file name's suffix as `name`, the file's
 exact bytes as the one statement) and the file in one transaction with `ON_ERROR_STOP`, so the project
 never records the statements without the version that explains them, nor the version without the
@@ -160,8 +162,9 @@ statements. Then verify, before commit: `md5(statements[1])` for the version aga
 file on disk, raising if they differ, which is the comparison `tests/migration-drift.cjs` makes, so a
 write whose read-back does not match the file is named as drift the moment it lands rather than at the
 next run of the arm; after commit the ledger md5 is read back on a fresh connection and printed with
-the file's sha256 and md5, the actor and the approver. The SQL Editor paste and the Supabase MCP's
-`execute_sql` (963, 965) are no longer the route; `tests/migrate-workflow.cjs`, run by `pages.yml`, fails
+the file's sha256 and md5, the actor and the approver. The Supabase MCP's `execute_sql` (963, 965) is no
+longer the route, and the founder's SQL Editor paste of a script Chat generates from the committed bytes
+stays as the fallback when the workflow is down (1827); `tests/migrate-workflow.cjs`, run by `pages.yml`, fails
 if `migrate.yml` gains a `push` or `pull_request` trigger, loses the Environment, or stops being the only
 workflow referencing `MIGRATE_DB_URL`. 553's refusal of `apply_migration` is unchanged and its reason is
 unchanged, and `supabase db push` is refused with it: `apply_migration` mints its own version rather than
@@ -170,8 +173,8 @@ and all, under `20260913220047`. That trades one drift row for two and manufactu
 divergence ruling 444's arm exists to catch, and the only way back is hand editing
 `supabase_migrations.schema_migrations`, which is what PASS-01 was written about. 1528's list of
 destructive DDL (`drop column`, `drop type`, `drop trigger`, a `delete`) still reaches the project only
-on the founder's explicit instruction naming the table (the absolute above), and the approval of the
-`apply` run is where that instruction is recorded.
+on the founder's explicit instruction naming the table (the absolute above), given before dispatch and
+quoted in the PR that carries the file; an Approve click does not stand in for it.
 
 A handoff that names a migration's md5 states two values, each labelled: the raw md5 of the file's bytes, and the drift form, the md5 of the text with its trailing whitespace trimmed from the end, which is what `tests/migration-drift.cjs` compares against the project's recorded statements.
 

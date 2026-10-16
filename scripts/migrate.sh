@@ -6,15 +6,20 @@
 #   MODE=rehearse|apply VERSION=<14 digits> REF=<40-hex sha> MIGRATE_DB_URL=postgres://... \
 #     ACTOR=<who dispatched> APPROVER=<who approved> scripts/migrate.sh
 #
-# The checkout this runs in is the named commit, so the file is read from that commit and never from
-# the default branch's head. Every refusal is red with its reason in the log, and nothing is written
-# before the refusals are passed. Nothing here amends, renames or regenerates a migration file (466).
+# This script, and everything else the job executes, runs from the workflow's own commit: the
+# default branch the run was dispatched from, which is what the checkout holds. Only the migration
+# file is read out of REF, with `git show REF:path`, never by checking REF out, so a branch that
+# carries a different script, or none (#116's head carries no scripts/migrate.sh), changes nothing
+# about what runs. The file's bytes are proven to be REF's by their blob hash. Every refusal is red
+# with its reason in the log, and nothing is written before the refusals are passed. Nothing here
+# amends, renames or regenerates a migration file (466).
 #
-# Refusals, in order: an input that is not its shape; HEAD is not REF; REF is on no branch of the
-# repository; not exactly one supabase/migrations/{VERSION}_*.sql; the file carries its own
-# transaction statements (this run supplies the transaction, so a `begin;` or `commit;` in the file
-# would split it); the version is already in supabase_migrations.schema_migrations (apply); the
-# version is not later than the ledger's head (both modes).
+# Refusals, in order: an input that is not its shape; REF is not a commit this repository holds, or
+# is on no branch of it; not exactly one supabase/migrations/{VERSION}_*.sql at REF; the extracted
+# bytes do not hash to REF's blob; the file carries its own transaction statements (this run
+# supplies the transaction, so a `begin;` or `commit;` in the file would split it); the version is
+# already in supabase_migrations.schema_migrations (apply); the version is not later than the
+# ledger's head (both modes).
 #
 # Rehearse and apply run the same script: begin; insert the ledger row (version, the file name's
 # suffix as name, statements as a one-element array holding the file's exact bytes, dollar-quoted);
@@ -53,17 +58,14 @@ command -v psql > /dev/null || refuse "psql is not installed on this runner"
 
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
+say "running scripts/migrate.sh from the workflow's checkout at $(git rev-parse HEAD); the file is read out of ${REF}"
 
-HEAD_SHA="$(git rev-parse HEAD)"
-[ "$HEAD_SHA" = "$REF" ] || refuse "the checkout is at ${HEAD_SHA}, not the named ref ${REF}; the file must come from the named commit"
-
+git cat-file -e "${REF}^{commit}" 2> /dev/null || refuse "ref ${REF} is not a commit this repository holds"
 branches="$(git branch -r --contains "$REF" 2> /dev/null | sed 's/^[ *]*//' | grep -v -- '->' || true)"
 [ -n "$branches" ] || refuse "ref ${REF} is not an ancestor of any branch in the repository"
 say "ref ${REF} is on: $(printf '%s' "$branches" | tr '\n' ' ')"
 
-shopt -s nullglob
-matches=(supabase/migrations/"${VERSION}"_*.sql)
-shopt -u nullglob
+mapfile -t matches < <(git ls-tree -r --name-only "$REF" -- supabase/migrations/ | grep -E "^supabase/migrations/${VERSION}_[^/]+\.sql$" || true)
 case "${#matches[@]}" in
   0) refuse "no file supabase/migrations/${VERSION}_*.sql at ${REF}" ;;
   1) ;;
@@ -75,15 +77,25 @@ NAME="${BASENAME#"${VERSION}"_}"
 NAME="${NAME%.sql}"
 [[ "$NAME" =~ ^[A-Za-z0-9_.-]+$ ]] || refuse "the file name's suffix '${NAME}' carries a character outside [A-Za-z0-9_.-]"
 
-if grep -nEiq '^[[:space:]]*(begin|start[[:space:]]+transaction|commit|rollback)[[:space:]]*;' "$FILE"; then
-  grep -nEi '^[[:space:]]*(begin|start[[:space:]]+transaction|commit|rollback)[[:space:]]*;' "$FILE" | head -5
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+
+# The file's bytes, out of REF and never out of the working tree, proven by the blob hash.
+LOCAL="$WORK/$BASENAME"
+git show "${REF}:${FILE}" > "$LOCAL" || refuse "could not read ${FILE} out of ${REF}"
+BLOB="$(git rev-parse "${REF}:${FILE}")"
+HASHED="$(git hash-object "$LOCAL")"
+[ "$BLOB" = "$HASHED" ] || refuse "the bytes read for ${FILE} hash to ${HASHED}, not ${REF}'s blob ${BLOB}"
+
+if grep -nEiq '^[[:space:]]*(begin|start[[:space:]]+transaction|commit|rollback)[[:space:]]*;' "$LOCAL"; then
+  grep -nEi '^[[:space:]]*(begin|start[[:space:]]+transaction|commit|rollback)[[:space:]]*;' "$LOCAL" | head -5
   refuse "${FILE} carries its own transaction statement; this run supplies the one transaction the ledger row and the file share"
 fi
 
-SHA256="$(sha256sum "$FILE" | cut -d' ' -f1)"
-MD5="$(md5sum "$FILE" | cut -d' ' -f1)"
-BYTES="$(wc -c < "$FILE" | tr -d ' ')"
-say "mode ${MODE}; version ${VERSION}; file ${FILE} (${BYTES} bytes); name ${NAME}"
+SHA256="$(sha256sum "$LOCAL" | cut -d' ' -f1)"
+MD5="$(md5sum "$LOCAL" | cut -d' ' -f1)"
+BYTES="$(wc -c < "$LOCAL" | tr -d ' ')"
+say "mode ${MODE}; version ${VERSION}; file ${FILE} at ${REF} (${BYTES} bytes, blob ${BLOB}); name ${NAME}"
 say "sha256 ${SHA256}"
 say "md5    ${MD5}  (the raw md5 of the file's bytes)"
 
@@ -102,12 +114,9 @@ if [ -n "$head" ] && ! [[ "$VERSION" > "$head" ]]; then
   refuse "version ${VERSION} is not later than the ledger head ${head}"
 fi
 
-WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
-
 # A dollar-quote tag the file does not contain, so the ledger row holds the file's exact bytes.
 tag="migrate_$(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-while grep -q -- "\$${tag}\$" "$FILE"; do
+while grep -q -- "\$${tag}\$" "$LOCAL"; do
   tag="migrate_$(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n')"
 done
 
@@ -116,10 +125,10 @@ SCRIPT="$WORK/${MODE}.sql"
   printf '\\set ON_ERROR_STOP on\n'
   printf 'begin;\n'
   printf "insert into supabase_migrations.schema_migrations (version, name, statements)\nvalues ('%s', '%s', array[\$%s\$" "$VERSION" "$NAME" "$tag"
-  cat "$FILE"
+  cat "$LOCAL"
   printf '$%s$]);\n' "$tag"
   printf '\\echo ledger row inserted for %s, now the file\n' "$VERSION"
-  printf '\\i %s\n' "$ROOT/$FILE"
+  printf '\\i %s\n' "$LOCAL"
   printf '\\echo file ran, now the md5 check\n'
   cat <<SQL
 do \$migrate_check\$

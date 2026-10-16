@@ -95,6 +95,40 @@ record(
   `${SCRIPT} is executable`,
 );
 
+// Chat's reading of #117 at fdb9a41: the job checked inputs.ref out and ran the script from that
+// checkout, so a ref with no scripts/migrate.sh (#116's head) failed, and a ref carrying a different
+// script would have run it with the secret. The script runs from the workflow's own commit; only the
+// migration file is read out of inputs.ref, by `git show`, never by checking the ref out.
+const checkouts = [
+  ...text.matchAll(/^\s*- uses: actions\/checkout@[^\n]*\n((?:[ ]{8,}.*\n)*)/gm),
+].map((m) => m[1]);
+record(
+  checkouts.length >= 1,
+  "migrate.yml checks the workflow's own commit out",
+  `${checkouts.length} checkout step(s)`,
+);
+record(
+  checkouts.every((block) => !/^\s*ref:/m.test(block)),
+  "no checkout step in migrate.yml names a ref, so the job runs the workflow's own commit, never inputs.ref",
+);
+record(
+  !/git\s+(checkout|switch|worktree)\b/.test(text),
+  "migrate.yml never checks another ref out",
+);
+const scriptText = fs.existsSync(script) ? fs.readFileSync(script, "utf8") : "";
+record(
+  /git show "\$\{REF\}:/.test(scriptText) && /git hash-object/.test(scriptText),
+  `${SCRIPT} reads the migration file out of REF with git show and checks its blob hash`,
+);
+record(
+  !/git\s+(checkout|switch|worktree)\b/.test(scriptText),
+  `${SCRIPT} never checks REF out, so it runs from the workflow's checkout alone`,
+);
+record(
+  /refs\/heads\/\$\{DEFAULT_BRANCH\}/.test(text),
+  "migrate.yml refuses a dispatch from any ref but the default branch",
+);
+
 const others = fs
   .readdirSync(WORKFLOWS)
   .filter((f) => /\.ya?ml$/.test(f) && f !== WORKFLOW)
