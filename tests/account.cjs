@@ -268,6 +268,12 @@ async function runAccountFlows(browserType, bname, vp, theme) {
     const cur = page.locator('input[autocomplete="current-password"]');
     const nw = page.locator('input[autocomplete="new-password"]').nth(0);
     const nw2 = page.locator('input[autocomplete="new-password"]').nth(1);
+    // Section 7: the drawer moves focus to a pushed level's title on the frame after it renders.
+    // A fill that starts before that frame lands can lose its text to the heading (H62-A2, run
+    // 609: WebKit filled the new password into a title it had just focused, the field stayed
+    // empty and the submit refused it as too short). So the fields are filled only once the
+    // title holds focus, which is also what a member sees before they can type.
+    await waitFocusTitle(page);
     ac.wrongCurrent = "not-the-current-one";
     await cur.fill("not-the-current-one");
     await nw.fill("lagos-clinic-solar-2026");
@@ -340,6 +346,7 @@ async function runAccountFlows(browserType, bname, vp, theme) {
     ac.wrongCurrent = null;
     await page.click('[data-testid="password-open"]');
     await waitTitle(page, "Change your password");
+    await waitFocusTitle(page);
     await cur.fill("current-password-ok");
     await nw.fill("lagos-clinic-solar-2026");
     await nw2.fill("lagos-clinic-solar-2026");
