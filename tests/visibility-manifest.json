@@ -212,6 +212,10 @@
       "class": "exempt",
       "reason": "admin: gated by private.is_admin at aal2 (1177, 1266)"
     },
+    "admin_admit_all": {
+      "class": "exempt",
+      "reason": "admin write path (handoff 64-WG, 1854, 1855): admits every held member at aal2 through private.has_platform_role and writes its admin_actions row; no member row is read for a viewer"
+    },
     "admin_my_sessions": { "class": "exempt", "reason": "admin: the admin's own sessions (1177)" },
     "admin_org_settings_read": {
       "class": "exempt",

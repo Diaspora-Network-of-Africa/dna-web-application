@@ -1,3 +1,9 @@
+// Edited by hand on handoff H64-WG's branch for 20261018120000_h64_wg_launch_gate.sql, ahead of its
+// apply, to the shape the generator will produce: `members.admitted_at` (Row, Insert, Update) and the
+// function `admin_admit_all`; `onboarding_state` keeps `Json`, so its new `admitted` key moves
+// nothing here. Regenerated after the apply, as 20261015120100 was (CLAUDE.md: commit, apply,
+// regenerate, enforcing run, merge).
+//
 // Regenerated from the canonical Supabase project (dgspjevjoblujcoljvkn) with the Supabase MCP
 // generate_typescript_types tool on handoff H62-G's branch (#120, the Feed card's comments), on main
 // at fa4ef051 (the merge of #118), after the founder applied 20261016120000 and then 20261016120100
@@ -2448,6 +2454,7 @@ export type Database = {
       };
       members: {
         Row: {
+          admitted_at: string | null;
           avatar_path: string | null;
           cover_focus: string;
           cover_path: string | null;
@@ -2473,6 +2480,7 @@ export type Database = {
           who_completed_at: string | null;
         };
         Insert: {
+          admitted_at?: string | null;
           avatar_path?: string | null;
           cover_focus?: string;
           cover_path?: string | null;
@@ -2498,6 +2506,7 @@ export type Database = {
           who_completed_at?: string | null;
         };
         Update: {
+          admitted_at?: string | null;
           avatar_path?: string | null;
           cover_focus?: string;
           cover_path?: string | null;
@@ -4627,6 +4636,7 @@ export type Database = {
       };
     };
     Functions: {
+      admin_admit_all: { Args: { p_reason: string }; Returns: number };
       admin_change_history: {
         Args: { p_before?: number; p_limit?: number };
         Returns: Json;
