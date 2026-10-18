@@ -53,7 +53,8 @@
 -- (admin_actions, platform_roles, event_aliases, member_embeddings and the rest) are closed already.
 --
 -- Inventory (the PR carries the same table).
---   Gated tables (57, the restrictive policy): attestations, connection_requests, convene_picks,
+--   Gated tables (60, the restrictive policy): attestations, comment_intents, comment_reactions,
+--     comments, connection_requests, convene_picks,
 --     discovery_dismissals, dismissed_suggestions, edges, event_blocks, event_delivery,
 --     event_host_settings, event_parties, event_registrations, events, member_about, member_blocks,
 --     member_connections, member_corridors, member_focus_areas, member_follows, member_homes,
@@ -176,6 +177,14 @@ $do$;
 -- ---------------------------------------------------------------------------------------------------
 -- 4. Row policy: one restrictive policy per table authenticated reaches directly, ANDed with the
 --    table's own policies. The three own-row shapes follow.
+--
+--    comments, comment_reactions and comment_intents are H62-G's (20261016120100), which ruling
+--    1870 applies before this file; the to_regclass check below is what holds that order, because
+--    a run that finds one of them absent raises and writes nothing. H62-G's eight public functions
+--    need no definer line: each is security invoker and reads public.posts or public.comments
+--    under the caller's own policies before handing to its private definer, so a held member is
+--    refused at that read (42501, no such post or comment, or an empty page) by the gates on posts
+--    and on the three tables.
 -- ---------------------------------------------------------------------------------------------------
 
 do $do$
@@ -183,7 +192,8 @@ declare
   t text;
 begin
   foreach t in array array[
-    'attestations', 'connection_requests', 'convene_picks', 'discovery_dismissals',
+    'attestations', 'comment_intents', 'comment_reactions', 'comments', 'connection_requests',
+    'convene_picks', 'discovery_dismissals',
     'dismissed_suggestions', 'edges', 'event_blocks', 'event_delivery', 'event_host_settings',
     'event_parties', 'event_registrations', 'events', 'member_about', 'member_blocks',
     'member_connections', 'member_corridors', 'member_focus_areas', 'member_follows',

@@ -126,10 +126,14 @@ const SEEDED_FILLING = [
 /**
  * Handoff 64-WG (20261018120000): the tables that carry the admission gate, one RESTRICTIVE policy
  * each; members, media and storage.objects carry the own-row shape and are checked by name. The
- * list is the migration's, so a table the gate misses fails here by name.
+ * list is the migration's, so a table the gate misses fails here by name. The three comment tables
+ * are H62-G's (20261016120100), applied before the gate under ruling 1870.
  */
 const H64_GATED_TABLES = [
   "attestations",
+  "comment_intents",
+  "comment_reactions",
+  "comments",
   "connection_requests",
   "convene_picks",
   "discovery_dismissals",
