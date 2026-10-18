@@ -49,24 +49,22 @@ const COPY = {
   resume: "Welcome back. Let's pick up where you left off.",
   saveFailed: "We couldn't save that just now. Nothing you entered is lost. Try again.",
 };
+// H-BS7-STANCE (1859, 1861): six, in public.member_stances' position order. Value, label, foot
+// label, a run of the body.
 const CARDS = [
+  ["kin", "Kin", "I am Kin", "by birth, by ancestry or by heritage"],
   [
     "returnee",
     "Returnee",
     "I am a Returnee",
-    "Return looks different for everyone, and all of it counts.",
+    "whether your family left one generation ago or many",
   ],
-  ["kin", "Kin", "I am Kin", "you belong here without needing a plan."],
-  ["anchor", "Anchor", "I am an Anchor", "you're who they reach."],
-  [
-    "ally",
-    "Ally",
-    "I am an Ally",
-    "You walk alongside. You support and partner. You don't represent.",
-  ],
+  ["bridge", "Bridge", "I am a Bridge", "neither place is the one you're leaving"],
+  ["anchor", "Anchor", "I am an Anchor", "an African country other than the one you're from"],
+  ["ally", "Ally", "I am an Ally", "You might be family by marriage"],
   ["exploring", "Still exploring", "I'm still exploring", "Nothing here is waiting on you."],
 ];
-const EXPLAINER_ROWS = ["Returnee", "Kin", "Anchor", "Ally", "Still exploring"];
+const EXPLAINER_ROWS = ["Kin", "Returnee", "Bridge", "Anchor", "Ally", "Still exploring"];
 const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
   "base64",
@@ -316,20 +314,20 @@ async function runOnboardingLayout(browserType, bname, [w, h], theme) {
     );
     const cards = page.locator('[role="radiogroup"] [role="radio"]');
     record(
-      tag + ": five cards in ruling 300's order",
-      (await cards.count()) === 5 &&
+      tag + ": six cards in ruling 1859's order, from the vocabulary",
+      (await cards.count()) === 6 &&
         (await cards.allInnerTexts()).every((t, i) => t.startsWith(CARDS[i][1])),
     );
     let verbatim = true;
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 6; i++) {
       const t = await cards.nth(i).innerText();
       if (!t.includes(CARDS[i][2]) || !t.includes(CARDS[i][3])) verbatim = false;
     }
     record(tag + ": every card carries its body and label verbatim (ruling 331)", verbatim);
     record(
       tag + ": Still exploring is checked on load and is the one tab stop",
-      (await cards.nth(4).getAttribute("aria-checked")) === "true" &&
-        (await cards.nth(4).getAttribute("tabindex")) === "0" &&
+      (await cards.nth(5).getAttribute("aria-checked")) === "true" &&
+        (await cards.nth(5).getAttribute("tabindex")) === "0" &&
         (await cards.nth(0).getAttribute("tabindex")) === "-1",
     );
     record(
@@ -338,24 +336,34 @@ async function runOnboardingLayout(browserType, bname, [w, h], theme) {
     );
     record(tag + ": screen three carries no numeral (ruling 308)", noNumeral(text));
     const boxes = [];
-    for (let i = 0; i < 5; i++) boxes.push(await cards.nth(i).boundingBox());
+    for (let i = 0; i < 6; i++) boxes.push(await cards.nth(i).boundingBox());
     if (expanded) {
       const row = await page.locator('[data-testid="stance-cards"]').boundingBox();
+      // Ruling 1860: two rows of three, read left to right, the grid bleeding to at most 1200.
+      const top = boxes.slice(0, 3);
+      const bottom = boxes.slice(3);
       record(
-        tag + ": expanded shows the five in one row, bleeding to at most 1200 (ruling 320)",
-        boxes.every((b) => b && Math.abs(b.y - boxes[0].y) < 2) &&
+        tag +
+          ": expanded shows the six as two rows of three, bleeding to at most 1200 (ruling 1860)",
+        top.every((b) => b && Math.abs(b.y - top[0].y) < 2) &&
+          bottom.every((b) => b && Math.abs(b.y - bottom[0].y) < 2) &&
+          !!bottom[0] &&
+          !!top[0] &&
+          bottom[0].y > top[0].y + top[0].height - 1 &&
+          top.every((b, i) => b && (i === 0 || b.x > top[i - 1].x + top[i - 1].width - 1)) &&
           !!row &&
           row.width <= 1200 + 1 &&
           row.width >= Math.min(1200, w - 80) - 1,
         row ? String(Math.round(row.width)) : "no row",
       );
       record(
-        tag + ": the five cards are equal height",
-        boxes.every((b) => b && Math.abs(b.height - boxes[0].height) < 2),
+        tag + ": the cards in each row are equal height",
+        top.every((b) => b && Math.abs(b.height - top[0].height) < 2) &&
+          bottom.every((b) => b && Math.abs(b.height - bottom[0].height) < 2),
       );
     } else {
       record(
-        tag + ": compact and medium stack the five in a column (ruling 320)",
+        tag + ": compact and medium stack the six in a column (ruling 320, 1860)",
         boxes.every((b, i) => b && (i === 0 || b.y > boxes[i - 1].y + boxes[i - 1].height - 1)) &&
           boxes.every((b) => b && Math.abs(b.x - boxes[0].x) < 2),
       );
@@ -379,10 +387,10 @@ async function runOnboardingLayout(browserType, bname, [w, h], theme) {
     const dtext = await dlg.innerText();
     record(
       tag +
-        ": the explainer opens as one sheet with the h2, the lead, both kickers, the five rows, The Return and the close line",
+        ": the explainer opens as one sheet with the h2, the lead, both kickers, the six rows, The Return and the close line",
       dtext.includes("What these mean, and why we ask") &&
         dtext.includes("It never ranks you, and no one is ever shown a score.") &&
-        dtext.toLowerCase().includes("what the five mean") &&
+        dtext.toLowerCase().includes("what the six mean") &&
         dtext.toLowerCase().includes("what changes when you choose") &&
         EXPLAINER_ROWS.every((r) => dtext.includes(r)) &&
         dtext.includes("The Return is DNA's name for the movement") &&
@@ -760,45 +768,46 @@ async function runOnboardingFlows(browserType, bname, [w, h], theme) {
     await page.goto(BASE + "/relationship", { waitUntil: "domcontentloaded" });
     await page.waitForSelector('[data-testid="onboarding-relationship"]', { timeout: 15000 });
     const cards = page.locator('[role="radiogroup"] [role="radio"]');
-    await cards.nth(1).click();
+    await cards.nth(0).click();
     await page.waitForTimeout(100);
     record(
       tag + ": choosing Kin checks it and hides the chosen line for good (ruling 329)",
-      (await cards.nth(1).getAttribute("aria-checked")) === "true" &&
-        (await cards.nth(4).getAttribute("aria-checked")) === "false" &&
+      (await cards.nth(0).getAttribute("aria-checked")) === "true" &&
+        (await cards.nth(5).getAttribute("aria-checked")) === "false" &&
         (await page.locator('[data-testid="chosen-line"]').count()) === 0,
     );
-    await cards.nth(1).focus();
+    await cards.nth(0).focus();
     await page.keyboard.press("ArrowRight");
     await page.waitForTimeout(100);
     record(
       tag + ": arrow keys move selection and focus (roving tabindex)",
-      (await cards.nth(2).getAttribute("aria-checked")) === "true" &&
-        (await activeTestId(page)) === "stance-card-anchor" &&
-        (await cards.nth(2).getAttribute("tabindex")) === "0",
+      (await cards.nth(1).getAttribute("aria-checked")) === "true" &&
+        (await activeTestId(page)) === "stance-card-returnee" &&
+        (await cards.nth(1).getAttribute("tabindex")) === "0",
     );
     await page.keyboard.press("ArrowLeft");
     await page.keyboard.press("ArrowLeft");
     await page.waitForTimeout(100);
     record(
-      tag + ": the selection wraps and Space re-selects",
-      (await cards.nth(0).getAttribute("aria-checked")) === "true",
+      tag + ": the selection wraps from the first card to the last",
+      (await cards.nth(5).getAttribute("aria-checked")) === "true" &&
+        (await activeTestId(page)) === "stance-card-exploring",
     );
-    await cards.nth(4).click();
+    await cards.nth(5).click();
     await page.waitForTimeout(100);
     record(
       tag + ": re-selecting Still exploring keeps the chosen line hidden and counts as a touch",
-      (await cards.nth(4).getAttribute("aria-checked")) === "true" &&
+      (await cards.nth(5).getAttribute("aria-checked")) === "true" &&
         (await page.locator('[data-testid="chosen-line"]').count()) === 0,
     );
-    await cards.nth(1).click();
+    await cards.nth(0).click();
     db.onboarding.failScreen = "relationship";
     await page.locator('[data-testid="finish"]').click();
     await page.waitForSelector('[data-testid="auth-alert"]', { timeout: 15000 });
     record(
       tag + ": a failed finish shows the save alert and keeps the choice",
       (await alertText(page)) === COPY.saveFailed &&
-        (await cards.nth(1).getAttribute("aria-checked")) === "true",
+        (await cards.nth(0).getAttribute("aria-checked")) === "true",
     );
     db.onboarding.failScreen = null;
     await page.locator('[data-testid="finish"]').click();

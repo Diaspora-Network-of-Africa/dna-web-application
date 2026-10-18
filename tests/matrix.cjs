@@ -256,10 +256,12 @@ const VOCAB = {
   interests: ["Energy", "Health", "Farming"],
   countries: ["South Africa", "Ghana", "Nigeria", "Kenya"],
   world: ["Germany", "Ghana", "Kenya", "South Africa", "United Kingdom", "United States"],
-  // Ruling 187: the stance chooser reads the vocabulary, not a map in the component.
+  // Ruling 187: the stance chooser reads the vocabulary, not a map in the component. Six in
+  // public.member_stances' position order (1856, 1859).
   stances: [
-    { value: "returnee", label: "Returnee" },
     { value: "kin", label: "Kin" },
+    { value: "returnee", label: "Returnee" },
+    { value: "bridge", label: "Bridge" },
     { value: "anchor", label: "Anchor" },
     { value: "ally", label: "Ally" },
     { value: "exploring", label: "Still exploring" },
@@ -814,8 +816,9 @@ const CONNECT_WHERE = {
 };
 const CONNECT_OPTIONS = {
   stances: [
-    { value: "returnee", label: "Returnee" },
     { value: "kin", label: "Kin" },
+    { value: "returnee", label: "Returnee" },
+    { value: "bridge", label: "Bridge" },
     { value: "anchor", label: "Anchor" },
     { value: "ally", label: "Ally" },
     { value: "exploring", label: "Still exploring" },
