@@ -9777,3 +9777,30 @@ page holds it, reading the next page while it does not and more exist. On a long
 several reads of twenty before the comment shows. The cheaper shape is a projection that answers the
 page holding a named comment, which no handoff has asked for. Closes with that projection or a ruling
 that the paging is acceptable. Owner: Chat, by brief.
+
+## G311. The matrix suites have outgrown the timeouts handoff 38-C set, and Chromium's is cancelled by its own ceiling
+
+**Severity: Moderate (a proof the PR path cannot deliver). Opened 19 October 2026 during H62-G PR 1, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+**Closed 19 October 2026 by H63-CI (#124, ruling 1881, merged at `e5d8257`), after H63-CAL's raise
+(#123, ruling 1879). Recorded rather than dropped, because the run that found it is the reason the
+ceilings moved.**
+
+`pages.yml`'s `matrix` job carried `timeout-minutes` of 85 for WebKit and 75 for Chromium, derived
+by handoff 38-C (G196) from suites of 56 and 52 minutes with 8- and 7-minute margins. The suites
+grew with every surface since: on run 618 (#121's head `48000f8`) Chromium's suite step ran 72m40s
+and WebKit's 76m59s, so the margins were already 2 and 8 minutes. On run 620 (`dfd758a`, this PR's
+head, carrying 62-G's six comments arms per engine) WebKit's suite read 82m15s (522 arms) and
+finished with under 3 minutes of its 85 left, and Chromium's was cancelled by the job timeout at
+74m44s, at the messenger reactions arm with four arms still to run, so `matrix (chromium)` read
+`cancelled` with no summary and no total, on both attempts. The comments arms are not what moved
+the suites: read from run 620's `ARM` timestamps they take 50 s on Chromium and 53 s on WebKit in
+all, so the rest of the growth is run-to-run variance and the arms already on `main`.
+
+Two fixes, both taken. #123 raised the ceilings to 110 and 100 (1879), which deferred the breach.
+#124 runs each engine's suite as shards, six WebKit and four Chromium, each a contiguous cut of
+`fullUnits()` in `tests/matrix.cjs` listed in `tests/matrix-shards.json` and checked by
+`tests/shards.cjs`, with a 45-minute ceiling per shard and a summary job per engine that holds the
+union to `tests/expected-counts.json` (1881). This PR places its six comments units per engine in the
+shard that holds the account arms before them, Chromium 3 and WebKit 4, which adds 50 s and 53 s to
+those shards' run 625 times. Owner: none; #124 is on `main`.
