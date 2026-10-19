@@ -45,6 +45,8 @@ export type NotificationView = NotificationRow & {
   people?: NotificationPerson[] | undefined;
   /** 62-A: more people than the two the row shows exist; never a count. */
   others?: boolean | undefined;
+  /** 62-G (10.2): the post a comment object belongs to, so a reply's row can open the thread there. */
+  postId?: string | undefined;
 };
 
 /** The post's first words for N.object (SPEC 10.2): one line, cut at eight words. */
@@ -92,10 +94,13 @@ export async function loadNotifications(memberId: string, limit = 50): Promise<N
     ...rows.filter((r) => r.actor_kind === "space").map((r) => r.actor_id as string),
   ];
   // 62-A (1317): an intent row names its actor and the actors grouped into it, which nothing read
-  // before this; every one is a members core row the viewer may read.
+  // before this; every one is a members core row the viewer may read. 62-G (1849): a comment row
+  // and a reply row are people-led the same way.
   const isIntent = (k: string) => k === "intent_help" || k === "intent_build";
+  const isPeople = (k: string) =>
+    isIntent(k) || k === "comment_on_post" || k === "reply_to_comment";
   const groupedIds = rows
-    .filter((r) => isIntent(r.kind))
+    .filter((r) => isPeople(r.kind))
     .flatMap((r) => (Array.isArray(r.grouped_actor_ids) ? r.grouped_actor_ids : []));
   const memberActorIds = [
     ...new Set([
@@ -106,7 +111,12 @@ export async function loadNotifications(memberId: string, limit = 50): Promise<N
     ]),
   ];
   const postIds = rows
-    .filter((r) => isIntent(r.kind) && r.object_kind === "post")
+    .filter((r) => isPeople(r.kind) && r.object_kind === "post")
+    .map((r) => r.object_id as string);
+  // 62-G (1817, 1849): a reply and an intent on a comment point at the comment; its first words are
+  // N.object and its post is where the row opens, both read under the comments policy (141).
+  const commentIds = rows
+    .filter((r) => isPeople(r.kind) && r.object_kind === "comment")
     .map((r) => r.object_id as string);
   // Brief 10 (736, 1027): an event_party object is the member's own event_parties row, readable
   // under its policy, and its event's title; the verb comes from the event_roles vocabulary (1018),
@@ -115,39 +125,46 @@ export async function loadNotifications(memberId: string, limit = 50): Promise<N
   // Fix PR 10 item 8 (1637): a thread's name through messenger_threads_view, the Messenger's one
   // read projection, never threads directly; a thread the viewer no longer reads answers no row.
   const threadIds = ids("thread");
-  const [spaces, events, opps, actors, roles, parties, threads, intentPosts] = await Promise.all([
-    spaceIds.length
-      ? sb.from("spaces").select("id,title").in("id", spaceIds)
-      : Promise.resolve({ data: [] as { id: string; title: string }[] }),
-    ids("event").length
-      ? sb.from("events").select("id,title,starts_at").in("id", ids("event"))
-      : Promise.resolve({ data: [] as { id: string; title: string; starts_at: string | null }[] }),
-    ids("opportunity").length
-      ? sb.from("opportunities").select("id,title").in("id", ids("opportunity"))
-      : Promise.resolve({ data: [] as { id: string; title: string }[] }),
-    memberActorIds.length
-      ? sb.from("members").select("id,name,handle,avatar_path").in("id", memberActorIds)
-      : Promise.resolve({
-          data: [] as { id: string; name: string; handle: string; avatar_path: string | null }[],
-        }),
-    ids("space").length
-      ? sb
-          .from("space_roles")
-          .select("space_id,role")
-          .eq("member_id", memberId)
-          .in("space_id", ids("space"))
-      : Promise.resolve({ data: [] as { space_id: string; role: "lead" | "member" }[] }),
-    partyIds.length
-      ? sb.from("event_parties").select("id,event_id,role").in("id", partyIds)
-      : Promise.resolve({ data: [] as { id: string; event_id: string; role: string }[] }),
-    threadIds.length
-      ? sb.from("messenger_threads_view").select("thread_id,name").in("thread_id", threadIds)
-      : Promise.resolve({ data: [] as { thread_id: string | null; name: string | null }[] }),
-    // 62-A: the post an intent row is about, under the posts policy, for N.object's first words.
-    postIds.length
-      ? sb.from("feed").select("id,body").in("id", postIds)
-      : Promise.resolve({ data: [] as { id: string | null; body: string | null }[] }),
-  ]);
+  const [spaces, events, opps, actors, roles, parties, threads, intentPosts, commentRows] =
+    await Promise.all([
+      spaceIds.length
+        ? sb.from("spaces").select("id,title").in("id", spaceIds)
+        : Promise.resolve({ data: [] as { id: string; title: string }[] }),
+      ids("event").length
+        ? sb.from("events").select("id,title,starts_at").in("id", ids("event"))
+        : Promise.resolve({
+            data: [] as { id: string; title: string; starts_at: string | null }[],
+          }),
+      ids("opportunity").length
+        ? sb.from("opportunities").select("id,title").in("id", ids("opportunity"))
+        : Promise.resolve({ data: [] as { id: string; title: string }[] }),
+      memberActorIds.length
+        ? sb.from("members").select("id,name,handle,avatar_path").in("id", memberActorIds)
+        : Promise.resolve({
+            data: [] as { id: string; name: string; handle: string; avatar_path: string | null }[],
+          }),
+      ids("space").length
+        ? sb
+            .from("space_roles")
+            .select("space_id,role")
+            .eq("member_id", memberId)
+            .in("space_id", ids("space"))
+        : Promise.resolve({ data: [] as { space_id: string; role: "lead" | "member" }[] }),
+      partyIds.length
+        ? sb.from("event_parties").select("id,event_id,role").in("id", partyIds)
+        : Promise.resolve({ data: [] as { id: string; event_id: string; role: string }[] }),
+      threadIds.length
+        ? sb.from("messenger_threads_view").select("thread_id,name").in("thread_id", threadIds)
+        : Promise.resolve({ data: [] as { thread_id: string | null; name: string | null }[] }),
+      // 62-A: the post an intent row is about, under the posts policy, for N.object's first words.
+      postIds.length
+        ? sb.from("feed").select("id,body").in("id", postIds)
+        : Promise.resolve({ data: [] as { id: string | null; body: string | null }[] }),
+      commentIds.length
+        ? sb.from("comments").select("id,body,post_id").in("id", commentIds)
+        : Promise.resolve({ data: [] as { id: string; body: string | null; post_id: string }[] }),
+    ]);
+  const commentOf = new Map((commentRows.data ?? []).map((c) => [c.id, c]));
   const postBody = new Map(
     (intentPosts.data ?? []).filter((p) => !!p.id).map((p) => [p.id as string, p.body ?? ""]),
   );
@@ -224,12 +241,21 @@ export async function loadNotifications(memberId: string, limit = 50): Promise<N
     const kindRow = kinds.get(r.kind);
     const c = kindRow?.c_from_object ? r.c_category : kindRow?.c;
     // 62-A: the people an intent row names, the actor first then the grouped actors in the order
-    // they folded in; the row shows two and says "and others" past that, never a count.
-    const peopleIds = isIntent(r.kind)
+    // they folded in; the row shows two and says "and others" past that, never a count. 62-G: the
+    // comment and reply rows likewise (1849).
+    const peopleIds = isPeople(r.kind)
       ? [r.actor_id ?? "", ...(Array.isArray(r.grouped_actor_ids) ? r.grouped_actor_ids : [])]
       : [];
     const people = peopleIds.map(personOf).filter((p): p is NotificationPerson => !!p);
-    const intentObject = isIntent(r.kind) ? firstWords(postBody.get(oid)) || undefined : undefined;
+    const commentRow = r.object_kind === "comment" ? commentOf.get(oid) : undefined;
+    // N.object: the post's first words, or the comment's (an image alone reads as one).
+    const peopleObject = !isPeople(r.kind)
+      ? undefined
+      : r.object_kind === "comment"
+        ? commentRow
+          ? firstWords(commentRow.body) || "Shared an image"
+          : undefined
+        : firstWords(postBody.get(oid)) || undefined;
     // 1637: the row reads, verbatim, `{name} invited you to {group}.`
     const text =
       r.kind === "thread_invitation" && actor && objectName
@@ -243,11 +269,12 @@ export async function loadNotifications(memberId: string, limit = 50): Promise<N
       actor: actor || "A member",
       actorHandle:
         r.actor_kind === "member" ? (actorHandle.get(r.actor_id ?? "") ?? undefined) : undefined,
-      object: objectName || intentObject || undefined,
+      object: objectName || peopleObject || undefined,
       detail,
       eventId: partyRow?.event_id,
       people: people.length ? people : undefined,
       others: people.length > 2 ? true : undefined,
+      postId: commentRow?.post_id,
     };
   });
   // 194: an invitation whose thread no longer reads (declined, removed) renders nothing rather

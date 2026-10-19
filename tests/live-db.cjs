@@ -501,6 +501,17 @@ async function runLiveDbArms({ record, skip }) {
       "H62-A (141, 1734): a reactor private.visible_to does not admit for the author reaches the author's list with no name, handle or photo",
     h62aCarry:
       "H62-A (1826): every post_reactions row that predates 20261015120100 reads asante with no emoji",
+    h62g: "H62-G (1796, 1820): comment_post writes a comment the thread answers with its author named, oldest first by (created_at, id), and the post author's own comment carries the Author mark",
+    h62gReply:
+      "H62-G (1677): a reply to a top-level comment lands under it in post_comments, and a reply to a reply is refused with 22023 reply_to_reply",
+    h62gRefused:
+      "H62-G (141): a comment on a post the caller may not see is refused with 42501, and goes once the post is readable again",
+    h62gBlocked:
+      "H62-G (186, 198): across a block the post's author reads no comment by the blocked member and no name of theirs, and the blocked member reads no thread at all",
+    h62gReact:
+      "H62-G (1817, 1822): comment_react sets Asante and removes it when the held kind is chosen again, read through comment_reaction_rows; comment_intent stores its line trimmed for the commenter's sheet, which refuses a member who did not write the comment",
+    h62gNotify:
+      "H62-G (1849, 1817, 1316): a comment writes one comment_on_post row for the post's author with the post as object, a reply one reply_to_comment row for the commenter with the comment as object, an intent on a comment one intent_help row with the comment as object, the author's own comment writes none, and the reactions wrote none",
     // The conformance arm's checks (tests/visibility-conformance.cjs), listed here so that a run
     // that cannot connect reports each of them UNPROVEN by name (G143, 228).
     ...Object.fromEntries(Object.entries(CONFORMANCE).map(([k, v]) => ["conformance" + k, v])),
@@ -1554,6 +1565,299 @@ async function runLiveDbArms({ record, skip }) {
             "; role rows " +
             roleRows.length,
         );
+    });
+
+    // ------------------------------------------------------------------------------------------
+    // H62-G (1677, 1796, 1817, 1820, 1849, 141, 186). The comment layer's writers and projections in
+    // one rolled back transaction: the member comments on the owner's post, the owner comments on
+    // their own and replies to the member; the thread is read as both; a reply to a reply and a
+    // comment across a block are refused; the member reacts to and sends an intent on the owner's
+    // comment; the notification rows are read as each recipient. Every row in one transaction
+    // shares one created_at, so order is read as the function orders, (created_at, id).
+    // ------------------------------------------------------------------------------------------
+    await inTransaction(client, async () => {
+      await actAsSelf(client);
+      const present = await client.query(
+        "select (to_regclass('public.comments') is not null and to_regproc('public.comment_post') is not null) as ok",
+      );
+      if (!present.rows[0] || present.rows[0].ok !== true) {
+        unreachedIn("h62g", "20261016120100_h62g_feed_comments.sql is not on the project yet");
+        skip(names.h62g, "20261016120100_h62g_feed_comments.sql is not on the project yet");
+        return;
+      }
+      await actAs(client, owner.id);
+      let post = await client.query(
+        "select id from public.feed where author_kind = 'member' and author_id = $1 and status = 'published' and audience = 'everyone' limit 1",
+        [owner.id],
+      );
+      let postId = post.rows[0] ? post.rows[0].id : null;
+      if (!postId) {
+        const pub = await attempt(client, "select public.publish_post($1::jsonb) as id", [
+          JSON.stringify({
+            body: "H62-G comments arm. Rolled back by the same run.",
+            author_kind: "member",
+            author_id: owner.id,
+            audience: "everyone",
+            host_context: "live-checks",
+          }),
+        ]);
+        postId = pub.ok ? pub.rows[0].id : null;
+      }
+      if (!postId) {
+        unreachedIn("h62g", "no post by the owner could be read or published");
+        skip(names.h62g, "no post by the owner could be read or published");
+        return;
+      }
+      const show = (x) => JSON.stringify(x);
+      const comment = (parent, body) =>
+        attempt(client, "select public.comment_post($1::uuid, $2::uuid, $3) as c", [
+          postId,
+          parent,
+          body,
+        ]);
+      const thread = async () => {
+        const r = await attempt(client, "select public.post_comments($1::uuid) as t", [postId]);
+        return r.ok ? r.rows[0].t : null;
+      };
+      const summaryOf = async (cid) => {
+        const r = await attempt(
+          client,
+          "select public.comment_reaction_rows(array[$1::uuid]) as s",
+          [cid],
+        );
+        return r.ok ? r.rows[0].s[cid] || null : null;
+      };
+
+      // 1. The member comments; the owner comments on their own post and replies to the member.
+      await actAs(client, member.id);
+      const c1 = await comment(null, "  First, from the member.  ");
+      const c1Id = c1.ok ? c1.rows[0].c.id : null;
+      await actAs(client, owner.id);
+      const c2 = await comment(null, "The author's own word.");
+      const c2Id = c2.ok ? c2.rows[0].c.id : null;
+      const r1 = c1Id ? await comment(c1Id, "A reply from the author.") : { ok: false };
+      await actAs(client, member.id);
+      const t1 = await thread();
+      const tops = t1 ? t1.comments : [];
+      const findTop = (id) => tops.find((x) => x.id === id);
+      const ordered =
+        tops.length >= 2 &&
+        tops.every(
+          (x, i) =>
+            i === 0 ||
+            tops[i - 1].created_at < x.created_at ||
+            (tops[i - 1].created_at === x.created_at && tops[i - 1].id < x.id),
+        );
+      record(
+        names.h62g,
+        c1.ok &&
+          c1.rows[0].c.body === "First, from the member." &&
+          c1.rows[0].c.author &&
+          c1.rows[0].c.author.handle === member.handle &&
+          c1.rows[0].c.you === true &&
+          c2.ok &&
+          !!findTop(c1Id) &&
+          !!findTop(c2Id) &&
+          findTop(c2Id).is_post_author === true &&
+          findTop(c1Id).is_post_author === false &&
+          findTop(c1Id).author &&
+          findTop(c1Id).author.name === member.name &&
+          ordered &&
+          !t1.more &&
+          !("count" in (t1 || {})),
+        (c1.ok ? "c1 " + show(c1.rows[0].c.author) : "c1 " + c1.code + " " + c1.message) +
+          "; tops " +
+          show(
+            tops.map((x) => [x.id === c1Id ? "c1" : x.id === c2Id ? "c2" : x.id, x.is_post_author]),
+          ) +
+          "; ordered " +
+          ordered,
+      );
+
+      // 2. The reply under its parent; a reply to the reply refused.
+      const r1Id = r1.ok ? r1.rows[0].c.id : null;
+      const under = findTop(c1Id) ? findTop(c1Id).replies || [] : [];
+      const nested = r1Id ? await comment(r1Id, "nested") : { ok: true };
+      record(
+        names.h62gReply,
+        r1.ok &&
+          r1.rows[0].c.parent_id === c1Id &&
+          under.length === 1 &&
+          under[0].id === r1Id &&
+          under[0].is_post_author === true &&
+          !nested.ok &&
+          nested.code === "22023" &&
+          /reply_to_reply/.test(nested.message || ""),
+        (r1.ok ? "reply under c1: " + under.length : "reply " + r1.code + " " + r1.message) +
+          "; nested " +
+          (nested.ok ? "accepted" : nested.code + " " + nested.message),
+      );
+
+      // 3. React, remove, intent and the commenter's sheet, on the owner's comment.
+      const a1 = await attempt(client, "select public.comment_react($1::uuid, 'asante') as r", [
+        c2Id,
+      ]);
+      const s1 = await summaryOf(c2Id);
+      const a2 = await attempt(client, "select public.comment_react($1::uuid, 'asante') as r", [
+        c2Id,
+      ]);
+      const s2 = await summaryOf(c2Id);
+      const i1 = await attempt(
+        client,
+        "select public.comment_intent($1::uuid, 'help', true, $2) as r",
+        [c2Id, "  I can introduce you.  "],
+      );
+      const auMember = await attempt(
+        client,
+        "select public.comment_reactors_author($1::uuid) as r",
+        [c2Id],
+      );
+      await actAs(client, owner.id);
+      const auOwner = await attempt(
+        client,
+        "select public.comment_reactors_author($1::uuid) as r",
+        [c2Id],
+      );
+      const intentRow = auOwner.ok
+        ? (auOwner.rows[0].r.rows || []).find((x) => x.class === "intent" && x.kind === "help")
+        : null;
+      record(
+        names.h62gReact,
+        a1.ok &&
+          a1.rows[0].r &&
+          a1.rows[0].r.kind === "asante" &&
+          !!s1 &&
+          s1.own &&
+          s1.own.kind === "asante" &&
+          s1.kinds.includes("asante") &&
+          a2.ok &&
+          a2.rows[0].r === null &&
+          !!s2 &&
+          s2.own === null &&
+          i1.ok &&
+          Array.isArray(i1.rows[0].r) &&
+          i1.rows[0].r.includes("help") &&
+          !auMember.ok &&
+          auMember.code === "42501" &&
+          auOwner.ok &&
+          !!intentRow &&
+          intentRow.line === "I can introduce you." &&
+          intentRow.id === member.id,
+        [a1, a2, i1].map((x) => (x.ok ? show(x.rows[0].r) : x.code + " " + x.message)).join(" | ") +
+          "; own after remove " +
+          show(s2 && s2.own) +
+          "; member's author read " +
+          (auMember.ok ? "answered" : auMember.code) +
+          "; line " +
+          show(intentRow && intentRow.line),
+      );
+
+      // 4. The notification rows, as each recipient.
+      const ownerRows = await client.query(
+        "select kind, object_kind::text as object_kind, object_id, group_key, actor_id, c_category::text as c from public.notifications where recipient_member_id = $1 and (object_id = $2 or object_id = $3) order by created_at",
+        [owner.id, postId, c2Id],
+      );
+      await actAs(client, member.id);
+      const memberRows = await client.query(
+        "select kind, object_kind::text as object_kind, object_id, group_key, actor_id from public.notifications where recipient_member_id = $1 and object_id = $2 order by created_at",
+        [member.id, c1Id],
+      );
+      const postC = await client.query(
+        "select c_category::text as c from public.feed where id = $1",
+        [postId],
+      );
+      const commentRow = ownerRows.rows.find((r) => r.kind === "comment_on_post");
+      const intentRows = ownerRows.rows.filter((r) => r.kind === "intent_help");
+      const replyRow = memberRows.rows.find((r) => r.kind === "reply_to_comment");
+      record(
+        names.h62gNotify,
+        !!commentRow &&
+          commentRow.object_kind === "post" &&
+          commentRow.object_id === postId &&
+          commentRow.group_key === "post:" + postId &&
+          commentRow.actor_id === member.id &&
+          commentRow.c === (postC.rows[0] && postC.rows[0].c) &&
+          ownerRows.rows.filter((r) => r.kind === "comment_on_post").length === 1 &&
+          intentRows.length === 1 &&
+          intentRows[0].object_kind === "comment" &&
+          intentRows[0].object_id === c2Id &&
+          intentRows[0].group_key === "comment:" + c2Id &&
+          ownerRows.rows.every((r) => ["comment_on_post", "intent_help"].includes(r.kind)) &&
+          !!replyRow &&
+          replyRow.object_kind === "comment" &&
+          replyRow.object_id === c1Id &&
+          replyRow.group_key === "comment:" + c1Id &&
+          replyRow.actor_id === owner.id &&
+          memberRows.rows.length === 1,
+        "owner rows " +
+          show(ownerRows.rows.map((r) => [r.kind, r.object_kind])) +
+          "; member rows " +
+          show(memberRows.rows.map((r) => [r.kind, r.object_kind])),
+      );
+
+      // 5. The block: the member blocks the owner (216's path). The member may not see the post,
+      //    so a comment is refused and the thread is no post to them; the owner reads no comment by
+      //    the member and no name of theirs. Unblocked, both return.
+      const block = await attempt(
+        client,
+        "insert into public.member_blocks (blocker_id, blocked_id) values ($1::uuid, $2::uuid)",
+        [member.id, owner.id],
+      );
+      const refused = await comment(null, "across the block");
+      const tBlockedMember = await attempt(client, "select public.post_comments($1::uuid) as t", [
+        postId,
+      ]);
+      await actAs(client, owner.id);
+      const tBlockedOwner = await thread();
+      const blockedTops = tBlockedOwner ? tBlockedOwner.comments : null;
+      const namesSeen = (t) =>
+        JSON.stringify(t || {}).includes('"' + member.name + '"') ||
+        JSON.stringify(t || {}).includes('"' + member.handle + '"');
+      const latestBlocked = await attempt(
+        client,
+        "select public.post_latest_comments(array[$1::uuid]) as l",
+        [postId],
+      );
+      await actAs(client, member.id);
+      const unblock = await attempt(
+        client,
+        "delete from public.member_blocks where blocker_id = $1::uuid and blocked_id = $2::uuid",
+        [member.id, owner.id],
+      );
+      const again = await comment(null, "after the block");
+      await actAs(client, owner.id);
+      const tAfter = await thread();
+      record(
+        names.h62gBlocked,
+        block.ok &&
+          !tBlockedMember.ok &&
+          tBlockedMember.code === "42501" &&
+          !!blockedTops &&
+          !blockedTops.some((x) => x.id === c1Id) &&
+          !namesSeen(tBlockedOwner) &&
+          latestBlocked.ok &&
+          !namesSeen(latestBlocked.rows[0].l) &&
+          unblock.ok &&
+          !!tAfter &&
+          tAfter.comments.some((x) => x.id === c1Id),
+        (block.ok ? "" : "block " + block.code + "; ") +
+          "member reads thread " +
+          (tBlockedMember.ok ? "rows" : tBlockedMember.code) +
+          "; owner sees c1 under the block " +
+          (blockedTops ? blockedTops.some((x) => x.id === c1Id) : "no thread") +
+          "; member named " +
+          namesSeen(tBlockedOwner) +
+          "; after unblock c1 back " +
+          (tAfter ? tAfter.comments.some((x) => x.id === c1Id) : "no thread"),
+      );
+      record(
+        names.h62gRefused,
+        !refused.ok && refused.code === "42501" && again.ok && !!again.rows[0].c.id,
+        "under the block " +
+          (refused.ok ? "accepted" : refused.code + " " + refused.message) +
+          "; after " +
+          (again.ok ? "accepted" : again.code + " " + again.message),
+      );
     });
 
     // ------------------------------------------------------------------------------------------

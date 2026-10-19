@@ -99,7 +99,8 @@ export type PostCardProps = {
   /** Ruling 416: the handle line, rendered under the name when the author's core row is visible. */
   authorHandle?: string | undefined;
   authorKind?: "member" | "space";
-  meta?: string | undefined;
+  /** 62-G (SPEC 10.1, 1817): a node, so the Feed passes its `time` element; a string renders as before. */
+  meta?: ReactNode;
   avatarSrc?: string | undefined;
   anchor?: string | undefined;
   audience?: string | undefined;

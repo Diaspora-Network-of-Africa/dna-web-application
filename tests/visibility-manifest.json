@@ -25,6 +25,23 @@
       "class": "exempt",
       "reason": "62-A write path (security invoker): the caller's own intent on a post the posts row policy admits, through private.post_intent_write, which notifies the author (1802)"
     },
+    "post_comments": { "class": "invoker" },
+    "post_latest_comments": { "class": "invoker" },
+    "comment_reaction_rows": { "class": "invoker" },
+    "comment_reactors_visible": { "class": "invoker" },
+    "comment_reactors_author": { "class": "invoker" },
+    "comment_post": {
+      "class": "exempt",
+      "reason": "62-G write path (security invoker): a comment or a reply on a post the posts row policy admits, through private.comment_write, which notifies the post's or the comment's author (1849)"
+    },
+    "comment_react": {
+      "class": "exempt",
+      "reason": "62-G write path (security invoker): the caller's one public reaction on a comment the comments and posts row policies admit, through private.comment_reaction_write (1817)"
+    },
+    "comment_intent": {
+      "class": "exempt",
+      "reason": "62-G write path (security invoker): the caller's own intent on a comment the row policies admit, through private.comment_intent_write, which notifies the comment's author (1817)"
+    },
     "member_recent_reactions": {
       "class": "exempt",
       "reason": "62-A: the caller's own picker recents and Messenger reactions (1821, 1405)"
@@ -446,6 +463,10 @@
 
     "member_homes": { "class": "owner" },
 
+    "comments": {
+      "class": "scoped",
+      "reason": "a comment's audience is its post's: comments_member_select reads public.posts under the caller's own policies and refuses a commenter blocked either way (62-G, 141, 186)"
+    },
     "posts": {
       "class": "scoped",
       "reason": "a post's audience is the post's own: posts_member_select composes private.is_blocked with the post's audience (everyone, connections, anchored)"

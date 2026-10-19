@@ -9,6 +9,9 @@
 // the footer act A.panel, disabled until the author's panel ships (H62-D; the G entry). Composed
 // from Sheet, Tabs, Avatar and Button until Strand lands WhoReactedSheet and PersonRow (SPEC 12
 // proposals 5 and 6; the G entries). Loading and a failed read render words, never a figure.
+// Handoff 62-G (SPEC 8.2, 1822): the same sheet for a comment, through comment_reactors_visible and
+// comment_reactors_author; `target` names which, and the author's sheet for a comment is the
+// commenter's, with no A.panel (the panel is the post's own figures, H62-D).
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 import { Avatar } from "@/components/strand/Avatar";
@@ -17,6 +20,7 @@ import { IconButton } from "@/components/strand/IconButton";
 import { Sheet } from "@/components/strand/Sheet";
 import { Tabs } from "@/components/strand/Tabs";
 import type { CardC } from "@/components/strand/cmeta";
+import { loadCommentReactorsAuthor, loadCommentReactorsVisible } from "@/lib/comments";
 import {
   accessibleLabel,
   loadReactorsAuthor,
@@ -34,9 +38,13 @@ import { PersonLink, profileLabel } from "./PersonLink";
 
 export const ROLE_LABEL = "A member outside your network";
 
+export type WhoReactedTarget = "post" | "comment";
+
 export type WhoReactedSheetProps = {
   open: boolean;
-  postId: string;
+  /** 62-G: whose reactions, a post's (the default) or a comment's. */
+  target?: WhoReactedTarget | undefined;
+  targetId: string;
   c: CardC;
   /** The viewer authored the post: the author's sheet (1813). */
   author: boolean;
@@ -219,7 +227,8 @@ function PersonRow({
 
 export function WhoReactedSheet({
   open,
-  postId,
+  target = "post",
+  targetId,
   c,
   author,
   kinds,
@@ -232,15 +241,17 @@ export function WhoReactedSheet({
   const [tab, setTab] = useState<string>(initialTab ?? "all");
   useEffect(() => {
     setTab(initialTab ?? "all");
-  }, [initialTab, postId, open]);
+  }, [initialTab, targetId, open]);
   const visible = useQuery({
-    queryKey: ["reactors", "visible", postId],
-    queryFn: () => loadReactorsVisible(postId),
+    queryKey: ["reactors", target, "visible", targetId],
+    queryFn: () =>
+      target === "comment" ? loadCommentReactorsVisible(targetId) : loadReactorsVisible(targetId),
     enabled: open && !author,
   });
   const mine = useQuery({
-    queryKey: ["reactors", "author", postId],
-    queryFn: () => loadReactorsAuthor(postId),
+    queryKey: ["reactors", target, "author", targetId],
+    queryFn: () =>
+      target === "comment" ? loadCommentReactorsAuthor(targetId) : loadReactorsAuthor(targetId),
     enabled: open && author,
   });
   const navigateAway = () => onClose();
@@ -315,17 +326,18 @@ export function WhoReactedSheet({
                 onNavigate={navigateAway}
               />
             ));
-    foot = (
-      <Button
-        variant="ghost"
-        size="sm"
-        disabled
-        data-author-panel=""
-        style={{ alignSelf: "flex-start" }}
-      >
-        See this post’s figures
-      </Button>
-    );
+    foot =
+      target === "post" ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled
+          data-author-panel=""
+          style={{ alignSelf: "flex-start" }}
+        >
+          See this post’s figures
+        </Button>
+      ) : null;
   }
   return (
     <Sheet
@@ -353,6 +365,7 @@ export function WhoReactedSheet({
       </div>
       <div
         data-who-reacted={author ? "author" : "reader"}
+        data-who-reacted-target={target}
         style={{
           flex: 1,
           overflowY: "auto",

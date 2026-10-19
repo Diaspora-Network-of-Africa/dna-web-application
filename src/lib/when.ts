@@ -30,6 +30,43 @@ export function whenShort(iso: string | null | undefined): string {
   return format(d, "EEE d MMM");
 }
 
+// ---------------------------------------------------------------------------------------------
+// SPEC-62-FEED-CARD 10.1 (ruling 1817, handoff 62-G): every time on a card, under a comment and in the
+// notification tray is a `time` element whose title is the absolute form (T.absolute, whenLabel's
+// "Thu 9 Oct, 10:02"). Its visible text is relative within the day (T.relative: "Now" under a minute,
+// then "5m", then "10h", up to a day) and the absolute form after the day; the expanded card always
+// shows the absolute form. Times arrive absolute from the server and are formatted here, once, so
+// the card, the comment and the tray cannot drift (src/components/dna/TimeStamp.tsx renders them).
+// ---------------------------------------------------------------------------------------------
+
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** T.relative: "Now", "5m" or "10h" for an instant within the last day; null at or past it. */
+export function relativeWithinDay(iso: string | null | undefined, now = new Date()): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const diff = now.getTime() - d.getTime();
+  if (diff >= DAY_MS) return null;
+  if (diff < 60_000) return "Now";
+  if (diff < 60 * 60_000) return Math.floor(diff / 60_000) + "m";
+  return Math.floor(diff / (60 * 60_000)) + "h";
+}
+
+/**
+ * The two forms every `time` element carries (10.1): the absolute title, and the visible text,
+ * relative within the day unless `absolute` asks for the absolute form (the expanded card).
+ */
+export function timeParts(
+  iso: string | null | undefined,
+  opts: { absolute?: boolean | undefined; now?: Date | undefined } = {},
+): { text: string; title: string } | null {
+  const title = whenLabel(iso);
+  if (!title) return null;
+  const relative = opts.absolute ? null : relativeWithinDay(iso, opts.now ?? new Date());
+  return { text: relative ?? title, title };
+}
+
 export function timeLabel(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = new Date(iso);

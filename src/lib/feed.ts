@@ -22,7 +22,7 @@ import {
 } from "./post-view";
 import { getSupabase, type Supabase } from "./supabase";
 import { instrumentLabels } from "./vocabularies";
-import { browserZone, dateInZone, isPast, knownZone, localLine, whenLabel, whenLine } from "./when";
+import { browserZone, dateInZone, isPast, knownZone, localLine, whenLine } from "./when";
 
 type FeedRow = Views<"feed">;
 type PostRow = Tables<"posts">;
@@ -495,9 +495,11 @@ export async function hydratePosts(
             image: link.image_url ?? undefined,
           }
         : null,
-      // The meta line is the absolute time; city and zone arrive with member profiles. A Convene
-      // card's meta is the event's line (P1-SPEC section 2).
-      meta: eventMeta ?? whenLabel(p.published_at),
+      // A Convene card's meta is the event's line (P1-SPEC section 2); every other card's meta is
+      // the post's time, which the card router renders as 10.1's `time` element from published_at
+      // (62-G): relative within the day, absolute after it and on the expanded card.
+      meta: eventMeta,
+      published_at: p.published_at,
       event: eventView,
     };
   });

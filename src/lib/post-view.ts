@@ -124,7 +124,10 @@ export type PostView = {
    *  null where the row or its framing is absent so MediaBlock renders its default. */
   media: PostImage[];
   link?: LinkView | null | undefined;
+  /** The meta line's words where they are not a time: a Convene card's event line (P1-SPEC 2). */
   meta?: string | undefined;
+  /** 62-G (SPEC 10.1): the post's instant, absolute from the server; the card formats it. */
+  published_at?: string | null | undefined;
   /** Present on a Convene card (created object of kind event). */
   event?: EventView | undefined;
 };

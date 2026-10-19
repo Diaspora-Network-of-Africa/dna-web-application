@@ -21,7 +21,9 @@ import { Toast } from "@/components/strand/Toast";
 import type { ComposerVerb } from "@/components/strand/cmeta";
 import type { Member } from "@/lib/auth";
 import { openComposer } from "@/lib/composer-store";
+import { loadLatestComments } from "@/lib/comments";
 import { loadFeed, loadMarks, loadPost, setSaved } from "@/lib/feed";
+import { CommentThread, LatestCommentLine } from "./CommentThread";
 import { useFeedReactions } from "./FeedReactions";
 import type { FeedView } from "@/lib/feed-view";
 import { setHeaderLens } from "@/lib/header-lens-store";
@@ -104,7 +106,7 @@ export function FeedSurface({ member, view }: { member: Member; view: FeedView }
   const router = useRouter();
   const tier = useTier();
   const expandedTier = tier === "expanded";
-  const search = useSearch({ strict: false }) as { lens?: string; who?: string };
+  const search = useSearch({ strict: false }) as { lens?: string; who?: string; comment?: string };
   const mode = useMode();
   const lens = parseLens(search.lens);
   const { share, toast: shareToast } = useShare();
@@ -218,6 +220,13 @@ export function FeedSurface({ member, view }: { member: Member; view: FeedView }
   // bar and the prompt in `below`, the sheets and the live region as overlays.
   const shownPosts = [...(posts ?? []), ...(single.data ? [single.data] : [])];
   const reactions = useFeedReactions({ member, ids, posts: shownPosts, tier, mode });
+  // Handoff 62-G (SPEC 8.3): the newest comment per post, one read per page beside the marks; the
+  // collapsed card's `below` shows it as one line, and the expanded card shows the thread instead.
+  const latest = useQuery({
+    queryKey: ["comments", "latest", member.id, ids.join(",")],
+    queryFn: () => loadLatestComments(ids),
+    enabled: ids.length > 0,
+  });
   // SPEC 10.2 (1802): an intent notification lands on the author's sheet at that tab, once; the
   // parameter leaves the address so a refresh does not reopen it.
   const openedWho = useRef<string | null>(null);
@@ -381,6 +390,32 @@ export function FeedSurface({ member, view }: { member: Member; view: FeedView }
       params: { id },
       search: lensSearch(lens),
     }).href;
+    const rx = reactions.propsFor(p);
+    const newest = latest.data?.get(id);
+    // 62-G: the bar and the prompt first, then the thread on the expanded card or the newest comment
+    // as one line on the collapsed card (SPEC 3, 8.3), all in PostCard's `below`.
+    const below =
+      rx.below || opts.expanded || newest ? (
+        <>
+          {rx.below}
+          {opts.expanded ? (
+            <CommentThread
+              post={p}
+              member={member}
+              tier={tier}
+              mode={mode}
+              focusCommentId={search.comment ?? null}
+            />
+          ) : newest ? (
+            <LatestCommentLine
+              comment={newest}
+              member={member}
+              mode={mode}
+              onOpen={() => (opts.inPlace ? openPost(id) : undefined)}
+            />
+          ) : null}
+        </>
+      ) : null;
     return (
       <div key={id} data-post-id={id}>
         <PostCardRouter
@@ -388,7 +423,8 @@ export function FeedSurface({ member, view }: { member: Member; view: FeedView }
           feed
           saved={savedOf(id)}
           onSave={() => toggleSaved(id)}
-          {...reactions.propsFor(p)}
+          {...rx}
+          below={below}
           onAuthor={() => {
             if (p.author_handle)
               void navigate({ to: "/m/$handle", params: { handle: p.author_handle }, search: {} });
