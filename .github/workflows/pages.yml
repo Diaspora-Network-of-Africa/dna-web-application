@@ -1,11 +1,36 @@
 # Deploys every branch to Cloudflare Pages as its own preview (branch name = preview alias);
 # the production branch deploys to production. Direct-upload flow, so no GitHub App is needed.
 # Required repository secrets: CLOUDFLARE_API_TOKEN (Pages:Edit), CLOUDFLARE_ACCOUNT_ID.
+#
+# H63-CI (rulings 1846, 1847, 1881, 1890): the two-engine matrix runs on a head that is ready for
+# review, on a push to main and on a dispatch, as six WebKit shards and four Chromium shards. A push
+# to any other branch deploys both apps and runs the static checks, `live` and `admin-arms`, and no
+# matrix. A push to main runs the same jobs and then the shards and both summaries against the
+# deployment that push uploaded, as a post-merge check (1890, amending 1846). The ready head's matrix runs
+# from the pull_request event, which deploys nothing: `matrix-head` finds the deployment this
+# workflow's push run uploaded for that head, by its SHA and branch, at its own URL (1141, 1155),
+# through scripts/gate-deployment.sh, the lookup the macOS gate has used since 1735. A push event
+# cannot say whether its branch's pull request is a draft without `pull-requests: read`, which no
+# job's token holds, and marking a pull request ready pushes nothing, so the event is the one
+# carrier of both facts, as webkit-macos.yml's header says.
+#   push, any branch but main      deploy, deploy-admin, live, admin-arms; matrix-head says why no
+#                                  matrix runs, in one line of the run's summary.
+#   push to main                   all of the above, then the shards and both summaries against the
+#                                  deployment this run uploaded: the post-merge check (1890).
+#   pull_request into main         opened, reopened, synchronize, ready_for_review: the shards run on
+#                                  the head when the pull request is not a draft. converted_to_draft
+#                                  cancels a matrix in flight through the concurrency group, whose
+#                                  key on this event is the pull request's own ref. Nothing deploys.
+#   workflow_dispatch              everything: the deploy, the push jobs, and the shards against the
+#                                  deployment this run uploaded.
 name: Cloudflare Pages
 
 on:
   push:
     branches: ["**"]
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review, converted_to_draft]
   workflow_dispatch:
 
 concurrency:
@@ -14,6 +39,8 @@ concurrency:
 
 jobs:
   deploy:
+    # H63-CI: a pull_request event deploys nothing; the push run for its head already has.
+    if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -81,6 +108,11 @@ jobs:
       # workflow holding the migrate secret. Static, as the lint above.
       - name: The migrate workflow is dispatch-only, approved, and the only holder of its secret (handoff 62-MIG)
         run: node tests/migrate-workflow.cjs
+      # H63-CI (1847): every unit of the full run is in exactly one shard of tests/matrix-shards.json
+      # on each engine, and the three units that act on the project for the seeded accounts share
+      # one. Static, so a push learns of an unplaced arm before a ready head's shards refuse to run.
+      - name: Every unit of the full matrix is in exactly one shard (H63-CI, ruling 1847)
+        run: node tests/shards.cjs
       - run: bun run build
       # Handoff 40-B section 6, arm 4: the member app's bundle carries no admin read and no admin
       # copy (Brief 12 guardrail 1). Read from the output this job just built.
@@ -138,6 +170,7 @@ jobs:
   # project. Its own job with no `needs` in either direction, so it neither delays nor gates the
   # member app's deploy, and the member app's test jobs never wait on it.
   deploy-admin:
+    if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -374,6 +407,93 @@ jobs:
           path: live-out
           if-no-files-found: warn
 
+  # H63-CI (rulings 1846, 1735): whether this run carries the matrix, and the deployment it reads.
+  # It says why in one line of the run's summary when the matrix does not run, because a skipped
+  # job runs no step and so writes nothing of its own. On a dispatch, and on a push to main (1890:
+  # the post-merge check), the deployment is the one the deploy job above just uploaded. On a pull request's event it is the one this workflow's push
+  # run uploaded for the head, found on Cloudflare by SHA and branch, here on one runner so no shard
+  # waits on a deploy; on a push to a ready pull request that push run is still building when this
+  # starts, and the lookup polls until its deploy stage has succeeded.
+  matrix-head:
+    needs: deploy
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+      url: ${{ steps.find.outputs.url || steps.decide.outputs.url }}
+      sha: ${{ steps.decide.outputs.sha }}
+      kind: ${{ steps.decide.outputs.kind }}
+    steps:
+      - name: Does this run carry the matrix (rulings 1846, 1735)
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          DEPLOYED: ${{ needs.deploy.outputs.deployed }}
+          URL: ${{ needs.deploy.outputs.url }}
+        run: |
+          set -uo pipefail
+          reason=""
+          case "$EVENT" in
+            workflow_dispatch | push)
+              if [ "$EVENT" = "push" ] && [ "$GITHUB_REF" != "refs/heads/main" ]; then
+                reason="a push to a branch other than main runs no matrix; it runs from its pull request's event, on a head that is ready for review, from a push to main as the post-merge check (1890), or from a dispatch."
+              elif [ "$DEPLOYED" = "true" ]; then
+                {
+                  echo "run=true"
+                  echo "url=$URL"
+                  echo "sha=$GITHUB_SHA"
+                  echo "kind=push"
+                } >> "$GITHUB_OUTPUT"
+                if [ "$EVENT" = "push" ]; then
+                  echo "**The matrix runs (ruling 1890):** a push to main, the post-merge check, on the deployment this run uploaded for \`$GITHUB_SHA\`." >> "$GITHUB_STEP_SUMMARY"
+                else
+                  echo "**The matrix runs (ruling 1846):** a dispatch, on the deployment this run uploaded for \`$GITHUB_SHA\`." >> "$GITHUB_STEP_SUMMARY"
+                fi
+              else
+                reason="this ${EVENT}'s deploy job uploaded no deployment, so there is nothing to test."
+              fi
+              ;;
+            pull_request)
+              if [ "$DRAFT" = "true" ]; then
+                reason="the head \`$HEAD_SHA\` belongs to draft pull request #$NUMBER; the matrix runs when it is marked ready for review."
+              else
+                {
+                  echo "run=true"
+                  echo "sha=$HEAD_SHA"
+                  echo "kind=pr"
+                } >> "$GITHUB_OUTPUT"
+                echo "**The matrix runs (ruling 1846):** pull request #$NUMBER is ready for review, and its head is \`$HEAD_SHA\` ($ACTION)." >> "$GITHUB_STEP_SUMMARY"
+              fi
+              ;;
+            *)
+              reason="the $EVENT event runs no matrix."
+              ;;
+          esac
+          if [ -n "$reason" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=matrix skipped::${reason//\`/}"
+            echo "**The matrix is skipped (ruling 1846):** $reason" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/checkout@v4
+        if: ${{ github.event_name == 'pull_request' && steps.decide.outputs.run == 'true' }}
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: The head's own deployment (rulings 1141, 1735)
+        id: find
+        if: ${{ github.event_name == 'pull_request' && steps.decide.outputs.run == 'true' }}
+        env:
+          SHA: ${{ github.event.pull_request.head.sha }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          PROJECT: dna-web-application
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: scripts/gate-deployment.sh
+
   # Exit check (ruling 61): the responsive matrix against the deployed preview.
   #
   # Rulings 223 and 283: one job per engine rather than one job driving both. Run 108 finished at
@@ -383,42 +503,89 @@ jobs:
   # buys two things raising the ceiling does not: a Chromium result that no longer waits on WebKit,
   # and, with fail-fast off, a Chromium result that a WebKit crash can no longer take down with it.
   # Under ruling 265 that is the difference between a red matrix and a red engine.
+  #
+  # H63-CI (rulings 1847, 1881): each engine in shards, six on WebKit and four on Chromium, over
+  # exactly the arms a full run runs. SHARD=k/n makes tests/matrix.cjs call only the units
+  # tests/matrix-shards.json gives shard k (tests/shards.cjs says how the file was cut and why the
+  # three Messenger units that act on the project for the seeded accounts share one); each shard
+  # checks the arms it ran against tests/expected-counts.json as a full run does, and the engine's
+  # matrix-summary job below holds the shards' union to the whole declaration. With fail-fast off a
+  # red shard takes down no other, so a red matrix names its engine and its shard.
   matrix:
-    needs: deploy
-    if: ${{ needs.deploy.outputs.deployed == 'true' }}
+    name: matrix (${{ matrix.engine }} ${{ matrix.shard }} of ${{ matrix.of }})
+    needs: matrix-head
+    # `!cancelled()` and not the implicit success(): success() reads every ancestor, and on a pull
+    # request's event matrix-head's own need, deploy, is skipped by design, so without it the shards
+    # were skipped behind a matrix-head that ran and said run=true (run 631).
+    if: ${{ !cancelled() && needs.matrix-head.outputs.run == 'true' }}
     runs-on: ubuntu-latest
-    # Handoff 38-C (G196), superseding the 60 handoff 31-B set when run 316 put Chromium's whole
-    # matrix past 45 at +2682s. The budget is the sum of what the job does, read on runs 436 and
-    # 439 and stated per engine, because the two share no state (283).
+    # Ruling 1879's line, per shard (handoff 63-CI). The budget is the sum of what one shard does,
+    # read per engine because the two share no state (283), and per shard because each installs,
+    # retries and uploads on its own runner.
     #
-    # WebKit: setup through the deployment check, 15 s on run 436; the apt-archive cache restore
-    # and seed, under 30 s; the install at its own 14-minute bound (the step below); the suite,
-    # 52m31s on run 436 (390 arms, +3151s) and, at run 439 attempt 2's pace, 6 per cent slower
-    # with a crash and its retry inside it (+3217s where run 436 read +3034s), about 56 minutes;
-    # 1237's retries at the census's maximum of two crashed arms in one job (828, run 139), each a
-    # fresh browser and the longest arm again, the connect arm at 23 s, under 2 minutes; the core
-    # extraction, 2m01s on run 439 attempt 2, 3 minutes; the archive harvest, the classification and
-    # the upload, under 1 minute. 0.5 + 0.5 + 14 + 56 + 2 + 3 + 1 = 77, so 85: an 8-minute margin.
+    # The suite: pages.yml run 625 (#123's final head, 0b426b5) ran each engine in one process,
+    # WebKit's suite in 78m19s and Chromium's in 74m03s, and its `ARM ... +Ns` lines give every
+    # arm's seconds; tests/matrix-shards.json was cut from them. The slowest WebKit shard reads
+    # 13m09s of that run's arm time and the slowest Chromium shard 18m37s. Run 439 attempt 2's pace,
+    # 6 per cent slower with a crash and its retry inside it, still applies to a shard as it did to
+    # the whole suite: about 14 and 20 minutes.
     #
-    # Chromium: the same setup, cache and install bound, 15; the suite, 51m16s on run 436 and
-    # 50m19s on run 439, 52; no core step and no retry, because Chromium has not crashed once in the
-    # census; the upload, under 1. 15 + 52 + 1 = 68, so 75: a 7-minute margin. Chromium's 60 is
-    # raised on its own reading and not on WebKit's: its suite was 44m42s when 31-B set 60 and is
-    # 51 now, which left 8 minutes for an install that run 439 showed cannot be assumed to take 26 s.
-    timeout-minutes: ${{ matrix.engine == 'webkit' && 110 || 100 }}
+    # WebKit: setup through the deployment check, 15 s on run 625 as on run 436; the apt-archive
+    # cache restore and seed, under 30 s; the install at its own 14-minute bound (the step below,
+    # unchanged, and now paid ten times a run, which is what the cache is for); the suite, 14; 1237's
+    # retries at the census's maximum of two crashed arms in one job (828, run 139), counted per
+    # shard because each shard is a job, each a fresh browser and the longest arm again, the
+    # 390x844 lens seat at 84 s, under 3 minutes; the core extraction, 2m01s on run 439 attempt 2,
+    # 3 minutes; the archive harvest, the classification, the shard's timing and the upload, under
+    # 1 minute. 0.5 + 0.5 + 14 + 14 + 3 + 3 + 1 = 36, so 45: a 9-minute margin.
+    #
+    # Chromium: the same setup, cache and install bound, 15; the suite, 20; no core step and no
+    # retry, because Chromium has not crashed once in the census; the upload, under 1. 15 + 20 + 1
+    # = 36, so 45: a 9-minute margin.
+    #
+    # Where 38-C's readings no longer apply: run 436's suites, 52m31s and 51m16s, and the 56 and 52
+    # minutes reasoned from them, describe one process running every arm; the arms have grown since
+    # (516 an engine on run 625) and no job runs them all now. 1879's 110 and 100 were that one
+    # process's line and leave with it. The install bound's reading (run 439's mirror, 32m10s and
+    # 8m22s against a 73 s install) applies unchanged, per shard.
+    #
+    # 1881's target is a slowest shard that finishes within 25 minutes of its job's start: on run
+    # 625's arm time that is about 1 minute of setup and install plus 13m09s (WebKit) and 18m37s
+    # (Chromium). The 45 above is the line that holds when the install or a retry does not go to
+    # plan, and is not the target.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        engine: [chromium, webkit]
+        include:
+          - { engine: chromium, shard: 1, of: 4 }
+          - { engine: chromium, shard: 2, of: 4 }
+          - { engine: chromium, shard: 3, of: 4 }
+          - { engine: chromium, shard: 4, of: 4 }
+          - { engine: webkit, shard: 1, of: 6 }
+          - { engine: webkit, shard: 2, of: 6 }
+          - { engine: webkit, shard: 3, of: 6 }
+          - { engine: webkit, shard: 4, of: 6 }
+          - { engine: webkit, shard: 5, of: 6 }
+          - { engine: webkit, shard: 6, of: 6 }
     env:
-      # Ruling 1141, as in the live job: the deployment this run uploaded, at its own URL.
-      BASE: ${{ needs.deploy.outputs.url }}
+      # Ruling 1141, as in the live job: the deployment this head was uploaded as, at its own URL;
+      # matrix-head says which run uploaded it.
+      BASE: ${{ needs.matrix-head.outputs.url }}
     steps:
+      # The shard's own clock, for the summary's per-shard time (1881).
+      - name: The shard's start
+        run: echo "SHARD_START=$(date +%s)" >> "$GITHUB_ENV"
+      # The head the deployment was built from, never the merge ref a pull_request event checks
+      # out by default: the tests are the ones the deployment was built beside.
       - uses: actions/checkout@v4
-      # Ruling 1141, as in the live job: each engine's summary names the host it tests.
+        with:
+          ref: ${{ needs.matrix-head.outputs.sha }}
+      # Ruling 1141, as in the live job: each shard's summary names the host it tests.
       - name: The host this job tests (ruling 1141)
         env:
-          KIND: push
+          KIND: ${{ needs.matrix-head.outputs.kind }}
+          HEAD_SHA: ${{ needs.matrix-head.outputs.sha }}
         run: scripts/host-tested.sh
       - uses: oven-sh/setup-bun@v2
         with:
@@ -567,9 +734,11 @@ jobs:
           sudo sysctl -w kernel.core_uses_pid=0 || true
           sudo sysctl -w fs.suid_dumpable=1 || true
           cat /proc/sys/kernel/core_pattern
-      - name: Run the matrix (${{ matrix.engine }})
+      - name: Run the matrix (${{ matrix.engine }}, shard ${{ matrix.shard }} of ${{ matrix.of }})
         env:
           ENGINE: ${{ matrix.engine }}
+          # H63-CI: the units tests/matrix-shards.json gives this shard, and no other.
+          SHARD: ${{ matrix.shard }}/${{ matrix.of }}
           OUT: ${{ github.workspace }}/matrix-out
           # Handoff 41-B section 5: the Messenger media arm (tests/messenger-media.cjs) signs the two
           # seeded accounts in for real against the deployment's own routes (ruling 218), as the live
@@ -711,18 +880,64 @@ jobs:
           fi
           tail=$(sed -n '/=== arms by tier/,$p' "$log")
           [ -n "$tail" ] || tail=$(tail -80 "$log")
-          echo "=== ${{ matrix.engine }}: the matrix summary, re-emitted (ruling 267) ==="
+          echo "=== ${{ matrix.engine }} shard ${{ matrix.shard }} of ${{ matrix.of }}: the matrix summary, re-emitted (ruling 267) ==="
           printf '%s\n' "$tail"
           {
-            echo "### ${{ matrix.engine }} (ruling 292: arms, not a total)"
+            echo "### ${{ matrix.engine }}, shard ${{ matrix.shard }} of ${{ matrix.of }} (ruling 292: arms, not a total)"
             echo '```'
             printf '%s\n' "$tail"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      # H63-CI (1881): the shard's time from its first step to here, read by the engine's summary.
+      - name: The shard's time (H63-CI)
+        if: always()
+        env:
+          OUT: ${{ github.workspace }}/matrix-out
+          ENGINE: ${{ matrix.engine }}
+          SHARD: ${{ matrix.shard }}
+          OF: ${{ matrix.of }}
+        run: |
+          set -uo pipefail
+          mkdir -p "$OUT"
+          seconds=$(( $(date +%s) - ${SHARD_START:-$(date +%s)} ))
+          printf '{"engine":"%s","shard":%s,"of":%s,"seconds":%s}\n' "$ENGINE" "$SHARD" "$OF" "$seconds" > "$OUT/shard.json"
+          echo "$ENGINE shard $SHARD of $OF: ${seconds}s from its first step to its tail."
       - name: Upload screenshots and results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: matrix-${{ matrix.engine }}-run-${{ github.run_number }}
+          name: matrix-${{ matrix.engine }}-shard-${{ matrix.shard }}-of-${{ matrix.of }}-run-${{ github.run_number }}
           path: matrix-out
           if-no-files-found: warn
+
+  # H63-CI (rulings 1847, 1881; 292, 228): one job per engine that reads every shard's arm counts
+  # against tests/expected-counts.json and fails, naming the arm, on one no shard ran, one two shards
+  # ran, or one short of or over its declaration, and, naming the shard, on a shard that left no
+  # counts. It runs when a shard failed too, because the sweep is most worth reading on that run.
+  matrix-summary:
+    name: matrix summary (${{ matrix.engine }})
+    needs: [matrix-head, matrix]
+    if: ${{ !cancelled() && needs.matrix-head.outputs.run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, webkit]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.matrix-head.outputs.sha }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      # tests/matrix-summary.cjs reads the admin-arm pattern out of tests/matrix.cjs, which loads
+      # Playwright's package (not a browser).
+      - run: scripts/retry.sh 3 bun install --frozen-lockfile
+      - name: Every shard's arm counts (H63-CI)
+        uses: actions/download-artifact@v4
+        with:
+          pattern: matrix-${{ matrix.engine }}-shard-*-run-${{ github.run_number }}
+          path: shards
+      - name: The shards against the declaration (rulings 292, 1847)
+        run: node tests/matrix-summary.cjs ${{ matrix.engine }} shards

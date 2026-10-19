@@ -175,6 +175,32 @@ async function sheetSettled(page, selector) {
   );
 }
 
+/**
+ * H63-CI (run 637): the header's Lens tablist mounts a render after the shell's scroll state flips,
+ * which scrollCentre's fixed 400 ms does not wait for. Present, no animation running in it, and its
+ * box unchanged across two frames, before a reader counts it.
+ */
+async function lensSettled(page, selector) {
+  await page.waitForFunction(
+    (sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return false;
+      if (
+        el.getAnimations &&
+        el.getAnimations({ subtree: true }).some((a) => a.playState === "running")
+      )
+        return false;
+      const r = el.getBoundingClientRect();
+      const box = `${r.x},${r.y},${r.width},${r.height}`;
+      const prev = el.__settledBox;
+      el.__settledBox = box;
+      return prev === box;
+    },
+    selector,
+    { timeout: 10000, polling: "raf" },
+  );
+}
+
 /** AppShell's own flag that the member scrolled past its threshold, and the scroller's offset. */
 async function shellScrolled(page) {
   return page.evaluate(() => {
@@ -498,6 +524,9 @@ async function runMountFeed(bt, bname, [w, h], theme) {
       await scrollCentre(page, 400);
       const sel = '[data-app-header] [role="tablist"][aria-label="Lens"]';
       if (header) {
+        // Run 637: read before the bar had mounted, 0 bar(s). An absent bar still fails the read
+        // when the wait gives up.
+        await lensSettled(page, sel).catch(() => undefined);
         const hl = await readLens(page, sel, 5);
         record(
           tag + " header LensBar once scrolled: five tabs, no trailing seat, the 52 track",

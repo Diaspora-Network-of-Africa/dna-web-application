@@ -3146,7 +3146,7 @@ function sortedObject(pairs) {
   return Object.fromEntries([...pairs].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 }
 
-function accountForArms({ full, engines }) {
+function accountForArms({ full, engines, shard = null }) {
   armClose();
   const seen = new Map();
   for (const a of armLog) seen.set(a.arm, (seen.get(a.arm) || 0) + a.emitted);
@@ -3269,6 +3269,16 @@ function accountForArms({ full, engines }) {
   // So the full run's sweep leaves them out, and the SPECIAL=admin run sweeps exactly them: an
   // admin arm that stopped running is still found in what was declared, in the job that owes it.
   const adminRun = !full && (process.env.SPECIAL || "").includes("admin");
+  if (shard) {
+    // H63-CI (1847): a shard runs a part of the engine's arms, so an arm that did not run here may
+    // have run in another shard. The engine's summary job (tests/matrix-summary.cjs) reads every
+    // shard's arm-counts.json against this file and sweeps for the missing, the short and the twice.
+    console.log(
+      `ruling 292: shard ${shard.index} of ${shard.count}; the missing-arm sweep is the engine's ` +
+        "summary job's, over every shard (tests/matrix-summary.cjs).",
+    );
+    return;
+  }
   if (!full && !adminRun) {
     console.log(
       "ruling 292: SPECIAL, ONLY or THEME is set, so this is a subset run and arms that did not " +
@@ -3317,8 +3327,8 @@ const KNOWN_CLASSES = [
  * with the crash flag or its absence, so a G5 sighting and a different symptom are told apart in
  * the line a reader sees first.
  */
-function finish({ full = false, engines = [] } = {}) {
-  accountForArms({ full, engines });
+function finish({ full = false, engines = [], shard = null } = {}) {
+  accountForArms({ full, engines, shard });
   const fails = results.filter((r) => r.ok === false);
   const unprovenChecks = results.filter((r) => r.unproven);
   fs.writeFileSync(path.join(OUT, "results.json"), JSON.stringify(results, null, 2));
@@ -7706,6 +7716,11 @@ async function runWidth(browserType, bname, [w, h]) {
     await visit("/feed", "**/feed", "feed");
     await page.waitForSelector('[data-testid="compose"]');
     await page.click('[data-testid="compose"]');
+    // Runs 633 and 635 (H63-CI): `stop`'s bare 600 ms measured this panel mid-slide on WebKit,
+    // its edge at 2001 past 1280, as the first unit of a shard with and without a warmed engine.
+    // Wait for the resting transform as every other composer arm does; a sheet that never settles
+    // is still measured, and still fails, when the wait gives up.
+    await sheetSettled(page, 'section[role="dialog"][aria-label="Compose"]').catch(() => undefined);
     await stop("composer open");
     await page.keyboard.press("Escape");
     await page.waitForTimeout(400);
@@ -8012,6 +8027,10 @@ async function runFields(browserType, bname, [w, h]) {
 }
 
 module.exports = {
+  // H63-CI: the unit list and the sweep's scope, read by tests/shards.cjs and tests/matrix-summary.cjs.
+  fullUnits,
+  ADMIN_ARM,
+  loadExpected,
   launch,
   makeMockDb,
   seedPosts,
@@ -8050,6 +8069,269 @@ module.exports = {
   DISCOVERY_LENSES,
   SAMPLES,
 };
+
+/**
+ * H63-CI (rulings 1846, 1847, 1881): the full run as an ordered list of units, one per call the
+ * main loop used to make, each with a key that names it the same on both engines. A full run
+ * calls every unit in this order, which is the order the loop called them in; a shard (SHARD=k/n,
+ * tests/shards.cjs) calls the ones tests/matrix-shards.json gives it, in this order. A unit is the
+ * unit of placement because it is the unit of execution: a group runner's arms (runProfile,
+ * runMount, runSheets) share state inside the call (profile.cjs's `seenPublic` hands the public
+ * arm's ids to the owner arm of the same cell), so a call is never split across shards. `bt` is
+ * unread until a unit runs, so `fullUnits(null, name)` lists the keys without a browser.
+ */
+function fullUnits(bt, bname, only = null) {
+  const units = [];
+  const unit = (key, run) => units.push({ key, run });
+  const cell = ([w, h]) => `${w}x${h}`;
+  const strip = require("./lens-strip.cjs");
+  for (const vp of only ? [only] : VIEWPORTS) {
+    for (const theme of only ? [process.env.THEME || "light"] : THEMES)
+      unit(`viewport ${cell(vp)} ${theme}`, () => drive(runViewport, bt, bname, vp, theme));
+    unit(`shell ${cell(vp)}`, () => drive(runShell, bt, bname, vp));
+    unit(`lens-seat ${cell(vp)}`, () => drive(runLensSeat, bt, bname, vp));
+    if (strip.LENS_STRIP_WIDTHS.includes(vp[0]))
+      unit(`lens-strip ${cell(vp)}`, () => drive(strip.runLensStrip, bt, bname, vp));
+    unit(`width ${cell(vp)}`, () => drive(runWidth, bt, bname, vp));
+  }
+  if (only) return units;
+  unit("publish 390x844 light", () => drive(runPublish, bt, bname, [390, 844], "light"));
+  unit("publish 1280x800 dark", () => drive(runPublish, bt, bname, [1280, 800], "dark"));
+  unit("guards 390x844 light", () => drive(runPublishGuards, bt, bname, [390, 844], "light"));
+  unit("guards 1280x800 dark", () => drive(runPublishGuards, bt, bname, [1280, 800], "dark"));
+  unit("silence", () => drive(runSilence, bt, bname));
+  unit("keyboard", () => drive(runKeyboard, bt, bname));
+  for (const vp of FIELD_WIDTHS) unit(`fields ${cell(vp)}`, () => drive(runFields, bt, bname, vp));
+  // Convene Pass 1 (P1-SPEC section 6): the composer's Convene mode and the card.
+  unit("convene 390x844 light", () => drive(runConvene, bt, bname, [390, 844], "light"));
+  unit("convene 1280x800 dark", () => drive(runConvene, bt, bname, [1280, 800], "dark"));
+  unit("convene-zone 390x844 light", () => drive(runConveneZone, bt, bname, [390, 844], "light"));
+  unit("convene-zone 1280x800 dark", () => drive(runConveneZone, bt, bname, [1280, 800], "dark"));
+  for (const vp of TARGETED_VIEWPORTS)
+    unit(`targeted ${cell(vp)}`, () => drive(runTargeted, bt, bname, vp));
+  // Brief 3: the profile in its three views plus editing mode, every viewport, both themes.
+  const { runProfile } = require("./profile.cjs");
+  for (const vp of VIEWPORTS)
+    for (const theme of THEMES)
+      unit(`profile ${cell(vp)} ${theme}`, () => runProfile(bt, bname, vp, theme));
+  // Brief 4: Connect's four lenses, sheets and rails, every viewport, both themes.
+  const { runConnect } = require("./connect.cjs");
+  for (const vp of VIEWPORTS)
+    for (const theme of THEMES)
+      unit(`connect ${cell(vp)} ${theme}`, () => drive(runConnect, bt, bname, vp, theme));
+  // Handoff 55-A: the bell's dot and Connect's for-you dot, every viewport, both themes (61).
+  const { runNotifyDots } = require("./notify-dots.cjs");
+  for (const vp of VIEWPORTS)
+    for (const theme of THEMES)
+      unit(`notify ${cell(vp)} ${theme}`, () => drive(runNotifyDots, bt, bname, vp, theme));
+  // Handoff 60-NC: the panel's controls at every cell (61), its flows and the unsubscribe
+  // landing page on the compact, medium and expanded cells.
+  const nc = require("./notify-controls.cjs");
+  for (const vp of VIEWPORTS)
+    for (const theme of THEMES)
+      unit(`notify-controls ${cell(vp)} ${theme}`, () =>
+        drive(nc.runNotifyControls, bt, bname, vp, theme),
+      );
+  for (const vp of nc.FLOW_CELLS)
+    for (const theme of THEMES) {
+      unit(`notify-flows ${cell(vp)} ${theme}`, () =>
+        drive(nc.runNotifyFlows, bt, bname, vp, theme),
+      );
+      unit(`unsubscribed ${cell(vp)} ${theme}`, () =>
+        drive(nc.runUnsubscribed, bt, bname, vp, theme),
+      );
+    }
+  // Handoff 61-S1: the Account drawer at every cell (61), its flows on the compact, medium and
+  // expanded cells.
+  const ac = require("./account.cjs");
+  for (const vp of VIEWPORTS)
+    for (const theme of THEMES)
+      unit(`account ${cell(vp)} ${theme}`, () => drive(ac.runAccountDrawer, bt, bname, vp, theme));
+  for (const vp of ac.FLOW_CELLS)
+    for (const theme of THEMES) {
+      unit(`account-flows ${cell(vp)} ${theme}`, () =>
+        drive(ac.runAccountFlows, bt, bname, vp, theme),
+      );
+      unit(`account-session ${cell(vp)} ${theme}`, () =>
+        drive(ac.runAccountSessionGone, bt, bname, vp, theme),
+      );
+    }
+  // Brief 10 (handoff 30-C item 13): the member's event page at every cell, its flows on the
+  // two representative layouts.
+  const {
+    runEvent,
+    runEventBlocks,
+    runEventFlows,
+    runGuest,
+    runEventLinks,
+  } = require("./event.cjs");
+  for (const vp of VIEWPORTS)
+    for (const theme of THEMES) {
+      unit(`event ${cell(vp)} ${theme}`, () => drive(runEvent, bt, bname, vp, theme));
+      unit(`event-blocks ${cell(vp)} ${theme}`, () => drive(runEventBlocks, bt, bname, vp, theme));
+    }
+  for (const vp of [
+    [390, 844],
+    [1280, 800],
+  ])
+    for (const theme of THEMES)
+      unit(`event-flows ${cell(vp)} ${theme}`, () => drive(runEventFlows, bt, bname, vp, theme));
+  // Brief 9 (handoff 31-B item 15): Discovery at every width plus 1440, both themes.
+  const {
+    runDiscovery,
+    runDiscoveryFacets,
+    runDiscoveryPlace,
+    FOLLOWUP_ARMS,
+    DISCOVERY_VIEWPORTS,
+    FACET_VIEWPORTS,
+    PLACE_VIEWPORTS,
+  } = require("./discovery.cjs");
+  for (const vp of DISCOVERY_VIEWPORTS)
+    for (const theme of THEMES)
+      unit(`discovery ${cell(vp)} ${theme}`, () => drive(runDiscovery, bt, bname, vp, theme));
+  // Handoff 32-B items 1, 2, 6 and 12 with Addendum 1: redirects, facets, ladders, writes, memory.
+  for (const [vp, theme] of FACET_VIEWPORTS)
+    unit(`discovery-facets ${cell(vp)} ${theme}`, () =>
+      drive(runDiscoveryFacets, bt, bname, vp, theme),
+    );
+  // Handoff 31-D item 7 (1063, 1065, 1067): the lens, the place and the intent.
+  for (const [vp, theme] of PLACE_VIEWPORTS)
+    unit(`discovery-place ${cell(vp)} ${theme}`, () =>
+      drive(runDiscoveryPlace, bt, bname, vp, theme),
+    );
+  // Handoff 32-B Addenda 4 and 5: one arm per item (1 to 5, and 8), each on its own cells.
+  for (const [run, cells] of FOLLOWUP_ARMS)
+    for (const [vp, theme] of cells)
+      unit(`${run.name} ${cell(vp)} ${theme}`, () => drive(run, bt, bname, vp, theme));
+  // Handoff 30-D item 14.3: the public page's guest path on the two representative layouts.
+  for (const vp of [
+    [390, 844],
+    [1280, 800],
+  ])
+    for (const theme of THEMES)
+      unit(`guest ${cell(vp)} ${theme}`, () => drive(runGuest, bt, bname, vp, theme));
+  // Handoff 32-B item 9: the alias and short-code paths, on the client.
+  unit("event-links 390x844 light", () => drive(runEventLinks, bt, bname, [390, 844], "light"));
+  unit("event-links 1280x800 dark", () => drive(runEventLinks, bt, bname, [1280, 800], "dark"));
+  // Rulings 193, 194: the vocabulary read served and then failing, on both layouts.
+  const { runVocabulary } = require("./vocabulary.cjs");
+  for (const vp of [
+    [390, 844],
+    [1280, 800],
+  ])
+    for (const theme of THEMES)
+      for (const fail of [false, true])
+        unit(`vocab ${cell(vp)} ${theme} ${fail ? "failed" : "served"}`, () =>
+          drive(runVocabulary, bt, bname, vp, theme, fail),
+        );
+  // Brief 4B: every auth surface rendered at every viewport and both themes, then the state
+  // flows on the two representative layouts.
+  const { runAuthLayout, runAuthFlows } = require("./auth.cjs");
+  for (const vp of VIEWPORTS)
+    for (const theme of THEMES)
+      unit(`auth-layout ${cell(vp)} ${theme}`, () => drive(runAuthLayout, bt, bname, vp, theme));
+  for (const vp of [
+    [390, 844],
+    [1280, 800],
+  ])
+    for (const theme of THEMES)
+      unit(`auth-flows ${cell(vp)} ${theme}`, () => drive(runAuthFlows, bt, bname, vp, theme));
+  // Ruling 198 and Brief 4A: the blocked party's view, the blocker's own view, the control end
+  // to end and its focus management, on both layouts and both themes.
+  const { runBlock, runBlocker, runBlockFlow, runBlockFocus } = require("./block.cjs");
+  for (const vp of [
+    [390, 844],
+    [1280, 800],
+  ])
+    for (const theme of THEMES) {
+      unit(`blocked ${cell(vp)} ${theme}`, () => drive(runBlock, bt, bname, vp, theme));
+      unit(`blocker ${cell(vp)} ${theme}`, () => drive(runBlocker, bt, bname, vp, theme));
+      unit(`block-flow ${cell(vp)} ${theme}`, () => drive(runBlockFlow, bt, bname, vp, theme));
+      unit(`block-focus ${cell(vp)} ${theme}`, () => drive(runBlockFocus, bt, bname, vp, theme));
+    }
+  // Brief 5 (ruling 279): the three onboarding screens everywhere, the state flows on the
+  // two representative layouts.
+  const {
+    runOnboardingLayout,
+    runOnboardingFlows,
+    runOnboardingPhotoFormats,
+  } = require("./onboarding.cjs");
+  for (const vp of VIEWPORTS)
+    for (const theme of THEMES)
+      unit(`onboarding-layout ${cell(vp)} ${theme}`, () =>
+        drive(runOnboardingLayout, bt, bname, vp, theme),
+      );
+  for (const vp of [
+    [390, 844],
+    [1280, 800],
+  ])
+    for (const theme of THEMES)
+      unit(`onboarding-flows ${cell(vp)} ${theme}`, () =>
+        drive(runOnboardingFlows, bt, bname, vp, theme),
+      );
+  // Ruling 345: the HEIC and oversized-JPEG arm runs once per engine, at the compact tier.
+  unit("onboarding-photo 390x844 light", () =>
+    drive(runOnboardingPhotoFormats, bt, bname, [390, 844], "light"),
+  );
+  // Handoff 58-12C2 (Brief 12, 12C part 2): the member app's recording, one call per moment,
+  // at the two representative layouts (tests/record.cjs).
+  const { runRecord } = require("./record.cjs");
+  unit("record 390x844 light", () => drive(runRecord, bt, bname, [390, 844], "light"));
+  unit("record 1280x800 light", () => drive(runRecord, bt, bname, [1280, 800], "light"));
+  // Handoff 32-A item 5 (rulings 755, 556, 627): every route that binds a part Strand compile
+  // v1790212533284400 changed, read after its open gate, one cell per tier (tests/mount.cjs).
+  const { runMount, MOUNT_CELLS } = require("./mount.cjs");
+  for (const [vp, theme] of MOUNT_CELLS)
+    unit(`mount ${cell(vp)} ${theme}`, () => runMount(bt, bname, vp, theme));
+  // Handoff 60-MEDIA-2 (1714 to 1716): the Feed card's edges either side of the expanded tier's
+  // widths, at rest and after a 2,000 px scroll, and the profile's portrait and cover opening
+  // the viewer on the master (tests/media-sites.cjs).
+  const media = require("./media-sites.cjs");
+  for (const w of media.FEED_EDGE_WIDTHS)
+    unit(`feed-edge ${w}x${media.FEED_EDGE_HEIGHT}`, () =>
+      drive(media.runFeedEdge, bt, bname, [w, media.FEED_EDGE_HEIGHT]),
+    );
+  for (const [vp, theme] of media.PROFILE_CELLS)
+    unit(`profile-viewer ${cell(vp)} ${theme}`, () =>
+      drive(media.runProfileViewer, bt, bname, vp, theme),
+    );
+  // Handoff 37-B (1201): every Sheet's enter and exit, frame by frame, on both shapes
+  // (tests/sheet.cjs).
+  const { runSheets } = require("./sheet.cjs");
+  unit("sheets", () => runSheets(bt, bname));
+  // Handoff 41-B section 5 (rulings 1346, 1374): the Messenger media routes against the
+  // deployment, once per engine, with the two seeded accounts (tests/messenger-media.cjs).
+  const { runMessengerMedia } = require("./messenger-media.cjs");
+  unit("messenger-media", () => drive(runMessengerMedia, bt, bname));
+  // Handoff 56-MOV item 3 (G224): a .mov through the thread's own video input, sent and rendered,
+  // and one over the byte ceiling refused as too_large (tests/messenger-composer-video.cjs).
+  const { runMessengerComposerVideo } = require("./messenger-composer-video.cjs");
+  unit("messenger-composer-video", () => drive(runMessengerComposerVideo, bt, bname));
+  // Handoff 41-C item 5 (SPEC 41-14 "Arms"): the Messenger's surfaces, the responsive matrix and
+  // the flows on the mock, then the deployment with the two seeded accounts (tests/messenger.cjs).
+  const msg = require("./messenger.cjs");
+  for (const vp of msg.LAYOUT_CELLS)
+    for (const theme of THEMES)
+      unit(`messenger-layout ${cell(vp)} ${theme}`, () =>
+        drive(msg.runMessengerLayout, bt, bname, vp, theme),
+      );
+  for (const [vp, theme] of msg.FLOW_CELLS) {
+    unit(`messenger-flows ${cell(vp)} ${theme}`, () =>
+      drive(msg.runMessengerFlows, bt, bname, vp, theme),
+    );
+    // Handoff 56-41E item 3: SPEC-41-E's second pass on the same two cells.
+    unit(`messenger-reactions ${cell(vp)} ${theme}`, () =>
+      drive(msg.runMessengerReactions, bt, bname, vp, theme),
+    );
+  }
+  unit("messenger-live", () => drive(msg.runMessengerLive, bt, bname));
+  // Handoff 45-C arm 3 (1377): the member app's theme on a dark device with no stored choice
+  // renders as main did at c859d54, at one compact and one expanded width (tests/theme.cjs).
+  const { runMemberTheme } = require("./theme.cjs");
+  unit("member-theme 390x844", () => drive(runMemberTheme, bt, bname, [390, 844]));
+  unit("member-theme 1280x800", () => drive(runMemberTheme, bt, bname, [1280, 800]));
+  return units;
+}
 
 /**
  * Ruling 283: the job is split by engine, so a run names the engine it drives and its arms are
@@ -8459,209 +8741,17 @@ if (require.main === module)
       finish({ full: false, engines: specialEngines.map(([n]) => n) });
     }
     const engines = selectEngines();
+    // H63-CI (rulings 1846, 1847, 1881): SHARD=k/n runs the units tests/matrix-shards.json gives
+    // shard k of the engine's n, in the order below, and no other; unset, every unit runs.
+    const shard = require("./shards.cjs").fromEnv({ engines, only });
     for (const [bname, bt] of engines) {
-      for (const vp of only ? [only] : VIEWPORTS) {
-        for (const theme of only ? [process.env.THEME || "light"] : THEMES)
-          await drive(runViewport, bt, bname, vp, theme);
-        await drive(runShell, bt, bname, vp);
-        await drive(runLensSeat, bt, bname, vp);
-        const strip = require("./lens-strip.cjs");
-        if (strip.LENS_STRIP_WIDTHS.includes(vp[0])) await drive(strip.runLensStrip, bt, bname, vp);
-        await drive(runWidth, bt, bname, vp);
-      }
+      const units = fullUnits(bt, bname, only);
+      for (const u of shard ? shard.pick(bname, units) : units) await u.run();
       if (only) {
         finish({ full: false, engines: engines.map(([n]) => n) });
       }
-      await drive(runPublish, bt, bname, [390, 844], "light");
-      await drive(runPublish, bt, bname, [1280, 800], "dark");
-      await drive(runPublishGuards, bt, bname, [390, 844], "light");
-      await drive(runPublishGuards, bt, bname, [1280, 800], "dark");
-      await drive(runSilence, bt, bname);
-      await drive(runKeyboard, bt, bname);
-      for (const vp of FIELD_WIDTHS) await drive(runFields, bt, bname, vp);
-      // Convene Pass 1 (P1-SPEC section 6): the composer's Convene mode and the card.
-      await drive(runConvene, bt, bname, [390, 844], "light");
-      await drive(runConvene, bt, bname, [1280, 800], "dark");
-      await drive(runConveneZone, bt, bname, [390, 844], "light");
-      await drive(runConveneZone, bt, bname, [1280, 800], "dark");
-      for (const vp of TARGETED_VIEWPORTS) await drive(runTargeted, bt, bname, vp);
-      // Brief 3: the profile in its three views plus editing mode, every viewport, both themes.
-      const { runProfile } = require("./profile.cjs");
-      for (const vp of VIEWPORTS)
-        for (const theme of THEMES) await runProfile(bt, bname, vp, theme);
-      // Brief 4: Connect's four lenses, sheets and rails, every viewport, both themes.
-      const { runConnect } = require("./connect.cjs");
-      for (const vp of VIEWPORTS)
-        for (const theme of THEMES) await drive(runConnect, bt, bname, vp, theme);
-      // Handoff 55-A: the bell's dot and Connect's for-you dot, every viewport, both themes (61).
-      const { runNotifyDots } = require("./notify-dots.cjs");
-      for (const vp of VIEWPORTS)
-        for (const theme of THEMES) await drive(runNotifyDots, bt, bname, vp, theme);
-      // Handoff 60-NC: the panel's controls at every cell (61), its flows and the unsubscribe
-      // landing page on the compact, medium and expanded cells.
-      const nc = require("./notify-controls.cjs");
-      for (const vp of VIEWPORTS)
-        for (const theme of THEMES) await drive(nc.runNotifyControls, bt, bname, vp, theme);
-      for (const vp of nc.FLOW_CELLS)
-        for (const theme of THEMES) {
-          await drive(nc.runNotifyFlows, bt, bname, vp, theme);
-          await drive(nc.runUnsubscribed, bt, bname, vp, theme);
-        }
-      // Handoff 61-S1: the Account drawer at every cell (61), its flows on the compact, medium and
-      // expanded cells.
-      const ac = require("./account.cjs");
-      for (const vp of VIEWPORTS)
-        for (const theme of THEMES) await drive(ac.runAccountDrawer, bt, bname, vp, theme);
-      for (const vp of ac.FLOW_CELLS)
-        for (const theme of THEMES) {
-          await drive(ac.runAccountFlows, bt, bname, vp, theme);
-          await drive(ac.runAccountSessionGone, bt, bname, vp, theme);
-        }
-      // Brief 10 (handoff 30-C item 13): the member's event page at every cell, its flows on the
-      // two representative layouts.
-      const {
-        runEvent,
-        runEventBlocks,
-        runEventFlows,
-        runGuest,
-        runEventLinks,
-      } = require("./event.cjs");
-      for (const vp of VIEWPORTS)
-        for (const theme of THEMES) {
-          await drive(runEvent, bt, bname, vp, theme);
-          await drive(runEventBlocks, bt, bname, vp, theme);
-        }
-      for (const vp of [
-        [390, 844],
-        [1280, 800],
-      ])
-        for (const theme of THEMES) await drive(runEventFlows, bt, bname, vp, theme);
-      // Brief 9 (handoff 31-B item 15): Discovery at every width plus 1440, both themes.
-      const {
-        runDiscovery,
-        runDiscoveryFacets,
-        runDiscoveryPlace,
-        FOLLOWUP_ARMS,
-        DISCOVERY_VIEWPORTS,
-        FACET_VIEWPORTS,
-        PLACE_VIEWPORTS,
-      } = require("./discovery.cjs");
-      for (const vp of DISCOVERY_VIEWPORTS)
-        for (const theme of THEMES) await drive(runDiscovery, bt, bname, vp, theme);
-      // Handoff 32-B items 1, 2, 6 and 12 with Addendum 1: redirects, facets, ladders, writes, memory.
-      for (const [vp, theme] of FACET_VIEWPORTS)
-        await drive(runDiscoveryFacets, bt, bname, vp, theme);
-      // Handoff 31-D item 7 (1063, 1065, 1067): the lens, the place and the intent.
-      for (const [vp, theme] of PLACE_VIEWPORTS)
-        await drive(runDiscoveryPlace, bt, bname, vp, theme);
-      // Handoff 32-B Addenda 4 and 5: one arm per item (1 to 5, and 8), each on its own cells.
-      for (const [run, cells] of FOLLOWUP_ARMS)
-        for (const [vp, theme] of cells) await drive(run, bt, bname, vp, theme);
-      // Handoff 30-D item 14.3: the public page's guest path on the two representative layouts.
-      for (const vp of [
-        [390, 844],
-        [1280, 800],
-      ])
-        for (const theme of THEMES) await drive(runGuest, bt, bname, vp, theme);
-      // Handoff 32-B item 9: the alias and short-code paths, on the client.
-      await drive(runEventLinks, bt, bname, [390, 844], "light");
-      await drive(runEventLinks, bt, bname, [1280, 800], "dark");
-      // Rulings 193, 194: the vocabulary read served and then failing, on both layouts.
-      const { runVocabulary } = require("./vocabulary.cjs");
-      for (const vp of [
-        [390, 844],
-        [1280, 800],
-      ])
-        for (const theme of THEMES)
-          for (const fail of [false, true]) await drive(runVocabulary, bt, bname, vp, theme, fail);
-      // Brief 4B: every auth surface rendered at every viewport and both themes, then the state
-      // flows on the two representative layouts.
-      const { runAuthLayout, runAuthFlows } = require("./auth.cjs");
-      for (const vp of VIEWPORTS)
-        for (const theme of THEMES) await drive(runAuthLayout, bt, bname, vp, theme);
-      for (const vp of [
-        [390, 844],
-        [1280, 800],
-      ])
-        for (const theme of THEMES) await drive(runAuthFlows, bt, bname, vp, theme);
-      // Ruling 198 and Brief 4A: the blocked party's view, the blocker's own view, the control end
-      // to end and its focus management, on both layouts and both themes.
-      const { runBlock, runBlocker, runBlockFlow, runBlockFocus } = require("./block.cjs");
-      for (const vp of [
-        [390, 844],
-        [1280, 800],
-      ])
-        for (const theme of THEMES) {
-          await drive(runBlock, bt, bname, vp, theme);
-          await drive(runBlocker, bt, bname, vp, theme);
-          await drive(runBlockFlow, bt, bname, vp, theme);
-          await drive(runBlockFocus, bt, bname, vp, theme);
-        }
-      // Brief 5 (ruling 279): the three onboarding screens everywhere, the state flows on the
-      // two representative layouts.
-      const {
-        runOnboardingLayout,
-        runOnboardingFlows,
-        runOnboardingPhotoFormats,
-      } = require("./onboarding.cjs");
-      for (const vp of VIEWPORTS)
-        for (const theme of THEMES) await drive(runOnboardingLayout, bt, bname, vp, theme);
-      for (const vp of [
-        [390, 844],
-        [1280, 800],
-      ])
-        for (const theme of THEMES) await drive(runOnboardingFlows, bt, bname, vp, theme);
-      // Ruling 345: the HEIC and oversized-JPEG arm runs once per engine, at the compact tier.
-      await drive(runOnboardingPhotoFormats, bt, bname, [390, 844], "light");
-      // Handoff 58-12C2 (Brief 12, 12C part 2): the member app's recording, one call per moment,
-      // at the two representative layouts (tests/record.cjs).
-      const { runRecord } = require("./record.cjs");
-      await drive(runRecord, bt, bname, [390, 844], "light");
-      await drive(runRecord, bt, bname, [1280, 800], "light");
-      // Handoff 32-A item 5 (rulings 755, 556, 627): every route that binds a part Strand compile
-      // v1790212533284400 changed, read after its open gate, one cell per tier (tests/mount.cjs).
-      const { runMount, MOUNT_CELLS } = require("./mount.cjs");
-      for (const [vp, theme] of MOUNT_CELLS) await runMount(bt, bname, vp, theme);
-      // Handoff 60-MEDIA-2 (1714 to 1716): the Feed card's edges either side of the expanded tier's
-      // widths, at rest and after a 2,000 px scroll, and the profile's portrait and cover opening
-      // the viewer on the master (tests/media-sites.cjs).
-      {
-        const media = require("./media-sites.cjs");
-        for (const w of media.FEED_EDGE_WIDTHS)
-          await drive(media.runFeedEdge, bt, bname, [w, media.FEED_EDGE_HEIGHT]);
-        for (const [vp, theme] of media.PROFILE_CELLS)
-          await drive(media.runProfileViewer, bt, bname, vp, theme);
-      }
-      // Handoff 37-B (1201): every Sheet's enter and exit, frame by frame, on both shapes
-      // (tests/sheet.cjs).
-      const { runSheets } = require("./sheet.cjs");
-      await runSheets(bt, bname);
-      // Handoff 41-B section 5 (rulings 1346, 1374): the Messenger media routes against the
-      // deployment, once per engine, with the two seeded accounts (tests/messenger-media.cjs).
-      const { runMessengerMedia } = require("./messenger-media.cjs");
-      await drive(runMessengerMedia, bt, bname);
-      // Handoff 56-MOV item 3 (G224): a .mov through the thread's own video input, sent and rendered,
-      // and one over the byte ceiling refused as too_large (tests/messenger-composer-video.cjs).
-      const { runMessengerComposerVideo } = require("./messenger-composer-video.cjs");
-      await drive(runMessengerComposerVideo, bt, bname);
-      // Handoff 41-C item 5 (SPEC 41-14 "Arms"): the Messenger's surfaces, the responsive matrix and
-      // the flows on the mock, then the deployment with the two seeded accounts (tests/messenger.cjs).
-      const msg = require("./messenger.cjs");
-      for (const vp of msg.LAYOUT_CELLS)
-        for (const theme of THEMES) await drive(msg.runMessengerLayout, bt, bname, vp, theme);
-      for (const [vp, theme] of msg.FLOW_CELLS) {
-        await drive(msg.runMessengerFlows, bt, bname, vp, theme);
-        // Handoff 56-41E item 3: SPEC-41-E's second pass on the same two cells.
-        await drive(msg.runMessengerReactions, bt, bname, vp, theme);
-      }
-      await drive(msg.runMessengerLive, bt, bname);
-      // Handoff 45-C arm 3 (1377): the member app's theme on a dark device with no stored choice
-      // renders as main did at c859d54, at one compact and one expanded width (tests/theme.cjs).
-      const { runMemberTheme } = require("./theme.cjs");
-      await drive(runMemberTheme, bt, bname, [390, 844]);
-      await drive(runMemberTheme, bt, bname, [1280, 800]);
     }
-    finish({ full: true, engines: engines.map(([n]) => n) });
+    finish({ full: !shard, shard, engines: engines.map(([n]) => n) });
   })().catch((e) => {
     // Ruling 228: a run that dies mid-flow still owes a report. The arm that was open is short of
     // its declared count and is named as incomplete, rather than the whole run vanishing.
