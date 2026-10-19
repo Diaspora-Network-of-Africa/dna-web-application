@@ -2,17 +2,21 @@
 # the production branch deploys to production. Direct-upload flow, so no GitHub App is needed.
 # Required repository secrets: CLOUDFLARE_API_TOKEN (Pages:Edit), CLOUDFLARE_ACCOUNT_ID.
 #
-# H63-CI (rulings 1846, 1847, 1881): the two-engine matrix runs only on a head that is ready for
-# review and on a dispatch, as six WebKit shards and four Chromium shards. A push deploys both apps
-# and runs the static checks, `live` and `admin-arms`, and no matrix. The ready head's matrix runs
+# H63-CI (rulings 1846, 1847, 1881, 1890): the two-engine matrix runs on a head that is ready for
+# review, on a push to main and on a dispatch, as six WebKit shards and four Chromium shards. A push
+# to any other branch deploys both apps and runs the static checks, `live` and `admin-arms`, and no
+# matrix. A push to main runs the same jobs and then the shards and both summaries against the
+# deployment that push uploaded, as a post-merge check (1890, amending 1846). The ready head's matrix runs
 # from the pull_request event, which deploys nothing: `matrix-head` finds the deployment this
 # workflow's push run uploaded for that head, by its SHA and branch, at its own URL (1141, 1155),
 # through scripts/gate-deployment.sh, the lookup the macOS gate has used since 1735. A push event
 # cannot say whether its branch's pull request is a draft without `pull-requests: read`, which no
 # job's token holds, and marking a pull request ready pushes nothing, so the event is the one
 # carrier of both facts, as webkit-macos.yml's header says.
-#   push                           deploy, deploy-admin, live, admin-arms; matrix-head says why no
+#   push, any branch but main      deploy, deploy-admin, live, admin-arms; matrix-head says why no
 #                                  matrix runs, in one line of the run's summary.
+#   push to main                   all of the above, then the shards and both summaries against the
+#                                  deployment this run uploaded: the post-merge check (1890).
 #   pull_request into main         opened, reopened, synchronize, ready_for_review: the shards run on
 #                                  the head when the pull request is not a draft. converted_to_draft
 #                                  cancels a matrix in flight through the concurrency group, whose
@@ -405,8 +409,8 @@ jobs:
 
   # H63-CI (rulings 1846, 1735): whether this run carries the matrix, and the deployment it reads.
   # It says why in one line of the run's summary when the matrix does not run, because a skipped
-  # job runs no step and so writes nothing of its own. On a dispatch the deployment is the one the
-  # deploy job above just uploaded. On a pull request's event it is the one this workflow's push
+  # job runs no step and so writes nothing of its own. On a dispatch, and on a push to main (1890:
+  # the post-merge check), the deployment is the one the deploy job above just uploaded. On a pull request's event it is the one this workflow's push
   # run uploaded for the head, found on Cloudflare by SHA and branch, here on one runner so no shard
   # waits on a deploy; on a push to a ready pull request that push run is still building when this
   # starts, and the lookup polls until its deploy stage has succeeded.
@@ -435,17 +439,23 @@ jobs:
           set -uo pipefail
           reason=""
           case "$EVENT" in
-            workflow_dispatch)
-              if [ "$DEPLOYED" = "true" ]; then
+            workflow_dispatch | push)
+              if [ "$EVENT" = "push" ] && [ "$GITHUB_REF" != "refs/heads/main" ]; then
+                reason="a push to a branch other than main runs no matrix; it runs from its pull request's event, on a head that is ready for review, from a push to main as the post-merge check (1890), or from a dispatch."
+              elif [ "$DEPLOYED" = "true" ]; then
                 {
                   echo "run=true"
                   echo "url=$URL"
                   echo "sha=$GITHUB_SHA"
                   echo "kind=push"
                 } >> "$GITHUB_OUTPUT"
-                echo "**The matrix runs (ruling 1846):** a dispatch, on the deployment this run uploaded for \`$GITHUB_SHA\`." >> "$GITHUB_STEP_SUMMARY"
+                if [ "$EVENT" = "push" ]; then
+                  echo "**The matrix runs (ruling 1890):** a push to main, the post-merge check, on the deployment this run uploaded for \`$GITHUB_SHA\`." >> "$GITHUB_STEP_SUMMARY"
+                else
+                  echo "**The matrix runs (ruling 1846):** a dispatch, on the deployment this run uploaded for \`$GITHUB_SHA\`." >> "$GITHUB_STEP_SUMMARY"
+                fi
               else
-                reason="this dispatch's deploy job uploaded no deployment, so there is nothing to test."
+                reason="this ${EVENT}'s deploy job uploaded no deployment, so there is nothing to test."
               fi
               ;;
             pull_request)
@@ -461,7 +471,7 @@ jobs:
               fi
               ;;
             *)
-              reason="a push runs no matrix; it runs from its pull request's event, on a head that is ready for review, or from a dispatch."
+              reason="the $EVENT event runs no matrix."
               ;;
           esac
           if [ -n "$reason" ]; then
