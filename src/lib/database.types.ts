@@ -1,4 +1,17 @@
 // Regenerated from the canonical Supabase project (dgspjevjoblujcoljvkn) with the Supabase MCP
+// generate_typescript_types tool on handoff H62-G's branch (#120, the Feed card's comments), on main
+// at fa4ef051 (the merge of #118), after the founder applied 20261016120000 and then 20261016120100
+// through migrate.yml (1827) and Chat read the project back at 18:18 PDT on 18 October 2026: ledger
+// head 20261016120100_h62g_feed_comments, md5 f6359cc818858c95a0856d84519c89ce equal to the file at
+// 72d288b, and 20261016120000 at a861e3c6e565cb0a4f5927c9b44fd3cd. What it changes here: the tables
+// comments, comment_reactions and comment_intents with their relationships; the functions
+// comment_post, post_comments, post_latest_comments, comment_react, comment_intent,
+// comment_reaction_rows, comment_reactors_visible and comment_reactors_author; and `comment` in
+// anchor_kind. Nothing else moves. `export type Views` is restored by hand after every regeneration
+// (CLAUDE.md).
+//
+// Before H62-G:
+// Regenerated from the canonical Supabase project (dgspjevjoblujcoljvkn) with the Supabase MCP
 // generate_typescript_types tool on handoff H62-A's branch (#116, the Feed card's reactions), on
 // main at efae54e (the merge of #117), after the founder applied 20261015120000 and then
 // 20261015120100 through migrate.yml (apply run approved from the Actions tab under rulings 1827 and
@@ -532,6 +545,170 @@ export type Database = {
             columns: ["member_id"];
             isOneToOne: false;
             referencedRelation: "members";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      comment_intents: {
+        Row: {
+          comment_id: string;
+          created_at: string;
+          kind: string;
+          line: string | null;
+          member_id: string;
+        };
+        Insert: {
+          comment_id: string;
+          created_at?: string;
+          kind: string;
+          line?: string | null;
+          member_id: string;
+        };
+        Update: {
+          comment_id?: string;
+          created_at?: string;
+          kind?: string;
+          line?: string | null;
+          member_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "comment_intents_comment_id_fkey";
+            columns: ["comment_id"];
+            isOneToOne: false;
+            referencedRelation: "comments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "comment_intents_kind_fkey";
+            columns: ["kind"];
+            isOneToOne: false;
+            referencedRelation: "post_reaction_kinds";
+            referencedColumns: ["kind"];
+          },
+          {
+            foreignKeyName: "comment_intents_member_id_fkey";
+            columns: ["member_id"];
+            isOneToOne: false;
+            referencedRelation: "members";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      comment_reactions: {
+        Row: {
+          comment_id: string;
+          created_at: string;
+          emoji: string | null;
+          kind: string;
+          member_id: string;
+        };
+        Insert: {
+          comment_id: string;
+          created_at?: string;
+          emoji?: string | null;
+          kind: string;
+          member_id: string;
+        };
+        Update: {
+          comment_id?: string;
+          created_at?: string;
+          emoji?: string | null;
+          kind?: string;
+          member_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "comment_reactions_comment_id_fkey";
+            columns: ["comment_id"];
+            isOneToOne: false;
+            referencedRelation: "comments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "comment_reactions_emoji_fkey";
+            columns: ["emoji"];
+            isOneToOne: false;
+            referencedRelation: "message_reaction_emoji";
+            referencedColumns: ["emoji"];
+          },
+          {
+            foreignKeyName: "comment_reactions_member_id_fkey";
+            columns: ["member_id"];
+            isOneToOne: false;
+            referencedRelation: "members";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      comments: {
+        Row: {
+          author_id: string;
+          body: string | null;
+          created_at: string;
+          deleted_at: string | null;
+          edited_at: string | null;
+          id: string;
+          media_id: string | null;
+          parent_id: string | null;
+          post_id: string;
+        };
+        Insert: {
+          author_id: string;
+          body?: string | null;
+          created_at?: string;
+          deleted_at?: string | null;
+          edited_at?: string | null;
+          id?: string;
+          media_id?: string | null;
+          parent_id?: string | null;
+          post_id: string;
+        };
+        Update: {
+          author_id?: string;
+          body?: string | null;
+          created_at?: string;
+          deleted_at?: string | null;
+          edited_at?: string | null;
+          id?: string;
+          media_id?: string | null;
+          parent_id?: string | null;
+          post_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "comments_author_id_fkey";
+            columns: ["author_id"];
+            isOneToOne: false;
+            referencedRelation: "members";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "comments_media_id_fkey";
+            columns: ["media_id"];
+            isOneToOne: false;
+            referencedRelation: "media";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "comments_parent_id_fkey";
+            columns: ["parent_id"];
+            isOneToOne: false;
+            referencedRelation: "comments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "comments_post_id_fkey";
+            columns: ["post_id"];
+            isOneToOne: false;
+            referencedRelation: "feed";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "comments_post_id_fkey";
+            columns: ["post_id"];
+            isOneToOne: false;
+            referencedRelation: "posts";
             referencedColumns: ["id"];
           },
         ];
@@ -4500,6 +4677,36 @@ export type Database = {
       admin_staff_settings_read: { Args: never; Returns: Json };
       admin_staff_settings_save: { Args: { p_patch: Json }; Returns: Json };
       claim_guest_registrations: { Args: never; Returns: Json };
+      comment_intent: {
+        Args: {
+          p_comment: string;
+          p_kind: string;
+          p_line?: string;
+          p_on: boolean;
+        };
+        Returns: Json;
+      };
+      comment_post: {
+        Args: {
+          p_body?: string;
+          p_media?: string;
+          p_parent?: string;
+          p_post: string;
+        };
+        Returns: Json;
+      };
+      comment_react: {
+        Args: {
+          p_comment: string;
+          p_emoji?: string;
+          p_kind: string;
+          p_picked?: boolean;
+        };
+        Returns: Json;
+      };
+      comment_reaction_rows: { Args: { p_comments: string[] }; Returns: Json };
+      comment_reactors_author: { Args: { p_comment: string }; Returns: Json };
+      comment_reactors_visible: { Args: { p_comment: string }; Returns: Json };
       connect_cards: {
         Args: {
           p_cursor?: string;
@@ -4938,10 +5145,20 @@ export type Database = {
         Returns: Json;
       };
       onboarding_state: { Args: never; Returns: Json };
+      post_comments: {
+        Args: {
+          p_after?: string;
+          p_after_id?: string;
+          p_limit?: number;
+          p_post: string;
+        };
+        Returns: Json;
+      };
       post_intent: {
         Args: { p_kind: string; p_line?: string; p_on: boolean; p_post: string };
         Returns: Json;
       };
+      post_latest_comments: { Args: { p_posts: string[] }; Returns: Json };
       post_react: {
         Args: {
           p_emoji?: string;
@@ -5049,7 +5266,8 @@ export type Database = {
         | "event_party"
         | "thread"
         | "message_request"
-        | "post";
+        | "post"
+        | "comment";
       audience: "everyone" | "connections" | "anchored";
       c_category: "connect" | "convene" | "collaborate" | "contribute" | "convey" | "system";
       contribute_instrument: "time" | "skills" | "in_kind";
@@ -5239,6 +5457,7 @@ export const Constants = {
         "thread",
         "message_request",
         "post",
+        "comment",
       ],
       audience: ["everyone", "connections", "anchored"],
       c_category: ["connect", "convene", "collaborate", "contribute", "convey", "system"],
