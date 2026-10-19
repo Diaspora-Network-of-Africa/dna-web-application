@@ -36,7 +36,12 @@ import {
   type Provider,
 } from "@/lib/auth-flow";
 import { recoveryPending } from "@/lib/recovery";
-import { readSignInNext, type SignInNext } from "@/lib/sign-in-next";
+import {
+  consumeSignInNext,
+  readSignInNext,
+  rememberSignInNext,
+  type SignInNext,
+} from "@/lib/sign-in-next";
 import { getSupabase } from "@/lib/supabase";
 import { useTheme } from "@/lib/tier";
 
@@ -66,8 +71,19 @@ export const Route = createFileRoute("/sign-in")({
 function SignIn() {
   const { ready, member, refreshMember } = useAuth();
   const navigate = useNavigate();
-  const { join, email: prefill, next } = Route.useSearch();
+  const { join, email: prefill, next: nextInUrl } = Route.useSearch();
   useTheme();
+  // Handoff 63-WS (1866): a provider return lands on a bare /sign-in, so the word the member left
+  // with is read back from its marker, once, on this mount (src/lib/sign-in-next.ts). The URL's
+  // word wins where both exist. Consumed under a ref so a second run of the effect reads nothing.
+  const [carried, setCarried] = useState<SignInNext | undefined>(undefined);
+  const consumed = useRef(false);
+  useEffect(() => {
+    if (consumed.current) return;
+    consumed.current = true;
+    setCarried(consumeSignInNext());
+  }, []);
+  const next = nextInUrl ?? carried;
   const [mode, setMode] = useState<"in" | "up">(join ? "up" : "in");
   // The form's state, in the shared hook: email, password, the alert and status lines, the field
   // flags, the password refusal (ruling 392, B8 item 3: in the field's own line) and busy.
@@ -141,8 +157,11 @@ function SignIn() {
     setWaitingFor(p);
     const sb = getSupabase();
     if (!sb) return;
+    // Handoff 63-WS: the word travels the round trip as a marker beside the provider's own.
+    rememberSignInNext(next);
     const { error } = await startProvider(sb, p);
     if (error) {
+      rememberSignInNext(undefined);
       setWaitingFor(null);
       setAlert(COPY.providerError(p));
     }

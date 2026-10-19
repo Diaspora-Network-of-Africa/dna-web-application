@@ -19,6 +19,7 @@ const {
   sheetWidthIs,
   BASE,
   SB,
+  JWT,
 } = M;
 const HANDLE = "thandiwe-dube";
 /** The handle the mock's own members row carries (tests/matrix.cjs, `members`), never the address opened. */
@@ -1071,9 +1072,10 @@ async function runGate(browserType, bname, vp, theme) {
  * reads; its Sign in carries next=profile and nothing else, no handle and no URL; the sign-in lands
  * on the member's own /m/<handle> in Edit profile mode, the handle read from their members row (the
  * mock's row is amara-osei and the address opened named thandiwe-dube, so the two are told apart);
- * a member already signed in lands in Edit profile mode with no sign-in step; and a path or a
- * handle in next is dropped and lands on the Feed. On main the control carries no next and the
- * sign-in lands on /feed, so the first two checks fail there.
+ * a provider round trip, which comes back to a bare /sign-in, lands there too, the word carried by
+ * its marker (src/lib/sign-in-next.ts); a member already signed in lands in Edit profile mode with
+ * no sign-in step; and a path or a handle in next is dropped and lands on the Feed. On main the
+ * controls carry no next and every sign-in lands on /feed, so the first four checks fail there.
  */
 async function runSignInReturn(browserType, bname, vp, theme) {
   const [w, h] = vp;
@@ -1114,8 +1116,53 @@ async function runSignInReturn(browserType, bname, vp, theme) {
       carries(fromChrome),
       fromChrome.search,
     );
-    // Done Means 1, second half: the sign-in lands on the member's own profile, in Edit profile
-    // mode, at the handle their row carries and not the one the address named.
+    // Done Means 2: the provider round trip. The mock's provider sends the member straight back to
+    // redirect_to with a session in the fragment, as a provider does on success; the redirect is
+    // the bare /sign-in the client registers, so the word can only have travelled by its marker.
+    const authorize = [];
+    await page.route("**/auth/v1/authorize**", (route) => {
+      const u = new URL(route.request().url());
+      authorize.push(u.searchParams.get("redirect_to"));
+      const to =
+        (u.searchParams.get("redirect_to") || BASE + "/sign-in") +
+        "#access_token=" +
+        JWT +
+        "&token_type=bearer&expires_in=3600&refresh_token=r";
+      return route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        headers: { "access-control-allow-origin": "*" },
+        body: `<!doctype html><meta charset="utf-8"><title>provider</title><script>location.replace(${JSON.stringify(to)})</script>`,
+      });
+    });
+    await M.hydrated(page);
+    await page.click('[data-testid="provider-google"]');
+    await page.waitForURL((u) => ownProfile(u) || u.pathname === "/feed", { timeout: 15000 });
+    await page
+      .waitForSelector('[data-testid="profile"]:not([data-view="loading"])', { timeout: 20000 })
+      .catch(() => undefined);
+    await page.waitForTimeout(250);
+    const viaProvider = new URL(page.url());
+    record(
+      tag +
+        ": a provider round trip, back to the bare /sign-in, lands on the member's own profile in Edit profile mode (1866)",
+      authorize.length === 1 &&
+        authorize[0] === BASE + "/sign-in" &&
+        ownProfile(viaProvider) &&
+        ["1", "true"].includes(viaProvider.searchParams.get("edit") || "") &&
+        (await editMode()),
+      JSON.stringify(authorize) + " " + viaProvider.pathname + viaProvider.search,
+    );
+    // Signed out again, in the same tab: the session is the client's own stored one.
+    await page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
+    await openProfile(page, "?edit=1");
+    await tap(page, page.getByTestId("profile").getByRole("button", { name: "Sign in" }));
+    await page.waitForURL((u) => u.pathname === "/sign-in", { timeout: 15000 });
+    // Done Means 1, second half: the password sign-in lands on the member's own profile, in Edit
+    // profile mode, at the handle their row carries and not the one the address named.
     await M.hydrated(page);
     await page.fill('input[type="email"]', "member@test.invalid");
     await page.fill('input[type="password"]', "x");
