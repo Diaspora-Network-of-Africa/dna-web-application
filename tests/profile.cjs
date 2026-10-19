@@ -1089,13 +1089,33 @@ async function runSignInReturn(browserType, bname, vp, theme) {
     (await page.getAttribute('[data-testid="profile"]', "data-view")) === "owner" &&
     (await page.getAttribute('[data-testid="profile"]', "data-edit")) === "1" &&
     (await page.locator('[data-testid="edit-done"]').count()) === 1;
+  const carries = (u) =>
+    u.searchParams.get("next") === "profile" &&
+    [...u.searchParams.keys()].join() === "next" &&
+    !u.search.includes(HANDLE);
+  /** The landing after a sign-in: the member's own profile or, on main, the Feed. */
+  const landing = async () => {
+    await page.waitForURL((u) => ownProfile(u) || u.pathname === "/feed", { timeout: 15000 });
+    await page
+      .waitForSelector('[data-testid="profile"]:not([data-view="loading"])', { timeout: 20000 })
+      .catch(() => undefined);
+    await page.waitForTimeout(250);
+    return new URL(page.url());
+  };
+  // A sign-in control, tapped on the page, is always followed by a sign-in on the page it opens
+  // and never by a goto away from it: run 39188218825's WebKit job reported a goto issued from a
+  // tapped-to /sign-in as interrupted by a navigation back to that same address, at all six cells,
+  // where Chromium did not, so the arm does not depend on that departure.
+  const signedOut = async () => {
+    await page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
+    await openProfile(page, "?edit=1");
+  };
   try {
-    // Done Means 1, first half: signed out, Share off, the gate. The gate's own Sign in and the
-    // public chrome's Sign in each carry the word and nothing else.
-    const carries = (u) =>
-      u.searchParams.get("next") === "profile" &&
-      [...u.searchParams.keys()].join() === "next" &&
-      !u.search.includes(HANDLE);
+    // Done Means 1, first half: signed out, Share off, the gate, which is what every recipient of
+    // 1865 reads. The gate's own Sign in carries the word and nothing else.
     await openProfile(page, "?edit=1");
     const view = await page.getAttribute('[data-testid="profile"]', "data-view");
     await tap(page, page.getByTestId("profile").getByRole("button", { name: "Sign in" }));
@@ -1107,18 +1127,10 @@ async function runSignInReturn(browserType, bname, vp, theme) {
       view === "gate" && carries(fromGate),
       "view=" + view + " " + fromGate.search,
     );
-    await openProfile(page, "?edit=1");
-    await tap(page, page.getByRole("banner").getByRole("button", { name: "Sign in" }));
-    await page.waitForURL((u) => u.pathname === "/sign-in", { timeout: 15000 });
-    const fromChrome = new URL(page.url());
-    record(
-      tag + ": the public chrome's Sign in carries next=profile alone, no handle (1866)",
-      carries(fromChrome),
-      fromChrome.search,
-    );
-    // Done Means 2: the provider round trip. The mock's provider sends the member straight back to
-    // redirect_to with a session in the fragment, as a provider does on success; the redirect is
-    // the bare /sign-in the client registers, so the word can only have travelled by its marker.
+    // Done Means 2: the provider round trip from that page. The mock's provider sends the member
+    // straight back to redirect_to with a session in the fragment, as a provider does on success;
+    // the redirect is the bare /sign-in the client registers, so the word can only have travelled
+    // by its marker.
     const authorize = [];
     await page.route("**/auth/v1/authorize**", (route) => {
       const u = new URL(route.request().url());
@@ -1136,13 +1148,9 @@ async function runSignInReturn(browserType, bname, vp, theme) {
       });
     });
     await M.hydrated(page);
+    await page.waitForSelector('[data-testid="provider-google"]', { timeout: 15000 });
     await page.click('[data-testid="provider-google"]');
-    await page.waitForURL((u) => ownProfile(u) || u.pathname === "/feed", { timeout: 15000 });
-    await page
-      .waitForSelector('[data-testid="profile"]:not([data-view="loading"])', { timeout: 20000 })
-      .catch(() => undefined);
-    await page.waitForTimeout(250);
-    const viaProvider = new URL(page.url());
+    const viaProvider = await landing();
     record(
       tag +
         ": a provider round trip, back to the bare /sign-in, lands on the member's own profile in Edit profile mode (1866)",
@@ -1153,26 +1161,24 @@ async function runSignInReturn(browserType, bname, vp, theme) {
         (await editMode()),
       JSON.stringify(authorize) + " " + viaProvider.pathname + viaProvider.search,
     );
-    // Signed out again, in the same tab: the session is the client's own stored one.
-    await page.evaluate(() => {
-      localStorage.clear();
-      sessionStorage.clear();
-    });
-    await openProfile(page, "?edit=1");
-    await tap(page, page.getByTestId("profile").getByRole("button", { name: "Sign in" }));
+    // Signed out again, in the same tab: the public chrome's Sign in carries the word too.
+    await signedOut();
+    await tap(page, page.getByRole("banner").getByRole("button", { name: "Sign in" }));
     await page.waitForURL((u) => u.pathname === "/sign-in", { timeout: 15000 });
+    const fromChrome = new URL(page.url());
+    record(
+      tag + ": the public chrome's Sign in carries next=profile alone, no handle (1866)",
+      carries(fromChrome),
+      fromChrome.search,
+    );
     // Done Means 1, second half: the password sign-in lands on the member's own profile, in Edit
     // profile mode, at the handle their row carries and not the one the address named.
     await M.hydrated(page);
+    await page.waitForSelector('input[type="email"]', { timeout: 15000 });
     await page.fill('input[type="email"]', "member@test.invalid");
     await page.fill('input[type="password"]', "x");
     await page.click('button[type="submit"]');
-    await page.waitForURL((u) => ownProfile(u) || u.pathname === "/feed", { timeout: 15000 });
-    await page
-      .waitForSelector('[data-testid="profile"]:not([data-view="loading"])', { timeout: 20000 })
-      .catch(() => undefined);
-    await page.waitForTimeout(250);
-    const landed = new URL(page.url());
+    const landed = await landing();
     record(
       tag +
         ": the sign-in lands on the member's own /m/<handle>, from their row, in Edit profile mode (1866)",
@@ -1190,8 +1196,8 @@ async function runSignInReturn(browserType, bname, vp, theme) {
       direct.pathname === "/m/" + HANDLE && (await editMode()),
       direct.pathname + direct.search,
     );
-    // Done Means 4: a path, a handle and a profile path in next are dropped and land on the Feed;
-    // the word itself, signed in, lands on the member's own profile.
+    // Done Means 4: a path, a handle and a URL in next are dropped and land on the Feed; the word
+    // itself, signed in, lands on the member's own profile.
     const dropped = [];
     for (const bad of ["%2Fm%2F" + OWN_HANDLE, OWN_HANDLE, "https%3A%2F%2Fexample.invalid"]) {
       await page.goto(BASE + "/sign-in?next=" + bad, { waitUntil: "networkidle" });
@@ -1201,9 +1207,7 @@ async function runSignInReturn(browserType, bname, vp, theme) {
       dropped.push(at.host + at.pathname + at.search);
     }
     await page.goto(BASE + "/sign-in?next=profile", { waitUntil: "networkidle" });
-    await page.waitForURL((u) => ownProfile(u) || u.pathname === "/feed", { timeout: 15000 });
-    await page.waitForTimeout(300);
-    const word = new URL(page.url());
+    const word = await landing();
     record(
       tag +
         ": a path, a handle and a URL in next land on /feed; the word profile lands on the member's own profile (1866)",
