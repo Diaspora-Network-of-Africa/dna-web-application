@@ -514,7 +514,10 @@ jobs:
   matrix:
     name: matrix (${{ matrix.engine }} ${{ matrix.shard }} of ${{ matrix.of }})
     needs: matrix-head
-    if: ${{ needs.matrix-head.outputs.run == 'true' }}
+    # `!cancelled()` and not the implicit success(): success() reads every ancestor, and on a pull
+    # request's event matrix-head's own need, deploy, is skipped by design, so without it the shards
+    # were skipped behind a matrix-head that ran and said run=true (run 631).
+    if: ${{ !cancelled() && needs.matrix-head.outputs.run == 'true' }}
     runs-on: ubuntu-latest
     # Ruling 1879's line, per shard (handoff 63-CI). The budget is the sum of what one shard does,
     # read per engine because the two share no state (283), and per shard because each installs,
