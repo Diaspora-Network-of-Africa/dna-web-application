@@ -9,6 +9,7 @@ import { PostCard, type PostCardProps } from "@/components/strand/PostCard";
 import { CARD_SCHEMA, fieldRows, UNTYPED } from "@/components/strand/verb-schema";
 import { memberEventPath } from "@/lib/event-page";
 import type { EventSpeakerView, PostView } from "@/lib/post-view";
+import { TimeStamp } from "./TimeStamp";
 
 /**
  * Brief 10 (679, B10-SPEC 3.9): the card's speakers row at every tier. Avatar 32, the name, the
@@ -218,7 +219,14 @@ export function postCardProps(view: PostView, opts: RouterOptions = {}): PostCar
     authorHandle: view.author_handle,
     authorKind: view.author_kind,
     avatarSrc: view.author_avatar,
-    meta: view.meta,
+    // 62-G (SPEC 10.1, 1817): the time as a `time` element whose title is the absolute form,
+    // relative within the day on the Feed and always absolute on the expanded card; a Convene card
+    // keeps its event line.
+    meta:
+      view.meta ??
+      (view.published_at ? (
+        <TimeStamp iso={view.published_at} absolute={!!opts.expanded} />
+      ) : undefined),
     anchor: view.anchor_name,
     audience: AUDIENCE_LABEL(view.audience, view.anchor_name),
     kicker: ev ? (cancelled ? "Event cancelled" : "Event") : schema.kicker,

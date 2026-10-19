@@ -4,7 +4,7 @@
 // layer, so the real client code paths run against a deterministic backend. Backend behaviour
 // (RLS, the feed view) is verified separately in SQL against the live project.
 // Usage: BASE=https://b2-shell-feed.dna-web-application.pages.dev WEBKIT=1 node tests/matrix.cjs
-// Env: ONLY='[390,844]' runs one viewport; SPECIAL=publish,guards,keyboard,fields,silence,shell,width,targeted,profile,connect,event,discovery,vocab,block,auth,onboarding,mount,sheet,gate,admin,media,messenger,theme,account runs flows only.
+// Env: ONLY='[390,844]' runs one viewport; SPECIAL=publish,guards,keyboard,fields,silence,shell,width,targeted,profile,connect,event,discovery,vocab,block,auth,onboarding,mount,sheet,gate,admin,media,messenger,theme,account,comments runs flows only.
 // Ruling 1237: an arm that loses its web process is run again once, alone, in a fresh browser, by
 // `drive()` below; CRASH_PROBE=<arm tag> is the harness probe that proves it (off by default).
 // Brief 3 profile flows live in tests/profile.cjs and Brief 4 Connect flows in tests/connect.cjs; both share this mock.
@@ -417,6 +417,21 @@ const VOCAB = {
       c_from_object: false,
       destination: null,
       renders: false,
+    },
+    // Handoff 62-G (1849): the two comment kinds as 20261016120100 seeds them, C from the object.
+    {
+      value: "comment_on_post",
+      c: null,
+      c_from_object: true,
+      destination: "Opens the post",
+      renders: true,
+    },
+    {
+      value: "reply_to_comment",
+      c: null,
+      c_from_object: true,
+      destination: "Opens the comment",
+      renders: true,
     },
   ],
   // Handoff 60-NC (1554, 1555): the two email vocabularies as 20261012120000 seeds them.
@@ -1011,6 +1026,17 @@ function makeMockDb() {
     reactions: [],
     intents: [],
     picks: [],
+    // 62-G: a comment row is { id, post_id, parent_id, author_id, body, media, created_at,
+    // edited_at, deleted_at } and, for a seeded commenter other than the member, `person`; a
+    // reaction or intent on one carries comment_id in place of post_id. commentReactDelayMs and
+    // reactDelayMs hold the write's answer back so an arm can read the optimistic change (1844);
+    // reactFail refuses the next comment_react so the rollback can be read.
+    comments: [],
+    commentReactions: [],
+    commentIntents: [],
+    commentReactDelayMs: 0,
+    reactDelayMs: 0,
+    reactFail: false,
     drafts: new Map(),
     rpcPayloads: [],
     inferCalls: 0,
@@ -1500,6 +1526,7 @@ async function mockSupabase(page, db, opts = {}) {
         storage_path: `${UID}/p1/${db.post_media.length + 1}.png`,
         width: 1200,
         height: 800,
+        media_id: "m-" + (db.post_media.length + 1),
       });
     }
     if (p.startsWith("/storage/v1/object/sign/") && method === "POST") {
@@ -2277,6 +2304,11 @@ async function mockSupabase(page, db, opts = {}) {
     if (p === "/rest/v1/rpc/post_react") {
       const b = req.postDataJSON() || {};
       db.rpcPayloads.push({ fn: "post_react", body: b });
+      if (db.reactDelayMs) await new Promise((r) => setTimeout(r, db.reactDelayMs));
+      if (db.reactFail) {
+        db.reactFail = false;
+        return json({ code: "XX000", message: "forced failure", details: null, hint: null }, 500);
+      }
       const held = db.reactions.find((r) => r.post_id === b.p_post && r.member_id === UID);
       const base = (e) => (e || "").replace(/\uFE0F/g, "");
       if (
@@ -2393,6 +2425,253 @@ async function mockSupabase(page, db, opts = {}) {
       });
     }
     if (p === "/rest/v1/rpc/member_recent_reactions") return json(db.picks.slice(0, 5));
+    // ---------------------------------------------------------------------------------------------
+    // Handoff 62-G: the comment layer's eight functions, as 20261016120100 shapes their answers. The
+    // viewer is UID; a seeded commenter carries `person`. A deleted comment answers as a tombstone;
+    // no figure reaches a reader's answer.
+    // ---------------------------------------------------------------------------------------------
+    const commentSummary = (cid) => {
+      const rx = db.commentReactions.filter((r) => r.comment_id === cid);
+      const people = rx
+        .filter((r) => r.member_id === UID || r.network)
+        .sort((a, c) => (a.member_id === UID ? -1 : c.member_id === UID ? 1 : 0))
+        .slice(0, 2);
+      const own = rx.find((r) => r.member_id === UID);
+      return {
+        kinds: PUBLIC_KINDS.filter((k) => rx.some((r) => r.kind === k)),
+        other: rx.some((r) => r.kind === "other"),
+        people: people.map(personOf),
+        more: rx.length > people.length,
+        own: own ? { kind: own.kind, emoji: own.emoji || null } : null,
+        intents: db.commentIntents
+          .filter((i) => i.comment_id === cid && i.member_id === UID)
+          .map((i) => i.kind),
+      };
+    };
+    const commentJson = (c, withReplies) => {
+      const deleted = !!c.deleted_at;
+      const author = c.author_id === UID ? { ...ME } : c.person ? { ...c.person } : null;
+      const out = {
+        id: c.id,
+        post_id: c.post_id,
+        parent_id: c.parent_id || null,
+        deleted,
+        you: !deleted && c.author_id === UID,
+        is_post_author: !deleted && authorOf(c.post_id) === c.author_id,
+        author: deleted || (author && author.withheld) ? null : author,
+        body: deleted ? null : c.body,
+        media: deleted ? null : c.media || null,
+        created_at: c.created_at,
+        edited_at: c.edited_at || null,
+        reactions: deleted ? null : commentSummary(c.id),
+      };
+      if (withReplies)
+        out.replies = db.comments
+          .filter((r) => r.parent_id === c.id && !r.deleted_at)
+          .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
+          .map((r) => commentJson(r, false));
+      return out;
+    };
+    if (p === "/rest/v1/rpc/post_comments") {
+      const b = req.postDataJSON() || {};
+      db.rpcPayloads.push({ fn: "post_comments", body: b });
+      const limit = b.p_limit || 20;
+      let tops = db.comments
+        .filter(
+          (c) =>
+            c.post_id === b.p_post &&
+            !c.parent_id &&
+            (!c.deleted_at || db.comments.some((r) => r.parent_id === c.id && !r.deleted_at)),
+        )
+        .sort((a, c) => a.created_at.localeCompare(c.created_at) || a.id.localeCompare(c.id));
+      if (b.p_after)
+        tops = tops.filter(
+          (c) =>
+            c.created_at > b.p_after || (c.created_at === b.p_after && c.id > (b.p_after_id || "")),
+        );
+      const page = tops.slice(0, limit);
+      const last = page[page.length - 1];
+      return json({
+        comments: page.map((c) => commentJson(c, true)),
+        more: tops.length > limit,
+        next: tops.length > limit && last ? { created_at: last.created_at, id: last.id } : null,
+      });
+    }
+    if (p === "/rest/v1/rpc/post_latest_comments") {
+      const b = req.postDataJSON() || {};
+      const out = {};
+      for (const id of b.p_posts || []) {
+        const newest = db.comments
+          .filter((c) => c.post_id === id && !c.deleted_at)
+          .sort((a, c) => c.created_at.localeCompare(a.created_at) || c.id.localeCompare(a.id))[0];
+        if (newest) {
+          const j = commentJson(newest, false);
+          delete j.reactions;
+          out[id] = j;
+        }
+      }
+      return json(out);
+    }
+    if (p === "/rest/v1/rpc/comment_post") {
+      const b = req.postDataJSON() || {};
+      db.rpcPayloads.push({ fn: "comment_post", body: b });
+      const refuse = (m) => json({ code: "22023", message: m, details: null, hint: null }, 400);
+      const body = (b.p_body || "").trim();
+      if (!body && !b.p_media) return refuse("empty_comment");
+      if (b.p_parent) {
+        const parent = db.comments.find((c) => c.id === b.p_parent && c.post_id === b.p_post);
+        if (!parent)
+          return json(
+            { code: "42501", message: "comment_write: no such comment", details: null, hint: null },
+            403,
+          );
+        if (parent.parent_id) return refuse("reply_to_reply");
+        if (parent.deleted_at) return refuse("comment_deleted");
+      }
+      if (db.commentFail) {
+        db.commentFail = false;
+        return json({ code: "XX000", message: "forced failure", details: null, hint: null }, 500);
+      }
+      const row = {
+        id: "c-" + (db.comments.length + 1) + "-" + Math.random().toString(36).slice(2, 6),
+        post_id: b.p_post,
+        parent_id: b.p_parent || null,
+        author_id: UID,
+        body: body || null,
+        media: b.p_media
+          ? {
+              id: b.p_media,
+              storage_path: `${UID}/${b.p_post}/${b.p_media}.png`,
+              width: 1200,
+              height: 800,
+              crop: null,
+              focal_point: null,
+            }
+          : null,
+        created_at: new Date().toISOString(),
+      };
+      db.comments.push(row);
+      const j = commentJson(row, !row.parent_id);
+      return json(j);
+    }
+    if (p === "/rest/v1/rpc/comment_react") {
+      const b = req.postDataJSON() || {};
+      db.rpcPayloads.push({ fn: "comment_react", body: b });
+      if (db.commentReactDelayMs) await new Promise((r) => setTimeout(r, db.commentReactDelayMs));
+      if (db.reactFail) {
+        db.reactFail = false;
+        return json({ code: "XX000", message: "forced failure", details: null, hint: null }, 500);
+      }
+      const held = db.commentReactions.find(
+        (r) => r.comment_id === b.p_comment && r.member_id === UID,
+      );
+      const base = (e) => (e || "").replace(/\uFE0F/g, "");
+      if (
+        held &&
+        held.kind === b.p_kind &&
+        (b.p_kind !== "other" || base(held.emoji) === base(b.p_emoji))
+      ) {
+        db.commentReactions.splice(db.commentReactions.indexOf(held), 1);
+        return json(null);
+      }
+      const row = {
+        member_id: UID,
+        comment_id: b.p_comment,
+        kind: b.p_kind,
+        emoji: b.p_kind === "other" ? b.p_emoji : null,
+        created_at: new Date().toISOString(),
+      };
+      if (held) Object.assign(held, row);
+      else db.commentReactions.push(row);
+      if (b.p_picked && b.p_kind === "other")
+        db.picks = [b.p_emoji, ...db.picks.filter((e) => e !== b.p_emoji)].slice(0, 5);
+      return json({ kind: row.kind, emoji: row.emoji });
+    }
+    if (p === "/rest/v1/rpc/comment_intent") {
+      const b = req.postDataJSON() || {};
+      db.rpcPayloads.push({ fn: "comment_intent", body: b });
+      const at = db.commentIntents.findIndex(
+        (i) => i.comment_id === b.p_comment && i.member_id === UID && i.kind === b.p_kind,
+      );
+      if (b.p_on) {
+        if (at < 0)
+          db.commentIntents.push({
+            member_id: UID,
+            comment_id: b.p_comment,
+            kind: b.p_kind,
+            line: b.p_line || null,
+          });
+        else if (b.p_line) db.commentIntents[at].line = b.p_line;
+      } else if (at >= 0) db.commentIntents.splice(at, 1);
+      return json(
+        db.commentIntents
+          .filter((i) => i.comment_id === b.p_comment && i.member_id === UID)
+          .map((i) => i.kind),
+      );
+    }
+    if (p === "/rest/v1/rpc/comment_reaction_rows") {
+      const b = req.postDataJSON() || {};
+      const out = {};
+      for (const id of b.p_comments || []) out[id] = commentSummary(id);
+      return json(out);
+    }
+    if (p === "/rest/v1/rpc/comment_reactors_visible") {
+      const b = req.postDataJSON() || {};
+      return json(
+        db.commentReactions
+          .filter((r) => r.comment_id === b.p_comment)
+          .sort((a, c) => (a.member_id === UID ? -1 : c.member_id === UID ? 1 : 0))
+          .map((r) => ({
+            ...personOf(r),
+            headline: r.member_id === UID ? null : (r.person && r.person.headline) || null,
+            kind: r.kind,
+            emoji: r.emoji || null,
+            relationship: r.member_id === UID ? "self" : r.network ? "connected" : "outside",
+            through: null,
+          })),
+      );
+    }
+    if (p === "/rest/v1/rpc/comment_reactors_author") {
+      const b = req.postDataJSON() || {};
+      const c = db.comments.find((x) => x.id === b.p_comment);
+      if (!c || c.author_id !== UID)
+        return json(
+          {
+            code: "42501",
+            message: "comment_reactors_author: not the author",
+            details: null,
+            hint: null,
+          },
+          403,
+        );
+      const rx = db.commentReactions.filter((r) => r.comment_id === b.p_comment);
+      const ix = db.commentIntents.filter((i) => i.comment_id === b.p_comment);
+      const figures = {
+        all: rx.length + ix.length,
+        other: rx.filter((r) => r.kind === "other").length,
+      };
+      for (const k of VOCAB.post_reaction_kinds)
+        figures[k.value] =
+          rx.filter((r) => r.kind === k.value).length + ix.filter((i) => i.kind === k.value).length;
+      const rowOf = (r, cls, line) => ({
+        ...(r.member_id === UID
+          ? { ...ME, you: true, headline: null }
+          : { ...r.person, you: false }),
+        class: cls,
+        kind: r.kind,
+        emoji: r.emoji || null,
+        line,
+        relationship: r.member_id === UID ? "self" : r.network ? "connected" : "outside",
+        through: null,
+      });
+      return json({
+        figures,
+        rows: [
+          ...rx.map((r) => rowOf(r, "reaction", null)),
+          ...ix.map((i) => rowOf(i, "intent", i.line || null)),
+        ],
+      });
+    }
     if (p === "/rest/v1/rpc/notifications_dot") {
       const renders = new Set(
         VOCAB.notification_kinds.filter((k) => k.renders).map((k) => k.value),
@@ -2562,6 +2841,14 @@ async function mockSupabase(page, db, opts = {}) {
         }
         const ids = inIds("post_id");
         return json(list.filter((r) => !ids || ids.includes(r.post_id)));
+      }
+      if (table === "comments") {
+        const ids = inIds("id");
+        return json(
+          db.comments
+            .filter((c) => !ids || ids.includes(c.id))
+            .map((c) => ({ id: c.id, body: c.body, post_id: c.post_id })),
+        );
       }
       if (table === "notifications") {
         if (method === "PATCH") {
@@ -8156,6 +8443,12 @@ function fullUnits(bt, bname, only = null) {
         drive(ac.runAccountSessionGone, bt, bname, vp, theme),
       );
     }
+  // Handoff 62-G: the Feed card's comments on the compact, medium and expanded cells
+  // (tests/comments.cjs).
+  const cm = require("./comments.cjs");
+  for (const vp of cm.FLOW_CELLS)
+    for (const theme of THEMES)
+      unit(`comments ${cell(vp)} ${theme}`, () => drive(cm.runComments, bt, bname, vp, theme));
   // Brief 10 (handoff 30-C item 13): the member's event page at every cell, its flows on the
   // two representative layouts.
   const {
@@ -8564,6 +8857,14 @@ if (require.main === module)
               await drive(ac.runAccountFlows, bt, bname, vp, theme);
               await drive(ac.runAccountSessionGone, bt, bname, vp, theme);
             }
+        }
+        // Handoff 62-G: the Feed card's comments on the compact, medium and expanded cells
+        // (tests/comments.cjs).
+        if (process.env.SPECIAL.includes("comments")) {
+          const cm = require("./comments.cjs");
+          for (const vp of process.env.ONLY ? [JSON.parse(process.env.ONLY)] : cm.FLOW_CELLS)
+            for (const theme of process.env.THEME ? [process.env.THEME] : THEMES)
+              await drive(cm.runComments, bt, bname, vp, theme);
         }
         // Handoff 32-A item 5: the mount arms, one cell per tier (tests/mount.cjs).
         if (process.env.SPECIAL.includes("mount")) {

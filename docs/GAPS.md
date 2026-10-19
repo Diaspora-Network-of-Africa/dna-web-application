@@ -9708,3 +9708,119 @@ main is the contract iOS reads, the control and its row answering `user-select: 
 glyph-tap lines pass on main as well as after the fix. The founder's device check is the proof of
 the behaviour itself. Closes when an arm runs on iOS WebKit, or when a ruling accepts the style
 contract as the standing proof. Owner: Chat, by ruling.
+
+## G306. Strand proposal 8: `Comment`'s linked head, `time` as a node, `mark`, `media` and the action row
+
+**Severity: low (composed props on a Strand part). Opened 19 October 2026 during H62-G PR 1, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+SPEC-62-FEED-CARD 8 and 12 (proposal 8; rulings 1809, 1817, 1820, 1822): the comment's photo and
+name open the profile, the time is 10.1's `time` element, the post author's own comment carries the
+Author mark before the time, the one image renders after the text, and React, Reply and the comment's
+summary sit in an action row under the text. The tree's `Comment` takes them as `nameHref` and
+`onName`, `time: ReactNode`, `mark`, `media` and `actions` (which replaces the part's own Reply act),
+recorded as divergences in `docs/strand-ports/sha256-b1a458dac1bd562f.md`; `CommentThread` composes
+the action row and the Author mark. The collapsed card's one line (8.3) is composed in
+`LatestCommentLine` from `PersonLink` and a button rather than `presentation="latest"`, whose name is
+not a link. Closes when a compile carries `Comment` with `onName`, a `time` node, `mark`, `media`, an
+action-row slot and a linked `latest` presentation, and the thread rebinds. Owner: Chat, by Strand
+brief.
+
+## G307. Strand proposal 9: `CommentComposer`
+
+**Severity: low (a composed part). Opened 19 October 2026 during H62-G PR 1, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+SPEC-62-FEED-CARD 8.4 and 12 (proposal 9): one field, Emoji, Add an image, Send, the attached image's
+tile and the failure line, and B60 F19's Replying to strip. Composed in `src/components/dna/CommentBox.tsx`
+from `Input`, `AttachmentTile`, `IconButton` and `Button`; Emoji is a text act because the compile
+carries no smile icon (the extraction's own note). Closes when a compile carries `CommentComposer`.
+Owner: Chat, by Strand brief.
+
+## G308. The private security-definer helpers are executable by `authenticated`, and `anon` and `authenticated` hold USAGE on schema `private`
+
+**Severity: Moderate (a launch gate). Opened 19 October 2026 during H62-G PR 1 at Session 62's instruction (18 October), filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+`20261015120100` and `20261016120100` grant `execute` to `authenticated` on their private
+security-definer helpers (`private.post_reaction_write`, `private.comment_write`, the `*_for`
+projections and the rest), because each public function is security invoker and the caller must be
+able to reach the helper it calls; `20260921160100` set the pattern for `private.member_display`.
+`anon` and `authenticated` hold USAGE on schema `private` for the same reason. Each helper admits
+nothing the public wrapper did not already admit through the row policies, and PostgREST exposes
+only the schemas named in its `db-schemas` setting, so the helpers are callable from the API only if
+`private` is an exposed schema. Launch gate: verify on the canonical project that `private` is not an
+exposed API schema (the project's API settings), and record the reading here; if it is, or ever
+becomes so, revoke the execute grants and move the row work behind wrappers that take no viewer.
+Owner: Chat, by the launch gate (#121).
+
+## G309. Strings the comment layer renders that no extraction carries
+
+**Severity: low (copy held). Opened 19 October 2026 during H62-G PR 1, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+Named here rather than invented silently (HANDOFF-62-G guardrails). Each renders today as written and
+is replaced the moment an extraction or ruling names it: the role words for a commenter
+`private.visible_to` withholds from the viewer, "A member" (`COMMENTER_ROLE`; names.ts supplies no
+comment role, and A.role's "A member outside your network" is the author's sheet's); "Shared an
+image" for a comment with an image and no text on the collapsed card's line and in a notification's
+object line; the thread's failed read, "The comments did not load."; the box's refusal lines under a
+failed send, "The comment is too long.", "That comment is no longer here." and "The image did not
+attach."; the live region's refusal, "Could not save the reaction." and "Could not save that.", which
+62-A's toast already carried; and the destination words of the two kinds, "Opens the post" and
+"Opens the comment", which are the vocabulary row's own. Closes when Chat rules on each or an
+extraction carries it. Owner: Chat.
+
+## G310. A notification's comment destination reads the thread page by page until the comment is held
+
+**Severity: low (a cost, not a wrong answer). Opened 19 October 2026 during H62-G PR 1, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+SPEC-62-FEED-CARD 10.2: a reply's or a comment intent's row opens the post with the comment in view.
+`/posts/$id?comment=<id>` is the address, and `CommentThread` scrolls the comment into view once a
+page holds it, reading the next page while it does not and more exist. On a long thread that is
+several reads of twenty before the comment shows. The cheaper shape is a projection that answers the
+page holding a named comment, which no handoff has asked for. Closes with that projection or a ruling
+that the paging is acceptable. Owner: Chat, by brief.
+
+## G311. The matrix suites have outgrown the timeouts handoff 38-C set, and Chromium's is cancelled by its own ceiling
+
+**Severity: Moderate (a proof the PR path cannot deliver). Opened 19 October 2026 during H62-G PR 1, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+**Closed 19 October 2026 by H63-CI (#124, ruling 1881, merged at `e5d8257`), after H63-CAL's raise
+(#123, ruling 1879). Recorded rather than dropped, because the run that found it is the reason the
+ceilings moved.**
+
+`pages.yml`'s `matrix` job carried `timeout-minutes` of 85 for WebKit and 75 for Chromium, derived
+by handoff 38-C (G196) from suites of 56 and 52 minutes with 8- and 7-minute margins. The suites
+grew with every surface since: on run 618 (#121's head `48000f8`) Chromium's suite step ran 72m40s
+and WebKit's 76m59s, so the margins were already 2 and 8 minutes. On run 620 (`dfd758a`, this PR's
+head, carrying 62-G's six comments arms per engine) WebKit's suite read 82m15s (522 arms) and
+finished with under 3 minutes of its 85 left, and Chromium's was cancelled by the job timeout at
+74m44s, at the messenger reactions arm with four arms still to run, so `matrix (chromium)` read
+`cancelled` with no summary and no total, on both attempts. The comments arms are not what moved
+the suites: read from run 620's `ARM` timestamps they take 50 s on Chromium and 53 s on WebKit in
+all, so the rest of the growth is run-to-run variance and the arms already on `main`.
+
+Two fixes, both taken. #123 raised the ceilings to 110 and 100 (1879), which deferred the breach.
+#124 runs each engine's suite as shards, six WebKit and four Chromium, each a contiguous cut of
+`fullUnits()` in `tests/matrix.cjs` listed in `tests/matrix-shards.json` and checked by
+`tests/shards.cjs`, with a 45-minute ceiling per shard and a summary job per engine that holds the
+union to `tests/expected-counts.json` (1881). This PR places its six comments units per engine in the
+shard that holds the account arms before them, Chromium 3 and WebKit 4, which adds 50 s and 53 s to
+those shards' run 625 times. Owner: none; #124 is on `main`.
+
+## G312. A push made while a pull request is a draft can cancel the matrix that marking it ready started
+
+**Severity: Moderate (an enforcing run lost without a red). Opened 19 October 2026 during H62-G PR 1, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+`pages.yml` runs the matrix from the `pull_request` event (1846, H63-CI) under one concurrency group,
+`pages-${{ github.ref }}` with `cancel-in-progress: true`, whose key on that event is the pull
+request's own ref. Each event carries the pull request's draft flag as it stood when the event was
+raised, and `matrix-head` reads it from the payload. GitHub does not deliver the events in the order
+they were raised. On #120, `141636e` was pushed at 21:16:46 UTC while the pull request was a draft
+and it was marked ready at 21:17:28. The `ready_for_review` run, 642, started at 21:17:30 and
+`matrix-head` set `run=true`. The push's `synchronize` run, 643, was delivered at 21:18:23 with
+`DRAFT: true`, took the same group, cancelled 642 before any shard ran, and skipped the matrix
+itself as a draft's. Run 643 reads green and run 642 reads cancelled, so the pull request showed no
+red and no matrix. The macOS gate lost its ready run, 111, the same way. Re-running 642 restores the
+matrix, because a re-run replays its own payload. The shape of a fix is a `matrix-head` that reads
+the pull request's current draft state, not the payload's, before it skips. That needs
+`pull-requests: read` on that one job, which `pages.yml`'s header says no job's token holds today.
+The other shape is a concurrency key that a draft's run does not share with a ready run. Owner:
+Chat, by ruling, then Code.

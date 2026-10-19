@@ -12,7 +12,15 @@
 // `reply` set. presentation="latest": the collapsed card's one line (F10), one button that opens
 // the expanded card. No count of anything. Translations, none visible: `useInputMode` is the app's
 // `useMode`; typed props. Record: docs/strand-ports/sha256-b1a458dac1bd562f.md.
-import { useRef, useState, type CSSProperties, type ReactNode } from "react";
+//
+// Handoff 62-G (SPEC-62-FEED-CARD 8, 12 proposal 8; rulings 1809, 1817, 1820, 1822; G306), as
+// divergences kept until a compile carries them: `nameHref` and `onName` make the avatar and the name
+// one link named "{name}’s profile" (V.profile) that opens the profile and stops at the link; `time`
+// takes a node, so the head carries the 10.1 `time` element; `mark` renders before the time (the
+// Author mark, C.author); `media` renders after the text (the one image, through MediaBlock); and
+// `actions` renders the caller's action row (React, Reply, the comment's summary) where the part's own
+// Reply act stood, which is then not drawn. A call that passes none of them renders as the port did.
+import { useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { Avatar } from "./Avatar";
 import { IconButton } from "./IconButton";
 import { Menu, type MenuProps } from "./Menu";
@@ -57,7 +65,17 @@ function Act({
 export type CommentProps = {
   name: string;
   avatarSrc?: string | undefined;
-  time?: string | undefined;
+  /** 62-G (1820): the avatar and the name as one link to the profile; `onName` takes a plain click. */
+  nameHref?: string | undefined;
+  onName?: ((e: MouseEvent<HTMLElement>) => void) | undefined;
+  /** 62-G (10.1): a node, the `time` element whose title is the absolute form. */
+  time?: ReactNode;
+  /** 62-G (1817): the Author mark, before the time. */
+  mark?: ReactNode;
+  /** 62-G (SPEC 8.4): the one image, after the text. */
+  media?: ReactNode;
+  /** 62-G (SPEC 8.2): the action row under the comment; with it the part draws no Reply of its own. */
+  actions?: ReactNode;
   /** F14. */
   edited?: boolean | undefined;
   /** F16: "Sending" stands where the time goes, the text at 0.7 opacity, no acts. */
@@ -90,7 +108,12 @@ export type CommentProps = {
 export function Comment({
   name,
   avatarSrc,
+  nameHref,
+  onName,
   time,
+  mark,
+  media,
+  actions,
   edited,
   sending,
   failed,
@@ -182,6 +205,25 @@ export function Comment({
       </div>
     );
   const hasMenu = (menu || []).some((it) => !!it && !("rule" in it && it.rule));
+  const nameClick = (e: MouseEvent<HTMLElement>) => {
+    e.stopPropagation();
+    if (!onName) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    onName(e);
+  };
+  const avatar = <Avatar name={name} src={avatarSrc} size={size} />;
+  const nameSpan = (
+    <span
+      style={{
+        fontSize: "var(--text-s)",
+        lineHeight: "var(--text-s-lh)",
+        fontWeight: "var(--weight-bold)" as unknown as number,
+      }}
+    >
+      {name}
+    </span>
+  );
   return (
     <div
       data-comment={reply ? "reply" : "top"}
@@ -199,7 +241,22 @@ export function Comment({
       <div
         style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-2)", minWidth: 0 }}
       >
-        <Avatar name={name} src={avatarSrc} size={size} />
+        {nameHref ? (
+          // 62-G (1820): the photo is the same link as the name, hidden from the reading order so the
+          // head carries one "{name}’s profile" and not two.
+          <a
+            href={nameHref}
+            aria-hidden="true"
+            tabIndex={-1}
+            onClick={nameClick}
+            data-comment-avatar=""
+            style={{ display: "inline-flex", flex: "none" }}
+          >
+            {avatar}
+          </a>
+        ) : (
+          avatar
+        )}
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
           <div
             style={{
@@ -210,15 +267,20 @@ export function Comment({
               minWidth: 0,
             }}
           >
-            <span
-              style={{
-                fontSize: "var(--text-s)",
-                lineHeight: "var(--text-s-lh)",
-                fontWeight: "var(--weight-bold)" as unknown as number,
-              }}
-            >
-              {name}
-            </span>
+            {nameHref ? (
+              <a
+                href={nameHref}
+                aria-label={name + "’s profile"}
+                onClick={nameClick}
+                data-comment-name=""
+                style={{ color: "inherit", textDecoration: "none", minWidth: 0 }}
+              >
+                {nameSpan}
+              </a>
+            ) : (
+              nameSpan
+            )}
+            {mark && !sending ? mark : null}
             <span style={{ ...XS, color: "var(--ink-3)" }}>
               {sending ? "Sending" : time}
               {edited && !sending ? " · Edited" : ""}
@@ -235,6 +297,7 @@ export function Comment({
           >
             {text}
           </div>
+          {media ? <div data-comment-media="">{media}</div> : null}
           {failed ? (
             <div
               role="alert"
@@ -250,7 +313,9 @@ export function Comment({
               <Act label="Try again" onClick={onRetry} touch={touch} tone="var(--ink)" />
             </div>
           ) : null}
-          {!reply && onReply && !sending && !failed ? (
+          {actions && !sending && !failed ? (
+            actions
+          ) : !reply && onReply && !sending && !failed ? (
             <div style={{ display: "flex" }}>
               <Act label={replyLabel} onClick={onReply} touch={touch} />
             </div>

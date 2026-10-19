@@ -18,6 +18,12 @@
 // `people` is people-led: the photos lead in a fixed 58 column (one at 40, or two at 32 overlapping
 // by a fifth), each name in the sentence its own link, and the C marks the post's line under the
 // sentence, never a photo. Existing kinds keep their badge-led row until H62-B moves them.
+//
+// Handoff 62-G (SPEC-62-FEED-CARD 10.1, 10.2; rulings 1849, 1817): `comment_on_post` and
+// `reply_to_comment` read 1849's sentences verbatim from the people the caller passes ("{n1}
+// commented on your post", "{n1} and {n2} commented on your post", "{n1}, {n2} and others commented on
+// your post"; "replied to your comment" likewise), people-led like the intent rows; and `time` takes a
+// node, so the tray's time is the 10.1 `time` element whose title is the absolute form.
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
@@ -38,6 +44,19 @@ function intentSentence(kind: string, names: readonly string[], others: boolean)
   if (others) out.push(" and others");
   if (kind === "intent_help") out.push(" can help with your post");
   else out.push(one ? " wants to build with you" : " want to build with you");
+  return out;
+}
+
+/** 1849, verbatim: the names, then "commented on your post" or "replied to your comment". */
+function commentSentence(kind: string, names: readonly string[], others: boolean): Part[] {
+  const list = names.slice(0, 2);
+  const out: Part[] = [];
+  list.forEach((n, i) => {
+    if (i === 1) out.push(others ? ", " : " and ");
+    out.push([n, 1]);
+  });
+  if (others) out.push(" and others");
+  out.push(kind === "comment_on_post" ? " commented on your post" : " replied to your comment");
   return out;
 }
 
@@ -78,6 +97,11 @@ function parts(row: {
       const names = row.names && row.names.length ? row.names : [row.actor ?? "A member"];
       return intentSentence(row.kind, names, !!row.others);
     }
+    case "comment_on_post":
+    case "reply_to_comment": {
+      const names = row.names && row.names.length ? row.names : [row.actor ?? "A member"];
+      return commentSentence(row.kind, names, !!row.others);
+    }
     default:
       return [""];
   }
@@ -104,7 +128,8 @@ export type NotificationListItemProps = {
   detail?: string | undefined;
   /** 736: the sentence verbatim, for a kind whose copy the caller owns (`role_invitation`). */
   text?: string | undefined;
-  time?: string | undefined;
+  /** 62-G (10.1): a node, the `time` element whose title is the absolute form; a string renders as before. */
+  time?: ReactNode;
   unread?: boolean | undefined;
   onClick?: (() => void) | undefined;
   /** 736: `role_invitation` carries one Respond act beside the row; absent, no act renders. */

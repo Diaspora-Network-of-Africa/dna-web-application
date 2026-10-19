@@ -42,6 +42,8 @@ with `object-fit: cover`, nothing chooses it), **whole** (the image at its own r
 | 16  | `src/components/strand/BodyBlocks.tsx:209`      | no surface (bound nowhere, G269)                                                                    | `MediaBlock` (image)                                            | framed; tap opens the viewer                                                                                                                                                                                                                                             | as now                                                                    | Under 1714                               |
 | 17  | `src/components/strand/ImageAdjust.tsx:326`     | the framing tool, the master being framed                                                           | `ImageAdjust`                                                   | whole, by design (the tool)                                                                                                                                                                                                                                              | as now                                                                    | Strand's own tool                        |
 | 18  | `src/components/strand/ImageViewer.tsx:289`     | the viewer                                                                                          | `ImageViewer`                                                   | whole                                                                                                                                                                                                                                                                    | as now                                                                    | Strand's own viewer                      |
+| 40  | `src/components/dna/CommentThread.tsx:366`      | a post `/posts/$id`, a comment's one image (62-G, SPEC 8.4)                                         | `MediaBlock` (image)                                            | framed by its stored size inside a 320 column; tap opens the viewer                                                                                                                                                                                                      | as now                                                                    | Under 1714 (H62-G)                       |
+| 41  | `src/components/dna/CommentThread.tsx:426`      | a post, the member's own image on a comment still sending (62-G)                                    | `MediaBlock` (image, `openable={false}`)                        | the device's bytes before the row exists, framed; not openable, by design (the sent comment's row 40 is)                                                                                                                                                                 | as now                                                                    | Under 1714 (H62-G)                       |
 
 The parts' own `<img>` inside `MediaBlock` (`:326` single, `:490` gallery tile, `:622` and `:630`
 video poster) are rows 1 to 5, 13 and 16 drawn; they are not separate sites. `ProfileHeader`'s one
@@ -49,43 +51,45 @@ video poster) are rows 1 to 5, 13 and 16 drawn; they are not separate sites. `Pr
 part and draws through MediaBlock's exported `imageFrame` and `placement`, so it is a Strand image
 part and not a raw site.
 
-**Count, member-image sites (rows 1 to 18).** Under 1714: 14 (rows 1 to 10, 12, 13, 16, and 3 under
-item 21). Held: 1 (row 11, the onboarding plate, which takes the profile's frame when the projection
-carries one, G292); no Strand item named, 2 (rows 14 and 15, G274). Strand's own tools: 2 (rows 17 and
-18). Identity marks: 21 (rows 19 to 39).
+**Count, member-image sites (rows 1 to 18, 40 and 41).** Under 1714: 16 (rows 1 to 10, 12, 13, 16, 40,
+41, and 3 under item 21). Held: 1 (row 11, the onboarding plate, which takes the profile's frame when
+the projection carries one, G292); no Strand item named, 2 (rows 14 and 15, G274). Strand's own tools:
+2 (rows 17 and 18). Identity marks: 23 (rows 19 to 39, 42 and 43).
 
 ## Identity marks (1714's exception)
 
 Each fills its shape, centred, and opens nothing of its own: a tap on the row or card opens the
 member, the thread or the post, never the photo.
 
-| #   | Site                                             | Where                                                       |
-| --- | ------------------------------------------------ | ----------------------------------------------------------- |
-| 19  | `src/components/strand/PostCard.tsx:289`         | a post's author, 40                                         |
-| 20  | `src/components/strand/PostCard.tsx:924`         | an event card's presenter, 24                               |
-| 21  | `src/components/strand/Composer.tsx:1230`        | the composer's author line, 32                              |
-| 22  | `src/components/strand/AppHeader.tsx:330`        | the header's own avatar, 36 and 32                          |
-| 23  | `src/components/strand/ThreadRow.tsx:166`        | a Messenger thread row, 44                                  |
-| 24  | `src/components/strand/RequestCard.tsx:69`       | a message request, 44                                       |
-| 25  | `src/components/strand/SearchResultRow.tsx:50`   | a Messenger search result, 32                               |
-| 26  | `src/components/strand/TokenSuggest.tsx:195`     | a token suggestion (the Messenger's mention list), 28       |
-| 27  | `src/components/strand/PersonCard.tsx:95`        | a person tile (event going list, `EventSurface.tsx:726`)    |
-| 28  | `src/components/strand/PersonCard.tsx:112`       | a person row (event people, `EventParts.tsx:270`, `:280`)   |
-| 29  | `src/components/dna/MemberCard.tsx:428`          | a Connect card's portrait, 4:5 by the card's own box (1541) |
-| 30  | `src/components/dna/MessengerThread.tsx:1135`    | the Messenger thread header, 40                             |
-| 31  | `src/components/dna/MessengerSurface.tsx:330`    | the Messenger's connection picker, 32                       |
-| 32  | `src/components/dna/IntroSheet.tsx:109`          | the introduction sheet's recipient, 48                      |
-| 33  | `src/components/dna/MessageRequestSheet.tsx:117` | the message request sheet's recipient, 44                   |
-| 34  | `src/components/dna/AttestationRail.tsx:105`     | an attester, 28                                             |
-| 35  | `src/components/dna/ConnectSurface.tsx:498`      | a DIA suggestion row on Connect, 28                         |
-| 36  | `src/components/dna/PostCardRouter.tsx:53`       | an event post's speaker chip, 32                            |
-| 37  | `src/components/dna/EventParts.tsx:217`          | an event's host line, 40                                    |
-| 38  | `src/components/strand/Comment.tsx:202`          | a comment's author, 32 (24 on a reply); bound nowhere yet   |
-| 39  | `src/components/strand/PostCard.tsx:304`         | a post's author, 40 (row 19's current line)                 |
+| #   | Site                                                 | Where                                                                                              |
+| --- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| 19  | `src/components/strand/PostCard.tsx:289`             | a post's author, 40                                                                                |
+| 20  | `src/components/strand/PostCard.tsx:924`             | an event card's presenter, 24                                                                      |
+| 21  | `src/components/strand/Composer.tsx:1230`            | the composer's author line, 32                                                                     |
+| 22  | `src/components/strand/AppHeader.tsx:330`            | the header's own avatar, 36 and 32                                                                 |
+| 23  | `src/components/strand/ThreadRow.tsx:166`            | a Messenger thread row, 44                                                                         |
+| 24  | `src/components/strand/RequestCard.tsx:69`           | a message request, 44                                                                              |
+| 25  | `src/components/strand/SearchResultRow.tsx:50`       | a Messenger search result, 32                                                                      |
+| 26  | `src/components/strand/TokenSuggest.tsx:195`         | a token suggestion (the Messenger's mention list), 28                                              |
+| 27  | `src/components/strand/PersonCard.tsx:95`            | a person tile (event going list, `EventSurface.tsx:726`)                                           |
+| 28  | `src/components/strand/PersonCard.tsx:112`           | a person row (event people, `EventParts.tsx:270`, `:280`)                                          |
+| 29  | `src/components/dna/MemberCard.tsx:428`              | a Connect card's portrait, 4:5 by the card's own box (1541)                                        |
+| 30  | `src/components/dna/MessengerThread.tsx:1135`        | the Messenger thread header, 40                                                                    |
+| 31  | `src/components/dna/MessengerSurface.tsx:330`        | the Messenger's connection picker, 32                                                              |
+| 32  | `src/components/dna/IntroSheet.tsx:109`              | the introduction sheet's recipient, 48                                                             |
+| 33  | `src/components/dna/MessageRequestSheet.tsx:117`     | the message request sheet's recipient, 44                                                          |
+| 34  | `src/components/dna/AttestationRail.tsx:105`         | an attester, 28                                                                                    |
+| 35  | `src/components/dna/ConnectSurface.tsx:498`          | a DIA suggestion row on Connect, 28                                                                |
+| 36  | `src/components/dna/PostCardRouter.tsx:53`           | an event post's speaker chip, 32                                                                   |
+| 37  | `src/components/dna/EventParts.tsx:217`              | an event's host line, 40                                                                           |
+| 38  | `src/components/strand/Comment.tsx:215`              | a comment's author, 32 (24 on a reply); the thread (62-G)                                          |
+| 39  | `src/components/strand/PostCard.tsx:304`             | a post's author, 40 (row 19's current line)                                                        |
+| 42  | `src/components/dna/PersonLink.tsx:81`               | a linked name's photo: the sheets' rows 40, the prompt 20, the newest-comment line 24 (62-A, 62-G) |
+| 43  | `src/components/strand/NotificationListItem.tsx:302` | a people-led row's photos, 40 or two at 32 (62-A, 62-G)                                            |
 
 `Avatar` with no `src` draws initials and no image: `ProfileSurface.tsx:808`, `:826`, `:1482`,
-`Rails.tsx:67`, `MessengerThread.tsx:2007`. `NotificationListItem` draws no image (its `role="img"`
-is the C glyph).
+`Rails.tsx:67`, `MessengerThread.tsx:2007`. `NotificationListItem`'s badge-led row draws no image
+(its `role="img"` is the C glyph); its people-led row is row 43.
 
 ## Not member images
 

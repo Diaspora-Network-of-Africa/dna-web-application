@@ -47,7 +47,7 @@ import {
 import { loadVocabularies } from "@/lib/vocabularies";
 import { useEmptyStateSeen } from "@/lib/record-hooks";
 import type { Tier } from "@/lib/tier";
-import { timeLabel } from "@/lib/when";
+import { TimeStamp } from "./TimeStamp";
 import { POPOVER_STYLE } from "./AppShell";
 
 /** SPEC 4.4 (1566): how long "Saved" stays before the line clears. */
@@ -204,6 +204,8 @@ export function NotificationPanel({
     actorHandle?: string | undefined;
     eventId?: string | undefined;
     objectId?: string | undefined;
+    objectKind?: string | null | undefined;
+    postId?: string | undefined;
   }) => {
     if (n.kind === "connection_accepted" && n.actorHandle) {
       setOpen(false);
@@ -226,6 +228,22 @@ export function NotificationPanel({
     if (n.kind === "thread_invitation" && n.objectId) {
       setOpen(false);
       void navigate({ to: "/messages/$thread", params: { thread: n.objectId } });
+      return;
+    }
+    // 62-G (1817, 1849, SPEC 10.2): a reply, or an intent on a comment, opens the post with the
+    // comment in view; a comment on the post opens the post.
+    if (n.objectKind === "comment" && n.objectId && n.postId) {
+      setOpen(false);
+      void navigate({
+        to: "/posts/$id",
+        params: { id: n.postId },
+        search: { comment: n.objectId },
+      });
+      return;
+    }
+    if (n.kind === "comment_on_post" && n.objectId) {
+      setOpen(false);
+      void navigate({ to: "/posts/$id", params: { id: n.objectId }, search: {} });
       return;
     }
     // 62-A (1802, SPEC 10.2): an intent opens the post with the author's sheet on that tab.
@@ -251,6 +269,8 @@ export function NotificationPanel({
       actorHandle?: string | undefined;
       eventId?: string | undefined;
       objectId?: string | undefined;
+      objectKind?: string | null | undefined;
+      postId?: string | undefined;
     },
   ) => {
     go(n);
@@ -397,10 +417,14 @@ export function NotificationPanel({
             object={n.object}
             detail={n.detail}
             text={n.text}
-            time={timeLabel(n.created_at)}
+            time={<TimeStamp iso={n.created_at} />}
             unread={n.read_at === null}
             onClick={() =>
-              void onRow(n.id, n.read_at !== null, { ...n, objectId: n.object_id ?? undefined })
+              void onRow(n.id, n.read_at !== null, {
+                ...n,
+                objectId: n.object_id ?? undefined,
+                objectKind: n.object_kind,
+              })
             }
             onRespond={
               n.kind === "role_invitation"
@@ -411,7 +435,11 @@ export function NotificationPanel({
             others={n.others}
             onPerson={goPerson}
             onPeople={() =>
-              void onRow(n.id, n.read_at !== null, { ...n, objectId: n.object_id ?? undefined })
+              void onRow(n.id, n.read_at !== null, {
+                ...n,
+                objectId: n.object_id ?? undefined,
+                objectKind: n.object_kind,
+              })
             }
             input={pointer ? "pointer" : "touch"}
           />
