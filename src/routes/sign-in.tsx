@@ -74,15 +74,14 @@ function SignIn() {
   const { join, email: prefill, next: nextInUrl } = Route.useSearch();
   useTheme();
   // Handoff 63-WS (1866): a provider return lands on a bare /sign-in, so the word the member left
-  // with is read back from its marker, once, on this mount (src/lib/sign-in-next.ts). The URL's
-  // word wins where both exist. Consumed under a ref so a second run of the effect reads nothing.
-  const [carried, setCarried] = useState<SignInNext | undefined>(undefined);
-  const consumed = useRef(false);
-  useEffect(() => {
-    if (consumed.current) return;
-    consumed.current = true;
-    setCarried(consumeSignInNext());
-  }, []);
+  // with is read back from its marker (src/lib/sign-in-next.ts). The URL's word wins where both
+  // exist. Ruling 1893: read in the state initializer, so the first render already holds it and the
+  // redirect below can never run once without it. Read in a mount effect it arrived a render late,
+  // and a session the provider return had already published sent the member to the Feed on that
+  // run (run 39195183910, WebKit at 1280 light). The read is memoised per document, so a second
+  // mount on the return reads the same word; on the server it answers undefined, and the value
+  // reaches no markup, so hydration is unaffected.
+  const [carried] = useState<SignInNext | undefined>(() => consumeSignInNext());
   const next = nextInUrl ?? carried;
   const [mode, setMode] = useState<"in" | "up">(join ? "up" : "in");
   // The form's state, in the shared hook: email, password, the alert and status lines, the field
