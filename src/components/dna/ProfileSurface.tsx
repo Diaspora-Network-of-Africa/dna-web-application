@@ -713,8 +713,19 @@ export function ProfileSurface({ handle, edit, asPublic }: ProfileSurfaceProps) 
     const i = C_ORDER.indexOf(lastC);
     openC(C_ORDER[(i + d + 5) % 5] as C);
   };
+  // Handoff 63-WS (1866): a signed-out request cannot know whose page it is, but ?edit=1 is the
+  // owner's own mode (126) and the one link 1865's email sends, so a page opened with it is the
+  // viewer's own link: its Sign in and Join DNA carry next=profile, and sign-in returns the member
+  // to their own profile at the handle their row carries, never the URL's. Without edit the two
+  // controls are as they were and sign-in lands on the Feed.
   const goSignIn = (join = false) =>
-    void navigate({ to: "/sign-in", search: join ? { join: true } : {} });
+    void navigate({
+      to: "/sign-in",
+      search: {
+        ...(join ? { join: true } : {}),
+        ...(edit ? { next: "profile" as const } : {}),
+      },
+    });
 
   // Expanded rail content (SPEC section 0.1): context only.
   useEffect(() => {

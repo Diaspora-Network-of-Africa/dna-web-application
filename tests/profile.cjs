@@ -21,6 +21,8 @@ const {
   SB,
 } = M;
 const HANDLE = "thandiwe-dube";
+/** The handle the mock's own members row carries (tests/matrix.cjs, `members`), never the address opened. */
+const OWN_HANDLE = "amara-osei";
 const SB_RE = SB.replace(/\./g, "\\.");
 /**
  * WebKit words every failed load the same way it words a cross-origin denial: "Fetch API cannot
@@ -1063,6 +1065,111 @@ async function runGate(browserType, bname, vp, theme) {
   await browser.close();
 }
 
+/**
+ * Handoff 63-WS (ruling 1866): sign-in returns a member to their own profile. A signed-out request
+ * for /m/<handle>?edit=1 renders the gate with Share off, which is what every recipient of 1865
+ * reads; its Sign in carries next=profile and nothing else, no handle and no URL; the sign-in lands
+ * on the member's own /m/<handle> in Edit profile mode, the handle read from their members row (the
+ * mock's row is amara-osei and the address opened named thandiwe-dube, so the two are told apart);
+ * a member already signed in lands in Edit profile mode with no sign-in step; and a path or a
+ * handle in next is dropped and lands on the Feed. On main the control carries no next and the
+ * sign-in lands on /feed, so the first two checks fail there.
+ */
+async function runSignInReturn(browserType, bname, vp, theme) {
+  const [w, h] = vp;
+  const tag = `${bname}-${w}x${h}-${theme} profile sign-in return`;
+  M.armStart(tag);
+  const { browser, page, errors } = await newPage(browserType, vp, theme, {
+    profile: { mode: "owner", switches: { shared: false, private: false } },
+  });
+  const ownProfile = (u) => u.pathname === "/m/" + OWN_HANDLE;
+  const editMode = async () =>
+    (await page.getAttribute('[data-testid="profile"]', "data-view")) === "owner" &&
+    (await page.getAttribute('[data-testid="profile"]', "data-edit")) === "1" &&
+    (await page.locator('[data-testid="edit-done"]').count()) === 1;
+  try {
+    // Done Means 1, first half: signed out, Share off, the gate. The gate's own Sign in and the
+    // public chrome's Sign in each carry the word and nothing else.
+    const carries = (u) =>
+      u.searchParams.get("next") === "profile" &&
+      [...u.searchParams.keys()].join() === "next" &&
+      !u.search.includes(HANDLE);
+    await openProfile(page, "?edit=1");
+    const view = await page.getAttribute('[data-testid="profile"]', "data-view");
+    await tap(page, page.getByTestId("profile").getByRole("button", { name: "Sign in" }));
+    await page.waitForURL((u) => u.pathname === "/sign-in", { timeout: 15000 });
+    const fromGate = new URL(page.url());
+    record(
+      tag +
+        ": signed out, ?edit=1 renders the gate and its Sign in carries next=profile alone, no handle (1866)",
+      view === "gate" && carries(fromGate),
+      "view=" + view + " " + fromGate.search,
+    );
+    await openProfile(page, "?edit=1");
+    await tap(page, page.getByRole("banner").getByRole("button", { name: "Sign in" }));
+    await page.waitForURL((u) => u.pathname === "/sign-in", { timeout: 15000 });
+    const fromChrome = new URL(page.url());
+    record(
+      tag + ": the public chrome's Sign in carries next=profile alone, no handle (1866)",
+      carries(fromChrome),
+      fromChrome.search,
+    );
+    // Done Means 1, second half: the sign-in lands on the member's own profile, in Edit profile
+    // mode, at the handle their row carries and not the one the address named.
+    await M.hydrated(page);
+    await page.fill('input[type="email"]', "member@test.invalid");
+    await page.fill('input[type="password"]', "x");
+    await page.click('button[type="submit"]');
+    await page.waitForURL((u) => ownProfile(u) || u.pathname === "/feed", { timeout: 15000 });
+    await page
+      .waitForSelector('[data-testid="profile"]:not([data-view="loading"])', { timeout: 20000 })
+      .catch(() => undefined);
+    await page.waitForTimeout(250);
+    const landed = new URL(page.url());
+    record(
+      tag +
+        ": the sign-in lands on the member's own /m/<handle>, from their row, in Edit profile mode (1866)",
+      ownProfile(landed) &&
+        ["1", "true"].includes(landed.searchParams.get("edit") || "") &&
+        !landed.searchParams.has("next") &&
+        (await editMode()),
+      landed.pathname + landed.search,
+    );
+    // Done Means 3: already signed in, the link lands in Edit profile mode with no sign-in step.
+    await openProfile(page, "?edit=1");
+    const direct = new URL(page.url());
+    record(
+      tag + ": signed in, ?edit=1 lands in Edit profile mode with no sign-in step",
+      direct.pathname === "/m/" + HANDLE && (await editMode()),
+      direct.pathname + direct.search,
+    );
+    // Done Means 4: a path, a handle and a profile path in next are dropped and land on the Feed;
+    // the word itself, signed in, lands on the member's own profile.
+    const dropped = [];
+    for (const bad of ["%2Fm%2F" + OWN_HANDLE, OWN_HANDLE, "https%3A%2F%2Fexample.invalid"]) {
+      await page.goto(BASE + "/sign-in?next=" + bad, { waitUntil: "networkidle" });
+      await page.waitForURL((u) => u.pathname === "/feed" || ownProfile(u), { timeout: 15000 });
+      await page.waitForTimeout(300);
+      const at = new URL(page.url());
+      dropped.push(at.host + at.pathname + at.search);
+    }
+    await page.goto(BASE + "/sign-in?next=profile", { waitUntil: "networkidle" });
+    await page.waitForURL((u) => ownProfile(u) || u.pathname === "/feed", { timeout: 15000 });
+    await page.waitForTimeout(300);
+    const word = new URL(page.url());
+    record(
+      tag +
+        ": a path, a handle and a URL in next land on /feed; the word profile lands on the member's own profile (1866)",
+      dropped.every((d) => d === new URL(BASE).host + "/feed") && ownProfile(word),
+      JSON.stringify(dropped) + " " + word.pathname + word.search,
+    );
+    record(tag + ": no page errors", errors.length === 0, errors.join(" | ").slice(0, 300));
+  } catch (e) {
+    record(tag + " flow", false, String(e).slice(0, 1200) + " | " + (await pageState(page)));
+  }
+  await browser.close();
+}
+
 /** One viewport, one theme: public, gate, owner, and the three visitor personas. */
 async function runProfile(browserType, bname, vp, theme) {
   // The visitor personas run at the three preview widths in every run shape. A SPECIAL run used to
@@ -1078,7 +1185,9 @@ async function runProfile(browserType, bname, vp, theme) {
     await M.drive(runVisitor, browserType, bname, vp, theme, "connected");
     await M.drive(runVisitor, browserType, bname, vp, theme, "anchor");
     await M.drive(runVisitor, browserType, bname, vp, theme, "stranger");
+    // Handoff 63-WS (1866): the sign-in return, at the three preview widths the personas run at.
+    await M.drive(runSignInReturn, browserType, bname, vp, theme);
   }
 }
 
-module.exports = { runProfile, runOwner, runVisitor, runPublic, runGate };
+module.exports = { runProfile, runOwner, runVisitor, runPublic, runGate, runSignInReturn };

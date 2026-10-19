@@ -213,7 +213,8 @@ record(
 //   endpoint  the one-click handler asks the database only on a POST carrying RFC 8058's body and a
 //             well-formed token, answers its word, and a GET redirects to the landing page without
 //             asking it;
-//   next      sign-in's next keeps exactly email-preferences and drops anything else, a URL above all;
+//   next      sign-in's next keeps exactly email-preferences and profile and drops anything else, a
+//             URL, a path or a handle above all;
 //   no mode   no literal mode or mode label exists in src/: they are notification_email_modes' words.
 // ------------------------------------------------------------------------------------------------
 
@@ -385,20 +386,41 @@ async function arms60nc() {
 
   // next
   const n = loadTs("src/lib/sign-in-next.ts");
+  // Handoff 63-WS (1866): profile is the second word, and a handle or a profile path is dropped
+  // like a URL. On main profile reads null and the check fails on its first value.
   const tried = [
     "email-preferences",
+    "profile",
     "https://example.invalid",
     "/feed",
     "//example.invalid",
     "EMAIL-PREFERENCES",
+    "/m/amara-osei",
+    "amara-osei",
+    "PROFILE",
+    "profile?edit=1",
     undefined,
     ["email-preferences"],
+    ["profile"],
   ].map((v) => n.readSignInNext(v) ?? null);
   record(
-    "next: sign-in keeps exactly email-preferences and drops a URL, a path and every other value (1557)",
+    "next: sign-in keeps exactly email-preferences and profile and drops a URL, a path, a handle and every other value (1557, 1866)",
     JSON.stringify(tried) ===
-      JSON.stringify(["email-preferences", null, null, null, null, null, null]) &&
-      /readSignInNext\(search\["next"\]\)/.test(read("src/routes/sign-in.tsx")),
+      JSON.stringify([
+        "email-preferences",
+        "profile",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+      ]) && /readSignInNext\(search\["next"\]\)/.test(read("src/routes/sign-in.tsx")),
     JSON.stringify(tried),
   );
 
