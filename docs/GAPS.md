@@ -9804,3 +9804,23 @@ Two fixes, both taken. #123 raised the ceilings to 110 and 100 (1879), which def
 union to `tests/expected-counts.json` (1881). This PR places its six comments units per engine in the
 shard that holds the account arms before them, Chromium 3 and WebKit 4, which adds 50 s and 53 s to
 those shards' run 625 times. Owner: none; #124 is on `main`.
+
+## G312. A push made while a pull request is a draft can cancel the matrix that marking it ready started
+
+**Severity: Moderate (an enforcing run lost without a red). Opened 19 October 2026 during H62-G PR 1, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+`pages.yml` runs the matrix from the `pull_request` event (1846, H63-CI) under one concurrency group,
+`pages-${{ github.ref }}` with `cancel-in-progress: true`, whose key on that event is the pull
+request's own ref. Each event carries the pull request's draft flag as it stood when the event was
+raised, and `matrix-head` reads it from the payload. GitHub does not deliver the events in the order
+they were raised. On #120, `141636e` was pushed at 21:16:46 UTC while the pull request was a draft
+and it was marked ready at 21:17:28. The `ready_for_review` run, 642, started at 21:17:30 and
+`matrix-head` set `run=true`. The push's `synchronize` run, 643, was delivered at 21:18:23 with
+`DRAFT: true`, took the same group, cancelled 642 before any shard ran, and skipped the matrix
+itself as a draft's. Run 643 reads green and run 642 reads cancelled, so the pull request showed no
+red and no matrix. The macOS gate lost its ready run, 111, the same way. Re-running 642 restores the
+matrix, because a re-run replays its own payload. The shape of a fix is a `matrix-head` that reads
+the pull request's current draft state, not the payload's, before it skips. That needs
+`pull-requests: read` on that one job, which `pages.yml`'s header says no job's token holds today.
+The other shape is a concurrency key that a draft's run does not share with a ready run. Owner:
+Chat, by ruling, then Code.
