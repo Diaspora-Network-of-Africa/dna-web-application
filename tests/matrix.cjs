@@ -4263,6 +4263,12 @@ async function runConvene(browserType, bname, [w, h], theme) {
     colorScheme: theme,
   });
   const page = await ctx.newPage();
+  // Ruling 1876: the arm types calendar dates as words ("Thu 16 Oct at 19:00", "Wed 16
+  // september, 7pm") and `parseWhen` reads a year-less date forward from the page's clock, so the
+  // arm runs on one date rather than the calendar's: 1 October 2026, where 16 October is this
+  // year's Friday and 16 September next year's Thursday. Installed running, before the first
+  // navigation, as tests/sheet.cjs does under 1236.
+  await page.clock.install({ time: new Date("2026-10-01T12:00:00Z") });
   // P4-SPEC section 5's two input-mode states were both host-pin states — `Map shown, pin
   // unplaced` and `Pin being dragged` — and ruling 929 removed the pin. Nothing in the place
   // section varies by input mode any more, so the `coarse` read that proved the mapping went with
