@@ -123,6 +123,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       // generated from icon-512.png and linked first; the favicon.png line below is untouched.
       { rel: "icon", href: "/favicon.ico", sizes: "any" },
       { rel: "icon", href: "/favicon.png", type: "image/png" },
+      // 1885, 1903: the dark tab icon, the square master in dark --ink, after favicon.png so a dark
+      // scheme takes it; a light scheme does not match it and keeps the lines above.
+      {
+        rel: "icon",
+        href: "/favicon-dark.png",
+        type: "image/png",
+        media: "(prefers-color-scheme: dark)",
+      },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png", sizes: "180x180" },
     ],
   }),

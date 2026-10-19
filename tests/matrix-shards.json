@@ -414,7 +414,9 @@
       "messenger-reactions 1280x800 dark",
       "messenger-live",
       "member-theme 390x844",
-      "member-theme 1280x800"
+      "member-theme 1280x800",
+      "brand 390x844 light",
+      "brand 1280x800 dark"
     ]
   ],
   "webkit": [
@@ -835,7 +837,9 @@
       "messenger-reactions 1280x800 dark",
       "messenger-live",
       "member-theme 390x844",
-      "member-theme 1280x800"
+      "member-theme 1280x800",
+      "brand 390x844 light",
+      "brand 1280x800 dark"
     ]
   ]
 }

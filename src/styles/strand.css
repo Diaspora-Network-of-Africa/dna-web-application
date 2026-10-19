@@ -6,133 +6,70 @@
  * The webfont @import (tokens/fonts.css) is the first rule so browsers honour it. */
 
 /* ---- tokens/fonts.css ---- */
-/* Strand webfonts, self-hosted (ruling 433, U-S10): no third party is contacted for type.
-   Bodoni Moda: high-contrast serif display, variable 400 to 700 with optical size, roman and
-   italic. Alegreya Sans: humanist sans for body and UI at 400, 500 and 700, italic 400. The
-   latin and latin-ext subsets the tree uses, as woff2 under public/strand/fonts, licensed under
-   the SIL Open Font License 1.1 (the OFL files sit beside them). font-display: swap throughout. */
+/* Strand webfonts, self-hosted (rulings 433 and 1884): no third party is contacted for type.
+   Instrument Sans: display, the full weight axis 400 to 700, normal only. Inter: body and UI, 400
+   to 700, and italic at 400. The latin and latin-ext subsets, as variable woff2 under
+   public/strand/fonts, licensed under the SIL Open Font License 1.1 (the OFL files sit beside
+   them). font-display: swap throughout. Strand compile sha256-89356d2d39fef8a6 (1894). */
 @font-face {
-  font-family: "Bodoni Moda";
+  font-family: "Instrument Sans";
   font-style: normal;
   font-weight: 400 700;
   font-display: swap;
-  src: url("/strand/fonts/bodoni-moda-400-700-normal-latin-ext.woff2") format("woff2");
+  src: url("/strand/fonts/InstrumentSans-Variable-latin-ext.woff2") format("woff2");
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
-    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F,
     U+A720-A7FF;
 }
 @font-face {
-  font-family: "Bodoni Moda";
+  font-family: "Instrument Sans";
   font-style: normal;
   font-weight: 400 700;
   font-display: swap;
-  src: url("/strand/fonts/bodoni-moda-400-700-normal-latin.woff2") format("woff2");
+  src: url("/strand/fonts/InstrumentSans-Variable-latin.woff2") format("woff2");
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: "Bodoni Moda";
-  font-style: italic;
+  font-family: "Inter";
+  font-style: normal;
   font-weight: 400 700;
   font-display: swap;
-  src: url("/strand/fonts/bodoni-moda-400-700-italic-latin-ext.woff2") format("woff2");
+  src: url("/strand/fonts/Inter-Variable-latin-ext.woff2") format("woff2");
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
-    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F,
     U+A720-A7FF;
 }
 @font-face {
-  font-family: "Bodoni Moda";
-  font-style: italic;
+  font-family: "Inter";
+  font-style: normal;
   font-weight: 400 700;
   font-display: swap;
-  src: url("/strand/fonts/bodoni-moda-400-700-italic-latin.woff2") format("woff2");
+  src: url("/strand/fonts/Inter-Variable-latin.woff2") format("woff2");
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: "Alegreya Sans";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/strand/fonts/alegreya-sans-400-normal-latin-ext.woff2") format("woff2");
-  unicode-range:
-    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
-    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
-    U+A720-A7FF;
-}
-@font-face {
-  font-family: "Alegreya Sans";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/strand/fonts/alegreya-sans-400-normal-latin.woff2") format("woff2");
-  unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
-    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: "Alegreya Sans";
+  font-family: "Inter";
   font-style: italic;
   font-weight: 400;
   font-display: swap;
-  src: url("/strand/fonts/alegreya-sans-400-italic-latin-ext.woff2") format("woff2");
+  src: url("/strand/fonts/Inter-Italic-Variable-latin-ext.woff2") format("woff2");
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
-    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F,
     U+A720-A7FF;
 }
 @font-face {
-  font-family: "Alegreya Sans";
+  font-family: "Inter";
   font-style: italic;
   font-weight: 400;
   font-display: swap;
-  src: url("/strand/fonts/alegreya-sans-400-italic-latin.woff2") format("woff2");
-  unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
-    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: "Alegreya Sans";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url("/strand/fonts/alegreya-sans-500-normal-latin-ext.woff2") format("woff2");
-  unicode-range:
-    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
-    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
-    U+A720-A7FF;
-}
-@font-face {
-  font-family: "Alegreya Sans";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url("/strand/fonts/alegreya-sans-500-normal-latin.woff2") format("woff2");
-  unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
-    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: "Alegreya Sans";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url("/strand/fonts/alegreya-sans-700-normal-latin-ext.woff2") format("woff2");
-  unicode-range:
-    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
-    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
-    U+A720-A7FF;
-}
-@font-face {
-  font-family: "Alegreya Sans";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url("/strand/fonts/alegreya-sans-700-normal-latin.woff2") format("woff2");
+  src: url("/strand/fonts/Inter-Italic-Variable-latin.woff2") format("woff2");
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -145,38 +82,40 @@
   --bg-sunken: #f2ede5;
   --surface: #ffffff;
   --surface-raised: #fffdfa;
-  --ink: #1a1a18;
-  --ink-2: #4a4844;
-  --ink-3: #77736c;
+  --ink: #111111;
+  --ink-2: #5e5e5a;
+  --ink-3: #6f6b64;
   --ink-4: #a9a49b;
-  --line: #e4ded3;
+  --line: #d8d5cf;
   --line-strong: #cfc7b9;
-  --inverse-bg: #1a1a18;
+  --inverse-bg: #111111;
   --inverse-ink: #faf7f2;
   --on-fill: #ffffff; /* ink on any C or ink fill */
-  --scrim: rgba(26, 26, 24, 0.4); /* behind sheets, drawers, dialogs */
+  --scrim: rgba(17, 17, 17, 0.4); /* behind sheets, drawers, dialogs */
   --surface-glass: rgba(250, 247, 242, 0.92); /* PulseDock, sticky bars */
+  --bg-brand: #f7f6f2; /* 1883: 1A Canvas, for the website, editorial and brand moments */
+  --surface-muted: #eeece6; /* 1883: 1A Surface, quiet panels and wells */
 
-  /* Five Cs (D092, canonical, logo-derived). Three rungs each. brand (--c-<c>): fills, glyphs, the 3px accent stroke; locked hex, never used as small text. text: contrast-safe rung, AA as text on --bg. tint: light wash behind badges and chips. */
-  --c-connect: #2d6a4f;
-  --c-connect-text: #1e5a3c;
-  --c-connect-tint: #e4efe9;
+  /* Five Cs (1883: the 1A palette; supersedes D092). Three rungs each. The tint rung takes 1A's soft value. Collaborate's slate is permitted for its own rungs only (1883 amends 95). brand (--c-<c>): fills, glyphs, the 3px accent stroke; locked hex, never used as small text. text: contrast-safe rung, AA as text on --bg. tint: light wash behind badges and chips. */
+  --c-connect: #2e5c49;
+  --c-connect-text: #2c5a48;
+  --c-connect-tint: #e0e7e3;
   --c-connect-ink: var(--on-fill);
-  --c-convene: #b87333;
-  --c-convene-text: #8a4a16;
-  --c-convene-tint: #f7e9dc;
-  --c-convene-ink: var(--on-fill);
-  --c-collaborate: #30909c;
-  --c-collaborate-text: #146a6a;
-  --c-collaborate-tint: #dfeff1;
-  --c-collaborate-ink: #ffffff; /* 3.9:1, large text and icons only on teal fills */
-  --c-contribute: #d4af37;
-  --c-contribute-text: #7e6000;
-  --c-contribute-tint: #f8f0d3;
-  --c-contribute-ink: var(--ink); /* gold is too light for white ink */
-  --c-convey: #79344b;
-  --c-convey-text: #79344b;
-  --c-convey-tint: #f1e2e7;
+  --c-convene: #c67d54;
+  --c-convene-text: #924d24;
+  --c-convene-tint: #f8ede7;
+  --c-convene-ink: #000000;
+  --c-collaborate: #667a93;
+  --c-collaborate-text: #495c74;
+  --c-collaborate-tint: #e8ebef;
+  --c-collaborate-ink: #000000;
+  --c-contribute: #c6a247;
+  --c-contribute-text: #7e6101;
+  --c-contribute-tint: #f7f2e6;
+  --c-contribute-ink: #000000;
+  --c-convey: #a4472b;
+  --c-convey-text: #94381c;
+  --c-convey-tint: #f4e5e0;
   --c-convey-ink: var(--on-fill);
   --c-stroke: 3px; /* accent stroke width, brand rung */
   /* System category (posts DIA could not type): no C, framed in the strong line */
@@ -208,19 +147,11 @@
     0 0 0 2px #faf7f2, 0 0 0 4px #e8b830, 0 0 18px rgba(232, 184, 48, 0.45); /* DIA only. Never on any other component. */
 
   /* Image viewer (1429). The viewer's ground is the same near-black in both themes, so its ink is named here rather than inherited from --ink, which flips. */
-  --viewer-scrim: rgba(20, 20, 18, 0.94);
+  --viewer-scrim: rgba(17, 17, 17, 0.94);
   --viewer-ink: #faf7f2;
   --viewer-control: rgba(250, 247, 242, 0.14);
   /* Image frames (1643). The ground an image is contained on past the ends of the frame set, and behind a frame before its file arrives: the theme's sunken neutral in both themes, never black. */
   --media-fill: var(--bg-sunken);
-
-  /* Logo palette (reference only; not used for UI) */
-  --logo-green: #1e4d3a;
-  --logo-red: #d64541;
-  --logo-orange: #e08a3c;
-  --logo-teal: #2a8f8f;
-  --logo-leaf: #5fa67a;
-  --logo-gold: #e8b830;
 
   /* Semantic aliases */
   --text-body: var(--ink);
@@ -231,12 +162,12 @@
   --border-default: var(--line);
 }
 
-/* Dark theme (ruling 57). Same token names; warm near-black ground, lifted C colors that pass AA as text on --bg. */
+/* Dark theme (ruling 57; values 1883). Same token names; 1A Ink ground, lifted C colors that pass AA as text on --bg. */
 [data-theme="dark"] {
-  --bg: #141412;
+  --bg: #111111;
   --bg-sunken: #1e1d1a;
   --surface: #1a1a18;
-  --surface-raised: #232220;
+  --surface-raised: #1f1f1e;
   --ink: #f2ede5;
   --ink-2: #c9c3b8;
   --ink-3: #9b958a;
@@ -244,30 +175,32 @@
   --line: #33312c;
   --line-strong: #4a4740;
   --inverse-bg: #faf7f2;
-  --inverse-ink: #1a1a18;
-  --on-fill: #141412;
+  --inverse-ink: #111111;
+  --on-fill: #111111;
   --scrim: rgba(0, 0, 0, 0.6);
-  --surface-glass: rgba(20, 20, 18, 0.92);
-  --c-connect: #5fb08a;
-  --c-connect-text: #7fc6a4;
-  --c-connect-tint: #1b2e24;
-  --c-convene: #d08a4a;
-  --c-convene-text: #e6a46e;
-  --c-convene-tint: #33241b;
-  --c-collaborate: #4fb3bf;
-  --c-collaborate-text: #72c6d0;
-  --c-collaborate-tint: #172c2c;
-  --c-contribute: #d4af37;
-  --c-contribute-text: #e2c45c;
-  --c-contribute-tint: #302a15;
-  --c-convey: #b0607c;
-  --c-convey-text: #d18ba3;
-  --c-convey-tint: #2e1f2b;
-  --c-connect-ink: #141412;
-  --c-convene-ink: #141412;
-  --c-collaborate-ink: #141412;
-  --c-contribute-ink: #141412;
-  --c-convey-ink: #141412;
+  --surface-glass: rgba(17, 17, 17, 0.92);
+  --bg-brand: #111111;
+  --surface-muted: #292927;
+  --c-connect: #578671;
+  --c-connect-text: #8db5a2;
+  --c-connect-tint: #1c2b24;
+  --c-convene: #c67d54;
+  --c-convene-text: #dfa27f;
+  --c-convene-tint: #33251c;
+  --c-collaborate: #697e97;
+  --c-collaborate-text: #9fb0c4;
+  --c-collaborate-tint: #212833;
+  --c-contribute: #c6a247;
+  --c-contribute-text: #d8bd73;
+  --c-contribute-tint: #2f2917;
+  --c-convey: #c06144;
+  --c-convey-text: #db8c73;
+  --c-convey-tint: #33201a;
+  --c-connect-ink: #111111;
+  --c-convene-ink: #111111;
+  --c-collaborate-ink: #111111;
+  --c-contribute-ink: #111111;
+  --c-convey-ink: #111111;
   --pulse-activity: #6b665e;
   --pulse-for-you: #f2ede5;
   --pulse-urgent: #e5645a;
@@ -300,8 +233,12 @@
 }
 /* ---- tokens/typography.css ---- */
 :root {
-  --font-display: "Bodoni Moda", "Bodoni 72", "Didot", Georgia, serif;
-  --font-sans: "Alegreya Sans", "Gill Sans", "Segoe UI", system-ui, sans-serif;
+  --font-display:
+    "Instrument Sans", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
   --font-mono: "SF Mono", Menlo, Consolas, monospace;
 
   /* Display (serif) */

@@ -63,7 +63,14 @@ async function resolved(page) {
       prepaint: root.hasAttribute("data-prepaint"),
       body: getComputedStyle(document.body).backgroundColor,
       card: card ? getComputedStyle(card).backgroundColor : null,
-      meta: meta ? (meta.getAttribute("content") || "").toLowerCase() : null,
+      // The build's minifier writes a six-digit hex that repeats in pairs as three (#111111 is
+      // #111, BS7), and the script copies the resolved --bg as written, so the colour is read in
+      // its six-digit form before it is compared with strand.css's.
+      meta: meta
+        ? (meta.getAttribute("content") || "")
+            .toLowerCase()
+            .replace(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/, "#$1$1$2$2$3$3")
+        : null,
       stored: (() => {
         try {
           return localStorage.getItem("dna.theme");

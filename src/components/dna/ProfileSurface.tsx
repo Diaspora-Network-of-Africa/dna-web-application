@@ -77,6 +77,12 @@ import { useEmptyStateSeen, useRecordOnChange } from "@/lib/record-hooks";
 import { useTier } from "@/lib/tier";
 import { loadVocabularies, type Vocabularies } from "@/lib/vocabularies";
 
+// 1892, 1902: the 1A wordmark in --ink in both themes. The span paints --ink through the file as a
+// mask; the hidden img of the same file at the mark's height gives the span its width from the
+// file's own ratio, so no ratio is written here (184: size by height, width auto).
+const WORDMARK = assetBase() + "wordmark-mono.svg";
+const WORDMARK_MASK = `url("${WORDMARK}") center / contain no-repeat`;
+
 const CONDENSE_PX = 120;
 // Once condensed, the masthead expands again only near the top. The condensed row is some 250px
 // shorter than the hero, so on a browser without scroll anchoring (Safari) the content under the
@@ -1173,11 +1179,27 @@ export function ProfileSurface({ handle, edit, asPublic }: ProfileSurfaceProps) 
             aria-label="DNA"
             style={{ display: "inline-flex", alignItems: "center", minHeight: 44 }}
           >
-            <img
-              src={assetBase() + "logo.png"}
-              alt="DNA"
-              style={{ height: expanded ? 28 : 24, display: "block" }}
-            />
+            <span
+              role="img"
+              aria-label="DNA"
+              style={{
+                display: "block",
+                background: "var(--ink)",
+                WebkitMask: WORDMARK_MASK,
+                mask: WORDMARK_MASK,
+              }}
+            >
+              <img
+                src={WORDMARK}
+                alt=""
+                style={{
+                  height: expanded ? 28 : 24,
+                  width: "auto",
+                  display: "block",
+                  visibility: "hidden",
+                }}
+              />
+            </span>
           </a>
           {signedOut ? (
             <Button variant="secondary" size="sm" onClick={() => goSignIn(false)}>

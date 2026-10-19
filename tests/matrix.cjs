@@ -3419,7 +3419,7 @@ async function drive(fn, ...args) {
 const EXPECTED_PATH = path.join(__dirname, "expected-counts.json");
 /** Handoff 40-B: the arms tests/auth.cjs runs against the admin host, swept by the admin run alone; handoff 45-B adds tests/overview.cjs's three, 45-C tests/theme.cjs's admin theme, and 45-D tests/settings.cjs's four, and 45-E its staff role arm. */
 const ADMIN_ARM =
-  /-admin (signed-out|accounts|overview|overview error|drawer focus|theme|settings admin|settings analyst|zone|dia off|appearance|staff role)$/;
+  /-admin (signed-out|accounts|overview|overview error|drawer focus|theme|settings admin|settings analyst|zone|dia off|appearance|staff role|brand)$/;
 
 function loadExpected() {
   try {
@@ -4049,7 +4049,7 @@ async function runViewport(browserType, bname, [w, h], theme) {
         (w > 1024
           ? " header: logo, bell, avatar; composer entry in the Feed column"
           : " header: logo Home, composer entry, bell, avatar; no theme or sign-out controls"),
-      (await page.locator('[data-app-header] img[alt="DNA"]').count()) === 1 &&
+      (await page.locator('[data-app-header] [role="img"][aria-label="DNA"]').count()) === 1 &&
         (await page.locator('[data-testid="compose"]').count()) === 1 &&
         (await page.locator('[data-testid="compose"]').textContent()).includes(
           "What is going on with you?",
@@ -8623,6 +8623,11 @@ function fullUnits(bt, bname, only = null) {
   const { runMemberTheme } = require("./theme.cjs");
   unit("member-theme 390x844", () => drive(runMemberTheme, bt, bname, [390, 844]));
   unit("member-theme 1280x800", () => drive(runMemberTheme, bt, bname, [1280, 800]));
+  // H-BS7-RESKIN item 9: the 1A wordmark in --ink and no retired asset requested, on /sign-in, /feed,
+  // a public profile and a public event, in each theme (tests/brand.cjs).
+  const brand = require("./brand.cjs");
+  for (const [vp, theme] of brand.BRAND_CELLS)
+    unit(`brand ${cell(vp)} ${theme}`, () => drive(brand.runBrand, bt, bname, vp, theme));
   return units;
 }
 
@@ -8957,6 +8962,9 @@ if (require.main === module)
             [1280, 800],
           ])
             for (const theme of ["light", "dark"]) await drive(runAdminTheme, bt, bname, vp, theme);
+          // H-BS7-RESKIN item 9: the admin sign-in and console draw the wordmark in --ink.
+          const { runAdminBrand, BRAND_CELLS } = require("./brand.cjs");
+          for (const [vp, theme] of BRAND_CELLS) await drive(runAdminBrand, bt, bname, vp, theme);
           // Handoff 45-D (Brief 12, admin Settings): arms 5 to 8.
           const {
             runAdminSettings,
@@ -8976,6 +8984,11 @@ if (require.main === module)
           // Handoff 45-E: a role without the Overview opens on Settings (1462, 1464).
           await drive(runAdminStaffRole, bt, bname, [390, 844], "dark");
           await drive(runAdminStaffRole, bt, bname, [1280, 800], "light");
+        }
+        // H-BS7-RESKIN item 9: the member app's brand arms alone (tests/brand.cjs).
+        if (process.env.SPECIAL.includes("brand")) {
+          const { runBrand, BRAND_CELLS } = require("./brand.cjs");
+          for (const [vp, theme] of BRAND_CELLS) await drive(runBrand, bt, bname, vp, theme);
         }
         // Handoff 45-C arm 3: the member app's theme on a dark device with no stored choice.
         if (process.env.SPECIAL.includes("theme")) {
