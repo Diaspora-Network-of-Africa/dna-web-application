@@ -7716,6 +7716,11 @@ async function runWidth(browserType, bname, [w, h]) {
     await visit("/feed", "**/feed", "feed");
     await page.waitForSelector('[data-testid="compose"]');
     await page.click('[data-testid="compose"]');
+    // Runs 633 and 635 (H63-CI): `stop`'s bare 600 ms measured this panel mid-slide on WebKit,
+    // its edge at 2001 past 1280, as the first unit of a shard with and without a warmed engine.
+    // Wait for the resting transform as every other composer arm does; a sheet that never settles
+    // is still measured, and still fails, when the wait gives up.
+    await sheetSettled(page, 'section[role="dialog"][aria-label="Compose"]').catch(() => undefined);
     await stop("composer open");
     await page.keyboard.press("Escape");
     await page.waitForTimeout(400);
