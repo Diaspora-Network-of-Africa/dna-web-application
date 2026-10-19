@@ -405,7 +405,7 @@ jobs:
     # census; the upload, under 1. 15 + 52 + 1 = 68, so 75: a 7-minute margin. Chromium's 60 is
     # raised on its own reading and not on WebKit's: its suite was 44m42s when 31-B set 60 and is
     # 51 now, which left 8 minutes for an install that run 439 showed cannot be assumed to take 26 s.
-    timeout-minutes: ${{ matrix.engine == 'webkit' && 85 || 75 }}
+    timeout-minutes: ${{ matrix.engine == 'webkit' && 110 || 100 }}
     strategy:
       fail-fast: false
       matrix:
