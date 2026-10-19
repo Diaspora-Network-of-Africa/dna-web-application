@@ -8066,6 +8066,33 @@ module.exports = {
 };
 
 /**
+ * H63-CI (run 633): a process's first launch of its engine is slow, and a full run gave that cost
+ * to one arm only, `viewport 360x800 light`, which measures nothing against a clock (run 625: 15 s
+ * on WebKit against 7 to 8 for the arms after it). A shard has a first arm of its own, and on run
+ * 633 WebKit shard 2's was `width 1280x800`, 25 s against run 625's 19, whose composer check
+ * measures 600 ms after the sheet opens and read the sheet still off screen (an edge at 2001 past
+ * 1280). So a shard launches its engine once and loads the deployment before its first unit, as
+ * the full run's later arms always ran. No arm is open, nothing is recorded, and a warm-up that
+ * fails costs nothing but its own time: the units after it run and report as they would have.
+ */
+async function warmUp(bt, bname) {
+  const at = Date.now();
+  let browser = null;
+  try {
+    browser = await launch(bt);
+    const page = await browser.newPage();
+    await page.goto(BASE + "/sign-in", { waitUntil: "networkidle", timeout: 30000 });
+  } catch (e) {
+    console.log(`WARMUP | ${bname} | ${String(e).slice(0, 200)}`);
+  } finally {
+    if (browser) await browser.close().catch(() => undefined);
+  }
+  console.log(
+    `WARMUP | ${bname} | the engine's first launch, ${Date.now() - at} ms, before the shard's first arm`,
+  );
+}
+
+/**
  * H63-CI (rulings 1846, 1847, 1881): the full run as an ordered list of units, one per call the
  * main loop used to make, each with a key that names it the same on both engines. A full run
  * calls every unit in this order, which is the order the loop called them in; a shard (SHARD=k/n,
@@ -8741,7 +8768,9 @@ if (require.main === module)
     const shard = require("./shards.cjs").fromEnv({ engines, only });
     for (const [bname, bt] of engines) {
       const units = fullUnits(bt, bname, only);
-      for (const u of shard ? shard.pick(bname, units) : units) await u.run();
+      const mine = shard ? shard.pick(bname, units) : units;
+      if (shard) await warmUp(bt, bname);
+      for (const u of mine) await u.run();
       if (only) {
         finish({ full: false, engines: engines.map(([n]) => n) });
       }
