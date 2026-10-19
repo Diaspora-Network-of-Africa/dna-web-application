@@ -1,9 +1,13 @@
-// Edited by hand on handoff H64-WG's branch for 20261018120000_h64_wg_launch_gate.sql, ahead of its
-// apply, to the shape the generator will produce: `members.admitted_at` (Row, Insert, Update) and the
-// function `admin_admit_all`; `onboarding_state` keeps `Json`, so its new `admitted` key moves
-// nothing here. Regenerated after the apply, as 20261015120100 was (CLAUDE.md: commit, apply,
-// regenerate, enforcing run, merge).
+// Regenerated from the canonical Supabase project (dgspjevjoblujcoljvkn) with the Supabase MCP
+// generate_typescript_types tool on handoff H64-WG's branch (#121, the launch gate's server half),
+// rebased onto main at 8f01b1c (the merge of #120), with the project read first on 20 October 2026:
+// ledger head 20261018120000_h64_wg_launch_gate, md5 6cd482a282642b4923d4e7167ad24548 equal to the
+// file (applied through migrate.yml run 8, 18 October), 63 restrictive policies, 13 members and none
+// held. What it changes over main's regeneration below: `members.admitted_at` (Row, Insert, Update)
+// and the function `admin_admit_all`. `onboarding_state` keeps `Json`, so its `admitted` key moves
+// nothing here. `export type Views` is restored by hand after every regeneration (CLAUDE.md).
 //
+// Before H64-WG:
 // Regenerated from the canonical Supabase project (dgspjevjoblujcoljvkn) with the Supabase MCP
 // generate_typescript_types tool on handoff H62-G's branch (#120, the Feed card's comments), on main
 // at fa4ef051 (the merge of #118), after the founder applied 20261016120000 and then 20261016120100
