@@ -717,4 +717,144 @@ async function runCommentsLanding(browserType, bname, vp, theme) {
   }
 }
 
-module.exports = { runComments, runCommentsLanding, FLOW_CELLS };
+/**
+ * H62-G1, the founder's walk of 20 Oct (items 1 and 2), at 390, 820 and 1280, both themes (six
+ * checks). On the walk a choice in the emoji picker seemed to send the comment (the project holds
+ * "Testing" and then "😄" alone, seven seconds apart), and a comment with text and an image saved
+ * with its image and no text. Each check reads what left the browser:
+ *   - a choice in the picker inserts at the caret and sends nothing (SPEC 8.4);
+ *   - a click that lands on Send from a press that began elsewhere sends nothing;
+ *   - a press on Send then sends the text with the emoji, once;
+ *   - text typed while the image uploads stays in the field, and Send sends both;
+ *   - Send sends what the field shows, read from the field at the press;
+ *   - no page errors.
+ */
+async function runCommentsCompose(browserType, bname, vp, theme) {
+  const [w, h] = vp;
+  const tag = `${bname} ${w}x${h} ${theme} comments-compose`;
+  M.armStart(tag);
+  const { browser, page, errors } = await open(browserType, vp, theme);
+  const db = makeMockDb();
+  seedPosts(db, 4);
+  await mockSupabase(page, db);
+  const touch = w < 1024;
+  const press = async (locator) => {
+    await locator.evaluate((e) => e.scrollIntoView({ block: "center" }));
+    await page.waitForTimeout(250);
+    const b = await locator.boundingBox();
+    if (!b) throw new Error("no box to press");
+    if (touch) await page.touchscreen.tap(b.x + b.width / 2, b.y + b.height / 2);
+    else await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  };
+  const posts = () => db.rpcPayloads.filter((x) => x.fn === "comment_post");
+  try {
+    await signIn(page);
+    const card = page.locator('[data-post-id="seed-1"]');
+    await press(card.locator('[data-testid="respond"]'));
+    const box = card.locator("[data-comment-box]");
+    const field = box.locator("[data-comment-field]");
+    await field.waitFor({ timeout: 15000 });
+    await page.waitForTimeout(1500);
+
+    // 1. The picker's choice.
+    await press(field);
+    await page.keyboard.type("Testing");
+    await press(box.locator("[data-comment-emoji]"));
+    const cell = page
+      .locator('[data-reaction-picker] [data-emoji-viewport] button:not([aria-label=""])')
+      .first();
+    await cell.waitFor({ timeout: 15000 });
+    const glyph = (await cell.textContent()) || "";
+    await press(cell);
+    await page.waitForTimeout(800);
+    const afterPick = posts().length;
+    const shown = await field.inputValue();
+    record(
+      tag + " a choice in the emoji picker inserts at the caret and sends nothing (1905, 8.4)",
+      afterPick === 0 && glyph.length > 0 && shown === "Testing" + glyph,
+      JSON.stringify({ afterPick, glyph, shown }),
+    );
+
+    // 2. A click that lands on Send from a press that began elsewhere.
+    await box
+      .locator("[data-comment-send]")
+      .evaluate((b) =>
+        b.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 })),
+      );
+    await page.waitForTimeout(400);
+    const stray = posts().length;
+    record(
+      tag + " a click on Send from a press that began elsewhere sends nothing (1905)",
+      stray === 0 && (await field.inputValue()) === "Testing" + glyph,
+      JSON.stringify({ stray }),
+    );
+
+    // 3. Send.
+    await press(box.locator("[data-comment-send]"));
+    await page.waitForTimeout(800);
+    const sent = posts();
+    record(
+      tag + " a press on Send sends the text with the emoji, once (1905)",
+      sent.length === 1 && sent[0].body.p_body === "Testing" + glyph,
+      JSON.stringify(sent.map((x) => x.body)),
+    );
+
+    // 4. Text typed while the image uploads.
+    await box
+      .locator("[data-comment-file]")
+      .setInputFiles({ name: "pic.png", mimeType: "image/png", buffer: PNG });
+    await press(field);
+    await page.keyboard.type("Testing with a picture");
+    const during = await field.inputValue();
+    await page.waitForFunction(
+      () => !document.querySelector("[data-comment-box] [data-comment-send]:disabled"),
+      null,
+      { timeout: 15000 },
+    );
+    await page.waitForTimeout(300);
+    const kept = await field.inputValue();
+    await press(box.locator("[data-comment-send]"));
+    await page.waitForTimeout(800);
+    const both = posts().at(-1);
+    record(
+      tag +
+        " text typed while the image uploads stays, and Send sends the text and the image (1905)",
+      posts().length === 2 &&
+        during === "Testing with a picture" &&
+        kept === "Testing with a picture" &&
+        !!both &&
+        both.body.p_body === "Testing with a picture" &&
+        typeof both.body.p_media === "string",
+      JSON.stringify({ during, kept, body: both && both.body }),
+    );
+
+    // 5. What the field shows is what goes, even where the change never reached the box: the box
+    // holds "x" and the field shows a sentence it never heard about. Send is pressed as iPhone presses
+    // a button, a pointerdown and a click with no focus moving, so the field never blurs and no
+    // change event carries its value to the box first, as a mouse press on Chromium would.
+    await press(field);
+    await page.keyboard.type("x");
+    await field.evaluate((el) => {
+      const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
+      set.call(el, "Shown in the field");
+    });
+    await box.locator("[data-comment-send]").evaluate((b) => {
+      b.dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch", isPrimary: true }),
+      );
+      b.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
+    });
+    await page.waitForTimeout(800);
+    const live = posts().at(-1);
+    record(
+      tag + " Send sends what the field shows (1905)",
+      posts().length === 3 && !!live && live.body.p_body === "Shown in the field",
+      JSON.stringify(live && live.body),
+    );
+    record(tag + " no page errors", errors.length === 0, errors.slice(0, 3).join(" | "));
+  } finally {
+    await browser.close();
+  }
+}
+
+module.exports = { runComments, runCommentsLanding, runCommentsCompose, FLOW_CELLS };

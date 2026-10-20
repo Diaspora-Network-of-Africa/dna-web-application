@@ -8456,6 +8456,13 @@ function fullUnits(bt, bname, only = null) {
       unit(`comments-g1 ${cell(vp)} ${theme}`, () =>
         drive(cm.runCommentsLanding, bt, bname, vp, theme),
       );
+  // H62-G1, the founder's walk of 20 Oct: the emoji choice sends nothing, and text and an image go
+  // together.
+  for (const vp of cm.FLOW_CELLS)
+    for (const theme of THEMES)
+      unit(`comments-compose ${cell(vp)} ${theme}`, () =>
+        drive(cm.runCommentsCompose, bt, bname, vp, theme),
+      );
   // Brief 10 (handoff 30-C item 13): the member's event page at every cell, its flows on the
   // two representative layouts.
   const {
@@ -8624,6 +8631,11 @@ function fullUnits(bt, bname, only = null) {
       drive(msg.runMessengerReactions, bt, bname, vp, theme),
     );
   }
+  // H62-G1, the founder's walk of 20 Oct (item 3): React on the newest message, at compact.
+  for (const theme of THEMES)
+    unit(`messenger-newest 390x844 ${theme}`, () =>
+      drive(msg.runMessengerNewest, bt, bname, [390, 844], theme),
+    );
   unit("messenger-live", () => drive(msg.runMessengerLive, bt, bname));
   // Handoff 45-C arm 3 (1377): the member app's theme on a dark device with no stored choice
   // renders as main did at c859d54, at one compact and one expanded width (tests/theme.cjs).

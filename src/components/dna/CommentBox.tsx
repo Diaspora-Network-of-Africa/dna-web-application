@@ -114,6 +114,10 @@ export function CommentBox({
   const rememberCaret = () => {
     const el = field();
     if (!el) return;
+    // H62-G1 (the walk of 20 Oct): the field is what the member sees. Where its value has moved
+    // without the change reaching the box, the box takes it here rather than writing its own older
+    // value back over it on the next render.
+    if (el.value !== text) setText(el.value.slice(0, COMMENT_MAX));
     caret.current = {
       start: el.selectionStart ?? text.length,
       end: el.selectionEnd ?? text.length,
@@ -178,9 +182,16 @@ export function CommentBox({
   const body = text.trim();
   const image = upload.status === "done" ? upload.image : null;
   const canSend = (body.length > 0 || !!image) && upload.status !== "uploading";
+  // H62-G1 (the walk of 20 Oct, items 1 and 2): what goes is what the field shows, read from the
+  // field at the press, so a comment with an image never leaves without the text above it; and Send
+  // acts only on a press that began on Send, or on the keyboard, so a click that lands on it after
+  // a press elsewhere (a choice in the emoji sheet as it closes, a control the box moved away from)
+  // sends nothing.
+  const sendPress = useRef(0);
   const send = () => {
-    if (!canSend) return;
-    onSend(body, image);
+    const shown = (field()?.value ?? text).trim();
+    if ((!shown && !image) || upload.status === "uploading") return;
+    onSend(shown, image);
     setText("");
     setUpload({ status: "none" });
     caret.current = null;
@@ -385,7 +396,18 @@ export function CommentBox({
             size={control}
             input={mode}
             disabled={!canSend}
-            onClick={send}
+            onPointerDown={() => {
+              sendPress.current = Date.now();
+            }}
+            onPointerCancel={() => {
+              sendPress.current = 0;
+            }}
+            onClick={(e) => {
+              // A press that began here and ended here a moment ago, or the keyboard (no detail).
+              const pressed = e.detail === 0 || Date.now() - sendPress.current < 1500;
+              sendPress.current = 0;
+              if (pressed) send();
+            }}
             data-comment-send=""
           />
         </div>
