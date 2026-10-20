@@ -9895,6 +9895,11 @@ account that shares). Closes with that reseed or that env, named by Chat. Owner:
 
 **Severity: low (a proof's fixture, not a surface). Opened 18 October 2026 during H64-WG, filed under ruling 597. The number is assigned by this entry (ruling 638).**
 
+**Closed 19 October 2026 by H63-CAL (#123, ruling 1876, merged at `655e84c`): the arm installs
+Playwright's clock at 2026-10-01T12:00Z before its first navigation, so "16 Oct" resolves to 2026
+on every run. Recorded rather than dropped, and renumbered from G313 when this branch was rebased
+onto `8f01b1c`, because H64-WG's runs 617 to 622 read it.**
+
 The composer's convene arm in `tests/matrix.cjs` proposes "Diaspora Builders Dinner in Nairobi on
 Thu 16 Oct at 19:00" (the fixture at line 76 and `when` at line 96) and holds four checks at each of
 its two cells to a preview reading `Presented by Amara Osei · Fri 16 Oct, 19:00` (line 4355 and
