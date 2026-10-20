@@ -9890,3 +9890,18 @@ counts. `check 1: anon reads the shared profile's core row` and the ruling 141 c
 every branch until the project carries a shared persona with an accepted attestation again, or the
 checks are pointed at one that exists (`SHARED` in the live job's env, or the handle of a current
 account that shares). Closes with that reseed or that env, named by Chat. Owner: Chat, by reseed.
+
+## G318. The convene arm's fixture date has passed, and its four preview checks turn red by the calendar
+
+**Severity: low (a proof's fixture, not a surface). Opened 18 October 2026 during H64-WG, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+The composer's convene arm in `tests/matrix.cjs` proposes "Diaspora Builders Dinner in Nairobi on
+Thu 16 Oct at 19:00" (the fixture at line 76 and `when` at line 96) and holds four checks at each of
+its two cells to a preview reading `Presented by Amara Osei · Fri 16 Oct, 19:00` (line 4355 and
+the three that read the same meta line): a weekday of 2026 with no year. From 17 October 2026 the
+parser resolves "16 Oct" to 16 October 2027, a Saturday, and the line renders `Sat 16 Oct 2027,
+19:00`, so the eight checks read red on every branch (H64-WG's run 39156106313 is the first; main's
+run 608 on 16 October was green by a day). The arm's `when` field checks (`Thu 16 Oct at 19:00`)
+still pass, because they read the typed text back. Closes when the fixture's date is computed from
+the run's own date with its weekday, or set far enough ahead and the expectation written from the
+same computation, never from a literal weekday. Owner: Chat, by brief.
