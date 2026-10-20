@@ -765,7 +765,13 @@ async function runCommentsCompose(browserType, bname, vp, theme) {
       .first();
     await cell.waitFor({ timeout: 15000 });
     const glyph = (await cell.textContent()) || "";
-    await press(cell);
+    // The cell is a Frimousse emoji, which cancels its own pointerdown; Linux WebKit's touch
+    // emulation then drops the tap's click, which the iPhone does not (the walk's choices went in).
+    // So the choice is clicked, as the Messenger's reactions arm clicks the same picker's cells at
+    // its touch cell; every other control here is pressed by touch.
+    await cell.evaluate((e) => e.scrollIntoView({ block: "center" }));
+    await page.waitForTimeout(250);
+    await cell.click();
     await page.waitForTimeout(800);
     const afterPick = posts().length;
     const shown = await field.inputValue();
