@@ -9860,3 +9860,33 @@ lever's source from 20261018120000, and the backfill stamps every existing accou
 count by period is now a read. Connecting it is a change to a 12B projection under its own SPEC
 line and arm, not this handoff's. Closes with a migration that reads `admitted_at` in the lever and
 the arm's expectation moved with it. Owner: Chat, by brief.
+
+## G316. The Filling up seed has a date, and the five Discovery live checks turn red by the calendar
+
+**Severity: low (a proof's fixture, not a surface). Opened 18 October 2026 during H64-WG, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+`tests/live-db.cjs` names the two seeded Filling up events (S54-1, 1165) by id and holds `S54-1
+(1165)`, `Handoff 34-A (1160)`, `Brief 9 (1040)`, `Handoff 34-A (1124, 1159)` and `Brief 9
+(1044, 1105)` to them: both published, future and uncancelled, the curated lane carrying the
+project's one pick, which is on `829b0fb7`. That event started at 2026-10-17 09:00Z, so from that
+hour every branch's `live` job reads the five red (H64-WG's run 39155181677 is the first; main's
+last run, 608 on 16 October, was green by a day). The arm reports them as failures, not as
+unproven, because the seed check is the control the others stand on. Closes when the pair is
+reseeded with a date past the next window and the arm reads the ids from the seed rather than
+holding them, or when a ruling moves the date dependence into a presence probe that reports
+UNPROVEN (228) instead of red. Owner: Chat, by reseed or ruling.
+
+## G317. The signed-out corpus checks read seeded personas the project no longer holds
+
+**Severity: low in the phase posture (140). Opened 18 October 2026 during H64-WG, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+`tests/live-checks.cjs` reads `thandiwe-dube` as the shared profile and `kwame-mensah` as the
+unshared one (`SHARED` and `UNSHARED`, overridable by env), and `ruling 141: anon
+public_attestations names no member who does not share` reads the attestations corpus. On 18
+October neither handle exists on the canonical project and `public.attestations` holds no row,
+where main's run 608 on 16 October read both the row and a convene attestation; the seeded personas
+and their attestations were removed between the two, leaving the twelve accounts ruling 1855 item 5
+counts. `check 1: anon reads the shared profile's core row` and the ruling 141 check are red on
+every branch until the project carries a shared persona with an accepted attestation again, or the
+checks are pointed at one that exists (`SHARED` in the live job's env, or the handle of a current
+account that shares). Closes with that reseed or that env, named by Chat. Owner: Chat, by reseed.
