@@ -233,7 +233,13 @@ async function runMemberTheme(browserType, bname, [w, h]) {
     const open = (html.match(/<html[^>]*>/) || [""])[0];
     record(
       `${tag} | the server renders no theme attribute and no theme script, as on main`,
-      !!open && !/data-theme|data-prepaint/.test(open) && !/prefers-color-scheme/.test(html),
+      // A theme script is what is looked for, so only script bodies are read: the head's dark-tab icon
+      // link carries the media query too (1885, BS7) and renders no theme.
+      !!open &&
+        !/data-theme|data-prepaint/.test(open) &&
+        !(html.match(/<script\b[^>]*>[\s\S]*?<\/script>/g) || []).some((t) =>
+          /prefers-color-scheme/.test(t),
+        ),
       open,
     );
 
@@ -242,7 +248,12 @@ async function runMemberTheme(browserType, bname, [w, h]) {
     const a = await page.evaluate(() => ({
       theme: document.documentElement.getAttribute("data-theme"),
       prepaint: document.documentElement.hasAttribute("data-prepaint"),
-      bg: getComputedStyle(document.documentElement).getPropertyValue("--bg").trim().toLowerCase(),
+      // The minifier writes #111111 as #111 (BS7); read in six-digit form, as the meta is above.
+      bg: getComputedStyle(document.documentElement)
+        .getPropertyValue("--bg")
+        .trim()
+        .toLowerCase()
+        .replace(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/, "#$1$1$2$2$3$3"),
       stored: localStorage.getItem("dna.theme"),
     }));
     record(
