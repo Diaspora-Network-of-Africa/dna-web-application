@@ -19,6 +19,7 @@ import { Comment } from "@/components/strand/Comment";
 import { MediaBlock } from "@/components/strand/MediaBlock";
 import type { CardC } from "@/components/strand/cmeta";
 import type { Member } from "@/lib/auth";
+import { useShellScroll } from "@/lib/shell-scroll";
 import {
   CommentError,
   loadComments,
@@ -213,9 +214,21 @@ export type CommentThreadProps = {
   /** A notification's destination (10.2): the comment to scroll to once the thread holds it. */
   focusCommentId?: string | null | undefined;
   onNavigate?: (() => void) | undefined;
+  /** H62-G1 (1905): the comment control's press count; each new one lands on the box once loaded. */
+  land?: number | undefined;
+  /** H62-G1 (1905): closes the section and returns to the Feed at the card (the card's Show less). */
+  onClose?: (() => void) | undefined;
 };
 
-export function CommentThread({ post, member, tier, mode, focusCommentId }: CommentThreadProps) {
+export function CommentThread({
+  post,
+  member,
+  tier,
+  mode,
+  focusCommentId,
+  land,
+  onClose,
+}: CommentThreadProps) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const postId = post.id ?? "";
@@ -228,6 +241,35 @@ export function CommentThread({ post, member, tier, mode, focusCommentId }: Comm
     enabled: !!postId,
   });
   const pages = useMemo(() => thread.data?.pages ?? [], [thread.data]);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const { scrollerRef } = useShellScroll();
+  // H62-G1 (1905): the box (with the section's close) is brought into the visible area by the least
+  // scroll of the shell's own scroller, never by scrollIntoView, which also scrolls the window on
+  // iPhone (104, 1457). The visible foot is the fixed dock's top below expanded, as the shell
+  // measures it. At compact the box is sticky above the dock (8.4), so it shows once the thread's
+  // top is a box's height above that foot, and the landing goes no further into the thread. A box
+  // already in view does not move the page at all.
+  const revealFoot = () => {
+    const sc = scrollerRef.current;
+    const root = rootRef.current;
+    const foot = root?.querySelector<HTMLElement>("[data-comment-box]");
+    if (!sc || !root || !foot) return;
+    const box = sc.getBoundingClientRect();
+    let bottom = box.bottom;
+    const dock = document.querySelector<HTMLElement>('[data-pulse="dock"]');
+    if (dock && getComputedStyle(dock).position === "fixed")
+      bottom = Math.min(bottom, dock.getBoundingClientRect().top);
+    const r = foot.getBoundingClientRect();
+    const end =
+      getComputedStyle(foot).position === "sticky"
+        ? Math.min(r.bottom, root.getBoundingClientRect().top + r.height)
+        : r.bottom;
+    const by = end + 12 - bottom;
+    if (by <= 0) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    sc.scrollTo({ top: sc.scrollTop + by, behavior: reduce ? "auto" : "smooth" });
+  };
+  const landed = useRef<number | undefined>(undefined);
   const top = useMemo(() => pages.flatMap((p) => p.comments), [pages]);
   const all = useMemo(() => flat(pages), [pages]);
   const ids = useMemo(() => all.map((c) => c.id), [all]);
@@ -326,6 +368,22 @@ export function CommentThread({ post, member, tier, mode, focusCommentId }: Comm
     }
   };
 
+  // H62-G1: a new press of the comment control lands once the page has loaded, so the box does not
+  // move off again as the comments arrive. What the page carries can still grow under it after the
+  // first frame (the summaries, the photos), so the landing is taken again once the first scroll has
+  // run its course; a box already in view does not move.
+  useEffect(() => {
+    if (land === undefined || landed.current === land || thread.isPending) return;
+    landed.current = land;
+    const frame = window.requestAnimationFrame(revealFoot);
+    const settle = window.setTimeout(revealFoot, 600);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(settle);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [land, thread.isPending]);
+
   // 10.2: a notification's destination, the comment, scrolled into view once the thread holds it;
   // the next page is read while it is not here and more exist.
   const focused = useRef(false);
@@ -388,7 +446,20 @@ export function CommentThread({ post, member, tier, mode, focusCommentId }: Comm
                 <ActionRow
                   layer={props}
                   reply={reply}
-                  onReply={reply ? undefined : () => setReplyTo(c)}
+                  onReply={
+                    reply
+                      ? undefined
+                      : () => {
+                          // H62-G1: the field takes focus inside the tap, which is what lets iPhone
+                          // raise its keyboard, and without the focus's own scroll; the box then
+                          // comes into view by the shell's scroller.
+                          setReplyTo(c);
+                          rootRef.current
+                            ?.querySelector<HTMLElement>("[data-comment-field]")
+                            ?.focus({ preventScroll: true });
+                          window.requestAnimationFrame(revealFoot);
+                        }
+                  }
                   mode={mode}
                 />
                 {props.below}
@@ -449,6 +520,7 @@ export function CommentThread({ post, member, tier, mode, focusCommentId }: Comm
   const compact = tier === "compact";
   return (
     <div
+      ref={rootRef}
       data-comment-thread=""
       style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}
     >
@@ -492,6 +564,7 @@ export function CommentThread({ post, member, tier, mode, focusCommentId }: Comm
         }
         onCancelReply={() => setReplyTo(null)}
         onSend={start}
+        onClose={onClose}
         compact={compact}
       />
       {layer.overlays}

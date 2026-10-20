@@ -21,7 +21,7 @@ import { PulseDock, type PulseState } from "@/components/strand/PulseDock";
 import type { C } from "@/components/strand/cmeta";
 import { LeftRail, RightRail } from "@/components/dna/Rails";
 import { NotificationPanel } from "@/components/dna/NotificationPanel";
-import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
+import { useKeyboardViewport } from "@/hooks/use-keyboard-height";
 import type { Member } from "@/lib/auth";
 import { openComposer, useComposerState } from "@/lib/composer-store";
 import { isSettingsPath, type FeedView } from "@/lib/feed-view";
@@ -209,22 +209,33 @@ export function AppShell({
   // the keyboard, and the document never scrolls inside the shell (104), so nothing scrolls it
   // back. When the keyboard closes, a window left scrolled is returned to the origin, on every
   // route. Rechecked a frame later, because the window can settle after visualViewport's resize.
-  const keyboard = useKeyboardHeight(true);
+  // H62-G1 (1905): while the keyboard is up and the focused field sits in a frame that already
+  // stands on the keyboard (`data-keyboard-frame`: the Messenger thread's frame, the lifted comment
+  // box), the window is held at the origin too, so the page under the field does not move; a field
+  // in no such frame keeps iOS's own scroll, which is all that keeps it above the keyboard.
+  const keyboardView = useKeyboardViewport(true);
+  const keyboard = keyboardView.height;
   const keyboardWasUp = useRef(false);
   useEffect(() => {
-    if (keyboard > 0) {
-      keyboardWasUp.current = true;
-      return;
-    }
-    if (!keyboardWasUp.current) return;
-    keyboardWasUp.current = false;
     const reset = () => {
       if (window.scrollX !== 0 || window.scrollY !== 0) window.scrollTo(0, 0);
     };
+    if (keyboard > 0) {
+      keyboardWasUp.current = true;
+      const framed = () => !!document.activeElement?.closest("[data-keyboard-frame]");
+      if (!framed()) return;
+      reset();
+      const frame = window.requestAnimationFrame(() => {
+        if (framed()) reset();
+      });
+      return () => window.cancelAnimationFrame(frame);
+    }
+    if (!keyboardWasUp.current) return;
+    keyboardWasUp.current = false;
     reset();
     const frame = window.requestAnimationFrame(reset);
     return () => window.cancelAnimationFrame(frame);
-  }, [keyboard]);
+  }, [keyboard, keyboardView.pageTop, keyboardView.offsetTop]);
   // Handoff 61-S1 (1656): the avatar opens the Account drawer at /settings, one control, replacing
   // the account dialog this shell drew. The drawer is the /settings route's, over the Feed.
   const onSettings = isSettingsPath(pathname);

@@ -497,4 +497,370 @@ async function runComments(browserType, bname, vp, theme) {
   }
 }
 
-module.exports = { runComments, FLOW_CELLS };
+/**
+ * H62-G1 (ruling 1905), at 390, 820 and 1280, both themes (six checks). The founder's walk found the
+ * comment control landing nowhere near the comments, no way to close them, and React and Reply
+ * saving nothing. On the compact and medium cells every control is a touch tap, the path the matrix's
+ * `click` never took; at 1280 the post's bar is open over the thread when the comment's React is
+ * pressed, the walk's Mac Safari case. Each check reads the page, not the code:
+ *   - the comment control: the card's top is the same at the press and at the click, and once the
+ *     thread has loaded the comment field and Show less stand in the visible column above the dock;
+ *   - React saves: comment_react is sent for the comment and React reads Reacted;
+ *   - Reply saves: the field holds focus right after the tap, and comment_post carries the parent;
+ *     the reply renders under it;
+ *   - Show less returns to /feed with the card collapsed at the place it held under the lens seat
+ *     before it opened (the seat's own height can change with the scope line's latch, 405);
+ *   - React and Reply survive a reload: the post landed on directly reads Reacted and the reply;
+ *   - no page errors.
+ * The iPhone keyboard (Done Means 3) cannot be driven on Linux WebKit; its proof is the founder's
+ * walk on the deployment (627).
+ */
+async function runCommentsLanding(browserType, bname, vp, theme) {
+  const [w, h] = vp;
+  const tag = `${bname} ${w}x${h} ${theme} comments-g1`;
+  M.armStart(tag);
+  const { browser, page, errors } = await open(browserType, vp, theme);
+  const db = makeMockDb();
+  seedPosts(db, 4);
+  const at2 = (hoursAgo) => new Date(Date.now() - hoursAgo * 3600e3).toISOString();
+  for (let i = 0; i < 6; i++)
+    db.comments.push({
+      id: "g1-" + i,
+      post_id: "seed-1",
+      parent_id: null,
+      author_id: (i % 2 ? ngozi : kwame).id,
+      body:
+        "A comment the member reads before they answer, number " +
+        ["one", "two", "three"][i % 3] +
+        ".",
+      media: null,
+      created_at: at2(30 - i),
+      person: i % 2 ? ngozi : kwame,
+    });
+  db.membersById = db.membersById || {};
+  for (const m of [lerato, ngozi, kwame]) db.membersById[m.id] = { ...m };
+  await mockSupabase(page, db);
+  const touch = w < 1024;
+  const press = async (locator) => {
+    const b = await locator.boundingBox();
+    if (!b) throw new Error("no box to press");
+    if (touch) await page.touchscreen.tap(b.x + b.width / 2, b.y + b.height / 2);
+    else await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  };
+  /** A control at the column's middle before a press, clear of the pinned block and the dock. */
+  const centre = async (locator) => {
+    await locator.evaluate((e) => e.scrollIntoView({ block: "center" }));
+    await page.waitForTimeout(300);
+  };
+  /** The visible column: the scroller's box, its foot the fixed dock's top where there is one. */
+  const view = () =>
+    page.evaluate(() => {
+      const card = document.querySelector('[data-post-id="seed-1"]');
+      const sc = card && card.closest("main, [data-shell-scroller]");
+      const scroller =
+        [...document.querySelectorAll("*")].find(
+          (e) =>
+            e.contains(card) &&
+            getComputedStyle(e).overflowY === "auto" &&
+            e.scrollHeight > e.clientHeight,
+        ) || sc;
+      const box = scroller ? scroller.getBoundingClientRect() : { top: 0, bottom: innerHeight };
+      const dock = document.querySelector('[data-pulse="dock"]');
+      const foot =
+        dock && getComputedStyle(dock).position === "fixed"
+          ? Math.min(box.bottom, dock.getBoundingClientRect().top)
+          : box.bottom;
+      const rect = (sel) => {
+        const e = document.querySelector(sel);
+        if (!e) return null;
+        const r = e.getBoundingClientRect();
+        return { top: Math.round(r.top), bottom: Math.round(r.bottom) };
+      };
+      const seat = document.querySelector("[data-lens-anchor]");
+      const seatBottom = seat ? seat.getBoundingClientRect().bottom : 0;
+      return {
+        path: location.pathname,
+        top: card ? Math.round(card.getBoundingClientRect().top) : null,
+        underSeat: card ? Math.round(card.getBoundingClientRect().top - seatBottom) : null,
+        visTop: Math.round(box.top),
+        foot: Math.round(foot),
+        field: rect('[data-post-id="seed-1"] [data-comment-field]'),
+        close: rect('[data-post-id="seed-1"] [data-comments-close]'),
+        thread: !!document.querySelector('[data-post-id="seed-1"] [data-comment-thread]'),
+      };
+    });
+  const inView = (r, v) => !!r && r.top >= v.visTop && r.bottom <= v.foot + 1;
+  try {
+    await signIn(page);
+    const card = page.locator('[data-post-id="seed-1"]');
+    await card.locator('[data-testid="respond"]').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(600);
+    const before = await view();
+
+    // 1. The comment control.
+    await page.evaluate(() => {
+      const top = () =>
+        Math.round(document.querySelector('[data-post-id="seed-1"]').getBoundingClientRect().top);
+      window.__g1 = [];
+      const rec = () => window.__g1.push(top());
+      addEventListener("pointerdown", rec, { capture: true, once: true });
+      addEventListener("click", rec, { capture: true, once: true });
+    });
+    await press(card.locator('[data-testid="respond"]'));
+    await page.locator('[data-post-id="seed-1"] [data-comment-id="g1-5"]').waitFor();
+    // The landing's settle pass runs 600 ms after the first; read the page once both have run.
+    await page.waitForTimeout(2000);
+    const tops = await page.evaluate(() => window.__g1);
+    const landed = await view();
+    record(
+      tag +
+        " the comment control: the card holds still under the press, and the comment field and Show less land in view (1905)",
+      tops.length === 2 &&
+        tops[0] === before.top &&
+        tops[1] === before.top &&
+        landed.path === "/posts/seed-1" &&
+        inView(landed.field, landed) &&
+        inView(landed.close, landed),
+      JSON.stringify({ tops, before: before.top, landed }),
+    );
+
+    // 2. React, by touch at 390 and 820; at 1280 with the post's bar open above the thread.
+    const row = card.locator('[data-comment-id="g1-0"]');
+    const react = row.locator("[data-comment-react]").first();
+    await centre(react);
+    let postBar = null;
+    if (!touch) {
+      // The pointer crosses the post's own React on its way down, as the walk's did; its bar opens
+      // over the thread, and the comment's React sits under it.
+      const heart = card.locator('[data-testid="react"]').first();
+      const hb = await heart.boundingBox();
+      await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+      await page.waitForTimeout(300);
+      postBar = await card.locator(":scope > * [data-reaction-below]").count();
+      const rb = await react.boundingBox();
+      await page.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2, { steps: 4 });
+      await page.waitForTimeout(300);
+    }
+    await press(react);
+    await page.waitForTimeout(600);
+    const reacts = db.rpcPayloads.filter((x) => x.fn === "comment_react");
+    record(
+      tag +
+        (touch
+          ? " a tap on a comment's React sends comment_react and reads Reacted (1905, 1817)"
+          : " with the post's bar open, a press on a comment's React sends comment_react and reads Reacted (1905, 1739)"),
+      reacts.length === 1 &&
+        reacts[0].body.p_comment === "g1-0" &&
+        reacts[0].body.p_kind === "asante" &&
+        (await react.getAttribute("aria-pressed")) === "true" &&
+        (touch || postBar > 0),
+      JSON.stringify({ reacts: reacts.map((x) => x.body), postBar }),
+    );
+
+    // 3. Reply.
+    await page.mouse.move(2, 2);
+    const reply = row.locator("[data-comment-reply]").first();
+    await centre(reply);
+    await press(reply);
+    const focused = await page.evaluate(
+      () => document.activeElement && document.activeElement.hasAttribute("data-comment-field"),
+    );
+    await page.waitForTimeout(400);
+    await card.locator("[data-comment-field]").fill("A reply from the landing arm.");
+    await centre(card.locator("[data-comment-send]"));
+    await press(card.locator("[data-comment-send]"));
+    await page.waitForTimeout(600);
+    const posted = db.rpcPayloads.filter((x) => x.fn === "comment_post").pop();
+    const under = await row.locator('[data-comment="reply"]').allTextContents();
+    record(
+      tag +
+        " Reply: the field holds focus right after the tap, and comment_post carries the parent (1905, 1677)",
+      focused === true &&
+        !!posted &&
+        posted.body.p_parent === "g1-0" &&
+        under.some((t) => t.includes("A reply from the landing arm.")),
+      JSON.stringify({ focused, posted: posted && posted.body, under: under.length }),
+    );
+
+    // 4. Show less, from the box's foot.
+    const close = card.locator("[data-comments-close]");
+    await centre(close);
+    await press(close);
+    await page.waitForURL("**/feed", { timeout: 10000 });
+    await page.waitForTimeout(800);
+    const back = await view();
+    record(
+      tag + " Show less returns to the Feed with the card closed where it was (1905)",
+      back.path === "/feed" &&
+        !back.thread &&
+        Math.abs(back.underSeat - before.underSeat) <= 1 &&
+        back.top >= back.visTop &&
+        back.top < back.foot,
+      JSON.stringify({ before: before.underSeat, after: back.underSeat, back }),
+    );
+
+    // 5. Both survive a reload.
+    await page.goto(M.BASE + "/posts/seed-1", { waitUntil: "networkidle" });
+    await page.reload({ waitUntil: "networkidle" });
+    const row2 = page.locator('[data-post-id="seed-1"] [data-comment-id="g1-0"]');
+    await row2.waitFor({ timeout: 10000 });
+    const pressed = await row2.locator("[data-comment-react]").first().getAttribute("aria-pressed");
+    const replies = await row2.locator('[data-comment="reply"]').allTextContents();
+    record(
+      tag + " React and Reply survive a reload (1905)",
+      pressed === "true" && replies.some((t) => t.includes("A reply from the landing arm.")),
+      JSON.stringify({ pressed, replies: replies.length }),
+    );
+    record(tag + " no page errors", errors.length === 0, errors.slice(0, 3).join(" | "));
+  } finally {
+    await browser.close();
+  }
+}
+
+/**
+ * H62-G1, the founder's walk of 20 Oct (items 1 and 2), at 390, 820 and 1280, both themes (six
+ * checks). On the walk a choice in the emoji picker seemed to send the comment (the project holds
+ * "Testing" and then "😄" alone, seven seconds apart), and a comment with text and an image saved
+ * with its image and no text. Each check reads what left the browser:
+ *   - a choice in the picker inserts at the caret and sends nothing (SPEC 8.4);
+ *   - a click that lands on Send from a press that began elsewhere sends nothing;
+ *   - a press on Send then sends the text with the emoji, once;
+ *   - text typed while the image uploads stays in the field, and Send sends both;
+ *   - Send sends what the field shows, read from the field at the press;
+ *   - no page errors.
+ */
+async function runCommentsCompose(browserType, bname, vp, theme) {
+  const [w, h] = vp;
+  const tag = `${bname} ${w}x${h} ${theme} comments-compose`;
+  M.armStart(tag);
+  const { browser, page, errors } = await open(browserType, vp, theme);
+  const db = makeMockDb();
+  seedPosts(db, 4);
+  await mockSupabase(page, db);
+  const touch = w < 1024;
+  const press = async (locator) => {
+    await locator.evaluate((e) => e.scrollIntoView({ block: "center" }));
+    await page.waitForTimeout(250);
+    const b = await locator.boundingBox();
+    if (!b) throw new Error("no box to press");
+    if (touch) await page.touchscreen.tap(b.x + b.width / 2, b.y + b.height / 2);
+    else await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  };
+  const posts = () => db.rpcPayloads.filter((x) => x.fn === "comment_post");
+  try {
+    await signIn(page);
+    const card = page.locator('[data-post-id="seed-1"]');
+    await press(card.locator('[data-testid="respond"]'));
+    const box = card.locator("[data-comment-box]");
+    const field = box.locator("[data-comment-field]");
+    await field.waitFor({ timeout: 15000 });
+    await page.waitForTimeout(1500);
+
+    // 1. The picker's choice.
+    await press(field);
+    await page.keyboard.type("Testing");
+    await press(box.locator("[data-comment-emoji]"));
+    const cell = page
+      .locator('[data-reaction-picker] [data-emoji-viewport] button:not([aria-label=""])')
+      .first();
+    await cell.waitFor({ timeout: 15000 });
+    const glyph = (await cell.textContent()) || "";
+    // The cell is a Frimousse emoji, which cancels its own pointerdown; Linux WebKit's touch
+    // emulation then drops the tap's click, which the iPhone does not (the walk's choices went in).
+    // So the choice is clicked, as the Messenger's reactions arm clicks the same picker's cells at
+    // its touch cell; every other control here is pressed by touch.
+    await cell.evaluate((e) => e.scrollIntoView({ block: "center" }));
+    await page.waitForTimeout(250);
+    await cell.click();
+    await page.waitForTimeout(800);
+    const afterPick = posts().length;
+    const shown = await field.inputValue();
+    record(
+      tag + " a choice in the emoji picker inserts at the caret and sends nothing (1905, 8.4)",
+      afterPick === 0 && glyph.length > 0 && shown === "Testing" + glyph,
+      JSON.stringify({ afterPick, glyph, shown }),
+    );
+
+    // 2. A click that lands on Send from a press that began elsewhere.
+    await box
+      .locator("[data-comment-send]")
+      .evaluate((b) =>
+        b.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 })),
+      );
+    await page.waitForTimeout(400);
+    const stray = posts().length;
+    record(
+      tag + " a click on Send from a press that began elsewhere sends nothing (1905)",
+      stray === 0 && (await field.inputValue()) === "Testing" + glyph,
+      JSON.stringify({ stray }),
+    );
+
+    // 3. Send.
+    await press(box.locator("[data-comment-send]"));
+    await page.waitForTimeout(800);
+    const sent = posts();
+    record(
+      tag + " a press on Send sends the text with the emoji, once (1905)",
+      sent.length === 1 && sent[0].body.p_body === "Testing" + glyph,
+      JSON.stringify(sent.map((x) => x.body)),
+    );
+
+    // 4. Text typed while the image uploads.
+    await box
+      .locator("[data-comment-file]")
+      .setInputFiles({ name: "pic.png", mimeType: "image/png", buffer: PNG });
+    await press(field);
+    await page.keyboard.type("Testing with a picture");
+    const during = await field.inputValue();
+    await page.waitForFunction(
+      () => !document.querySelector("[data-comment-box] [data-comment-send]:disabled"),
+      null,
+      { timeout: 15000 },
+    );
+    await page.waitForTimeout(300);
+    const kept = await field.inputValue();
+    await press(box.locator("[data-comment-send]"));
+    await page.waitForTimeout(800);
+    const both = posts().at(-1);
+    record(
+      tag +
+        " text typed while the image uploads stays, and Send sends the text and the image (1905)",
+      posts().length === 2 &&
+        during === "Testing with a picture" &&
+        kept === "Testing with a picture" &&
+        !!both &&
+        both.body.p_body === "Testing with a picture" &&
+        typeof both.body.p_media === "string",
+      JSON.stringify({ during, kept, body: both && both.body }),
+    );
+
+    // 5. What the field shows is what goes, even where the change never reached the box: the box
+    // holds "x" and the field shows a sentence it never heard about. Send is pressed as iPhone presses
+    // a button, a pointerdown and a click with no focus moving, so the field never blurs and no
+    // change event carries its value to the box first, as a mouse press on Chromium would.
+    await press(field);
+    await page.keyboard.type("x");
+    await field.evaluate((el) => {
+      const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
+      set.call(el, "Shown in the field");
+    });
+    await box.locator("[data-comment-send]").evaluate((b) => {
+      b.dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch", isPrimary: true }),
+      );
+      b.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
+    });
+    await page.waitForTimeout(800);
+    const live = posts().at(-1);
+    record(
+      tag + " Send sends what the field shows (1905)",
+      posts().length === 3 && !!live && live.body.p_body === "Shown in the field",
+      JSON.stringify(live && live.body),
+    );
+    record(tag + " no page errors", errors.length === 0, errors.slice(0, 3).join(" | "));
+  } finally {
+    await browser.close();
+  }
+}
+
+module.exports = { runComments, runCommentsLanding, runCommentsCompose, FLOW_CELLS };
