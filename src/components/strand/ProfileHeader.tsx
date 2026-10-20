@@ -429,7 +429,15 @@ export function ProfileHeader({
     >
       {plate(condensedAvatar, 4, 18)}
       <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1 }}>
-        <span style={{ fontFamily: "var(--font-display)", fontSize: 24, lineHeight: 1.1, ...ONE }}>
+        <span
+          style={{
+            fontFamily: "var(--font-display)",
+            fontWeight: 700,
+            fontSize: 24,
+            lineHeight: 1.1,
+            ...ONE,
+          }}
+        >
           {member.name}
         </span>
         {member.headline && (
@@ -509,7 +517,7 @@ export function ProfileHeader({
                   style={{
                     margin: 0,
                     fontFamily: "var(--font-display)",
-                    fontWeight: 400,
+                    fontWeight: 700,
                     fontSize: 44,
                     lineHeight: 1.02,
                     letterSpacing: "-0.01em",
@@ -680,7 +688,7 @@ export function ProfileHeader({
                   style={{
                     margin: 0,
                     fontFamily: "var(--font-display)",
-                    fontWeight: 400,
+                    fontWeight: 700,
                     fontSize: 34,
                     lineHeight: 1.02,
                     letterSpacing: "-0.01em",
@@ -775,7 +783,7 @@ export function ProfileHeader({
               style={{
                 margin: 0,
                 fontFamily: "var(--font-display)",
-                fontWeight: 400,
+                fontWeight: 700,
                 fontSize: 36,
                 lineHeight: 1.1,
                 textWrap: "balance",

@@ -135,7 +135,9 @@ export function BodyBlocks({ blocks = [], headingLevel = 2, style }: BodyBlocksP
             style={{
               margin: "var(--space-2) 0 0",
               fontFamily: "var(--font-display)",
-              fontWeight: "var(--weight-regular)" as unknown as number,
+              fontWeight: (headingLevel === 1
+                ? "var(--weight-bold)"
+                : "var(--weight-semibold)") as unknown as number,
               fontSize: "var(--display-s)",
               lineHeight: "var(--display-s-lh)",
               ...PRETTY,

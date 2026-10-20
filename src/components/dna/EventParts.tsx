@@ -180,7 +180,7 @@ export function EventTitle({
       style={{
         margin: 0,
         fontFamily: "var(--font-display)",
-        fontWeight: 400,
+        fontWeight: 700,
         fontSize: compact ? 26 : 32,
         lineHeight: 1.15,
         color: cancelled ? "var(--ink-3)" : "var(--ink)",

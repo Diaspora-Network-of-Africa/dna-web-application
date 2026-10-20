@@ -126,7 +126,7 @@
   /* Pulse state signals. State is never encoded as a C color. */
   --pulse-none: transparent;
   --pulse-activity: #a9a49b;
-  --pulse-for-you: #1a1a18;
+  --pulse-for-you: #111111; /* 1896, applied ahead of Strand's compile */
   --pulse-urgent: #b3261e;
 
   /* Semantic states. Destructive is a separate, more saturated warm red than error; never swap them. */
@@ -222,7 +222,8 @@
   --c-system-tint: var(
     --bg-sunken
   ); /* 1673 item 17 (brief 60-SP, compile sha256-b1a458dac1bd562f): restated for the same reason; it read the light #F2EDE5 in the dark theme before */
-  --glow-dia: 0 0 0 2px #141412, 0 0 0 4px #e8b830, 0 0 18px rgba(232, 184, 48, 0.4);
+  --glow-dia:
+    0 0 0 2px #111111, 0 0 0 4px #e8b830, 0 0 18px rgba(232, 184, 48, 0.4); /* 1896: the inner ring is the dark --bg */
   /* MemberCard's portrait halo, the one value the dark theme overrides (compile v1791495246160097,
      tokens/colors.css; 1487): on the warm near-black ground an ink shadow has no delta against
      --surface, so the photograph separates by a deeper halo and a faint rim of its own light. */

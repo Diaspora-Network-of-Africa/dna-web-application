@@ -812,7 +812,7 @@ function Settings() {
             style={{
               margin: 0,
               fontFamily: "var(--font-display)",
-              fontWeight: 400,
+              fontWeight: 700,
               fontSize: 32,
               lineHeight: 1.15,
             }}

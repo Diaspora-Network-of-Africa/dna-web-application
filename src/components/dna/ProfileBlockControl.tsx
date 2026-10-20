@@ -168,7 +168,7 @@ export function ProfileBlockControl({
           margin: 0,
           outline: "none",
           fontFamily: "var(--font-display)",
-          fontWeight: 400,
+          fontWeight: 600,
           fontSize: 26,
           lineHeight: 1.2,
           color: "var(--ink)",

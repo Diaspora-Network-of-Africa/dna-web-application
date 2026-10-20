@@ -2041,6 +2041,7 @@ function ProfileBody(p: BodyProps) {
           <div
             style={{
               fontFamily: "var(--font-display)",
+              fontWeight: 700,
               fontSize: 26,
               lineHeight: 1.2,
               textWrap: "pretty",

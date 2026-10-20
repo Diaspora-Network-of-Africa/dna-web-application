@@ -69,7 +69,7 @@ const H2 = ({ id, children }: { id: string; children: ReactNode }) => (
     style={{
       margin: 0,
       fontFamily: "var(--font-display)",
-      fontWeight: 400,
+      fontWeight: 600,
       fontSize: 26,
       lineHeight: 1.2,
     }}
@@ -612,7 +612,7 @@ function OverviewPage({
               style={{
                 margin: 0,
                 fontFamily: "var(--font-display)",
-                fontWeight: 400,
+                fontWeight: 700,
                 fontSize: 32,
                 lineHeight: 1.15,
                 color: "var(--ink)",

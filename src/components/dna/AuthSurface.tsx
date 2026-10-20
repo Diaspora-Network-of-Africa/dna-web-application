@@ -63,7 +63,7 @@ export function AuthHeading({
               fontFamily: "var(--font-display)",
               fontSize: 32,
               lineHeight: 1.15,
-              fontWeight: 400,
+              fontWeight: 700,
               color: "var(--ink)",
               margin: 0,
               outline: "none",

@@ -601,7 +601,7 @@ export function FeedSurface({ member, view }: { member: Member; view: FeedView }
                 <span
                   style={{
                     fontFamily: "var(--font-display)",
-                    fontWeight: 400,
+                    fontWeight: 700,
                     fontSize: 26,
                     lineHeight: 1.2,
                   }}

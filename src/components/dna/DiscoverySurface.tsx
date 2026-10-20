@@ -217,7 +217,7 @@ const H2: CSSProperties = {
   fontFamily: "var(--font-display)",
   fontSize: 22,
   lineHeight: 1.25,
-  fontWeight: 400,
+  fontWeight: 600,
   color: "var(--ink)",
 };
 

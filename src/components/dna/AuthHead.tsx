@@ -78,7 +78,7 @@ export function AuthHead({
           fontFamily: "var(--font-display)",
           fontSize: "var(--_auth-heading)",
           lineHeight: 1.15,
-          fontWeight: 400,
+          fontWeight: 700,
           color: "var(--ink)",
           textAlign: "center",
           textWrap: "balance",

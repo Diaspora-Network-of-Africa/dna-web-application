@@ -644,7 +644,7 @@ function FullPicker({
             fontFamily: "var(--font-display)",
             fontSize: "var(--display-s)",
             lineHeight: "var(--display-s-lh)",
-            fontWeight: "var(--weight-regular)" as unknown as number,
+            fontWeight: "var(--weight-semibold)" as unknown as number,
             outline: "none",
           }}
         >

@@ -108,7 +108,14 @@ export function IntroSheet({
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <Avatar name={member.name} src={member.avatarUrl} size={48} />
               <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-                <span style={{ fontFamily: "var(--font-display)", fontSize: 26, lineHeight: 1.15 }}>
+                <span
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontWeight: 700,
+                    fontSize: 26,
+                    lineHeight: 1.15,
+                  }}
+                >
                   {member.name}
                 </span>
                 {member.headline && (

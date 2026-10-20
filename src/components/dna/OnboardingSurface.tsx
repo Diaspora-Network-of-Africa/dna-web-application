@@ -686,7 +686,7 @@ function StanceCard({
             fontFamily: "var(--font-display)",
             fontSize: 22,
             lineHeight: 1.2,
-            fontWeight: 400,
+            fontWeight: 700,
             color: "var(--ink)",
           }}
         >
@@ -934,7 +934,7 @@ export function ExplainerSheet({
                 fontFamily: "var(--font-display)",
                 fontSize: 26,
                 lineHeight: 1.2,
-                fontWeight: 400,
+                fontWeight: 600,
                 color: "var(--ink)",
                 margin: 0,
                 outline: "none",
