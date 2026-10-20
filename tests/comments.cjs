@@ -608,7 +608,8 @@ async function runCommentsLanding(browserType, bname, vp, theme) {
     });
     await press(card.locator('[data-testid="respond"]'));
     await page.locator('[data-post-id="seed-1"] [data-comment-id="g1-5"]').waitFor();
-    await page.waitForTimeout(1200);
+    // The landing's settle pass runs 600 ms after the first; read the page once both have run.
+    await page.waitForTimeout(2000);
     const tops = await page.evaluate(() => window.__g1);
     const landed = await view();
     record(

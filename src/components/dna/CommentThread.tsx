@@ -369,12 +369,18 @@ export function CommentThread({
   };
 
   // H62-G1: a new press of the comment control lands once the page has loaded, so the box does not
-  // move off again as the comments arrive.
+  // move off again as the comments arrive. What the page carries can still grow under it after the
+  // first frame (the summaries, the photos), so the landing is taken again once the first scroll has
+  // run its course; a box already in view does not move.
   useEffect(() => {
     if (land === undefined || landed.current === land || thread.isPending) return;
     landed.current = land;
     const frame = window.requestAnimationFrame(revealFoot);
-    return () => window.cancelAnimationFrame(frame);
+    const settle = window.setTimeout(revealFoot, 600);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(settle);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [land, thread.isPending]);
 
