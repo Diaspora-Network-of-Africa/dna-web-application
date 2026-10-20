@@ -317,6 +317,24 @@ Deno.serve(async (req: Request) => {
   } else if (!UUID.test(postId)) return json({ error: "bad_post_id" }, 400);
   if (file.size > MAX_INPUT_BYTES) return json({ error: "too_large" }, 413);
 
+  // Handoff 64-WG (ruling 1854): the storage object and the media row below are written with the
+  // service role, which no row policy reaches, so the launch gate is read here. A held member keeps
+  // their own profile media (the avatar the Who screen asks for goes through the `slot` branch) and
+  // writes no post media; the answer is onboarding_state's own `admitted`, read under the member's
+  // JWT, the same read the client gate decides on (307).
+  if (!slot) {
+    const { data: state, error: stateErr } = await userClient.rpc("onboarding_state");
+    if (stateErr) {
+      console.log(JSON.stringify({ event: "admission_unavailable", message: stateErr.message }));
+      return json({ error: "admission_unavailable" }, 503);
+    }
+    const admitted =
+      state && typeof state === "object" && !Array.isArray(state)
+        ? (state as { admitted?: unknown }).admitted === true
+        : false;
+    if (!admitted) return json({ error: "not_admitted" }, 403);
+  }
+
   const original = new Uint8Array(await file.arrayBuffer());
   const type = sniff(original);
   if (!type || !ALLOWED[type]) return json({ error: "not_an_image" }, 415);

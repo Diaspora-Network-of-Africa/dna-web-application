@@ -172,11 +172,17 @@ async function readCatalog(client) {
        from pg_class c join pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm')`,
   );
+  // Permissive policies only. Handoff 64-WG's admission gate is one RESTRICTIVE policy per table,
+  // `<table>_admitted_gate`, ANDed with these; it reaches private.is_admitted and never the
+  // visibility predicate, because who may see a row and whether the caller is past the launch gate
+  // are two axes. The H64-WG arm in tests/live-db.cjs holds every gated table to exactly one such
+  // policy, so a restrictive policy carrying a visibility rule has nowhere to hide.
   const policies = await client.query(
     `select schemaname as schema, tablename as "table", policyname as name, cmd,
             roles::text[] as roles, qual
        from pg_policies
       where schemaname in ('public', 'storage') and cmd in ('SELECT', 'ALL')
+        and permissive = 'PERMISSIVE'
       order by 1, 2, 3`,
   );
   return {

@@ -1,4 +1,14 @@
 // Regenerated from the canonical Supabase project (dgspjevjoblujcoljvkn) with the Supabase MCP
+// generate_typescript_types tool on handoff H64-WG's branch (#121, the launch gate's server half),
+// rebased onto main at 8f01b1c (the merge of #120), with the project read first on 20 October 2026:
+// ledger head 20261018120000_h64_wg_launch_gate, md5 6cd482a282642b4923d4e7167ad24548 equal to the
+// file (applied through migrate.yml run 8, 18 October), 63 restrictive policies, 13 members and none
+// held. What it changes over main's regeneration below: `members.admitted_at` (Row, Insert, Update)
+// and the function `admin_admit_all`. `onboarding_state` keeps `Json`, so its `admitted` key moves
+// nothing here. `export type Views` is restored by hand after every regeneration (CLAUDE.md).
+//
+// Before H64-WG:
+// Regenerated from the canonical Supabase project (dgspjevjoblujcoljvkn) with the Supabase MCP
 // generate_typescript_types tool on handoff H62-G's branch (#120, the Feed card's comments), on main
 // at fa4ef051 (the merge of #118), after the founder applied 20261016120000 and then 20261016120100
 // through migrate.yml (1827) and Chat read the project back at 18:18 PDT on 18 October 2026: ledger
@@ -2448,6 +2458,7 @@ export type Database = {
       };
       members: {
         Row: {
+          admitted_at: string | null;
           avatar_path: string | null;
           cover_focus: string;
           cover_path: string | null;
@@ -2473,6 +2484,7 @@ export type Database = {
           who_completed_at: string | null;
         };
         Insert: {
+          admitted_at?: string | null;
           avatar_path?: string | null;
           cover_focus?: string;
           cover_path?: string | null;
@@ -2498,6 +2510,7 @@ export type Database = {
           who_completed_at?: string | null;
         };
         Update: {
+          admitted_at?: string | null;
           avatar_path?: string | null;
           cover_focus?: string;
           cover_path?: string | null;
@@ -4627,6 +4640,7 @@ export type Database = {
       };
     };
     Functions: {
+      admin_admit_all: { Args: { p_reason: string }; Returns: number };
       admin_change_history: {
         Args: { p_before?: number; p_limit?: number };
         Returns: Json;

@@ -9824,3 +9824,89 @@ the pull request's current draft state, not the payload's, before it skips. That
 `pull-requests: read` on that one job, which `pages.yml`'s header says no job's token holds today.
 The other shape is a concurrency key that a draft's run does not share with a ready run. Owner:
 Chat, by ruling, then Code.
+
+## G313. A held member who completes onboarding is visible to admitted members
+
+**Severity: low in the phase posture (140): no held member can exist while sign-up is closed (1852). Opened 18 October 2026 during H64-WG, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+20261018120000 gates what a held member may read and write (1854 item 4): every gated table reads
+them zero rows and every member-facing definer refuses them. It does not gate what admitted members
+may read about a held member. A held member who has completed the three onboarding steps (the
+onboarding writes are allowlisted) reaches `connect_cards`, `connect_where` and `profile_view`
+through `private.is_onboarded` and `private.visible_to` exactly as an admitted member does, because
+`visible_to` carries no admission term and 1748 keeps it to the audience question. Whether a held
+member is a member others may see, or is held from view as well as from reading, is 1854's second
+half and B64-Waitlist's to name; if held means unseen, the term belongs in `private.is_onboarded`'s
+three callers or in a fourth helper, never in `visible_to` (1734, 1748). Closes with that ruling.
+Owner: Chat, by ruling.
+
+## G314. `public.admin_admit_all` has no surface
+
+**Severity: low (an act with no caller). Opened 18 October 2026 during H64-WG, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+Handoff 64-WG item 6 ships the act: `admin_admit_all(p_reason)` admits every held member at once,
+writes its `admin_actions` row and refuses anyone not holding the admin role at aal2. Nothing in
+the admin console calls it, and it is callable only under an admin's aal2 JWT, so until a surface
+binds it the founder has no route to admit a held member. Closes when B64-Waitlist, or an admin
+brief, draws the control and a `claude/*` PR binds it. Owner: Chat, by brief.
+
+## G315. The Overview's Admitted lever still answers `not_connected`
+
+**Severity: low (a lever that now has a source). Opened 18 October 2026 during H64-WG, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+`admin_overview_levers` answers the Admitted lever null with `not_connected` (1363; the
+`overviewNotConnected` arm in `tests/live-db.cjs` holds it there). `members.admitted_at` is that
+lever's source from 20261018120000, and the backfill stamps every existing account at apply, so a
+count by period is now a read. Connecting it is a change to a 12B projection under its own SPEC
+line and arm, not this handoff's. Closes with a migration that reads `admitted_at` in the lever and
+the arm's expectation moved with it. Owner: Chat, by brief.
+
+## G316. The Filling up seed has a date, and the five Discovery live checks turn red by the calendar
+
+**Severity: low (a proof's fixture, not a surface). Opened 18 October 2026 during H64-WG, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+`tests/live-db.cjs` names the two seeded Filling up events (S54-1, 1165) by id and holds `S54-1
+(1165)`, `Handoff 34-A (1160)`, `Brief 9 (1040)`, `Handoff 34-A (1124, 1159)` and `Brief 9
+(1044, 1105)` to them: both published, future and uncancelled, the curated lane carrying the
+project's one pick, which is on `829b0fb7`. That event started at 2026-10-17 09:00Z, so from that
+hour every branch's `live` job reads the five red (H64-WG's run 39155181677 is the first; main's
+last run, 608 on 16 October, was green by a day). The arm reports them as failures, not as
+unproven, because the seed check is the control the others stand on. Closes when the pair is
+reseeded with a date past the next window and the arm reads the ids from the seed rather than
+holding them, or when a ruling moves the date dependence into a presence probe that reports
+UNPROVEN (228) instead of red. Owner: Chat, by reseed or ruling.
+
+## G317. The signed-out corpus checks read seeded personas the project no longer holds
+
+**Severity: low in the phase posture (140). Opened 18 October 2026 during H64-WG, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+`tests/live-checks.cjs` reads `thandiwe-dube` as the shared profile and `kwame-mensah` as the
+unshared one (`SHARED` and `UNSHARED`, overridable by env), and `ruling 141: anon
+public_attestations names no member who does not share` reads the attestations corpus. On 18
+October neither handle exists on the canonical project and `public.attestations` holds no row,
+where main's run 608 on 16 October read both the row and a convene attestation; the seeded personas
+and their attestations were removed between the two, leaving the twelve accounts ruling 1855 item 5
+counts. `check 1: anon reads the shared profile's core row` and the ruling 141 check are red on
+every branch until the project carries a shared persona with an accepted attestation again, or the
+checks are pointed at one that exists (`SHARED` in the live job's env, or the handle of a current
+account that shares). Closes with that reseed or that env, named by Chat. Owner: Chat, by reseed.
+
+## G318. The convene arm's fixture date has passed, and its four preview checks turn red by the calendar
+
+**Severity: low (a proof's fixture, not a surface). Opened 18 October 2026 during H64-WG, filed under ruling 597. The number is assigned by this entry (ruling 638).**
+
+**Closed 19 October 2026 by H63-CAL (#123, ruling 1876, merged at `655e84c`): the arm installs
+Playwright's clock at 2026-10-01T12:00Z before its first navigation, so "16 Oct" resolves to 2026
+on every run. Recorded rather than dropped, and renumbered from G313 when this branch was rebased
+onto `8f01b1c`, because H64-WG's runs 617 to 622 read it.**
+
+The composer's convene arm in `tests/matrix.cjs` proposes "Diaspora Builders Dinner in Nairobi on
+Thu 16 Oct at 19:00" (the fixture at line 76 and `when` at line 96) and holds four checks at each of
+its two cells to a preview reading `Presented by Amara Osei · Fri 16 Oct, 19:00` (line 4355 and
+the three that read the same meta line): a weekday of 2026 with no year. From 17 October 2026 the
+parser resolves "16 Oct" to 16 October 2027, a Saturday, and the line renders `Sat 16 Oct 2027,
+19:00`, so the eight checks read red on every branch (H64-WG's run 39156106313 is the first; main's
+run 608 on 16 October was green by a day). The arm's `when` field checks (`Thu 16 Oct at 19:00`)
+still pass, because they read the typed text back. Closes when the fixture's date is computed from
+the run's own date with its weekday, or set far enough ahead and the expectation written from the
+same computation, never from a literal weekday. Owner: Chat, by brief.
