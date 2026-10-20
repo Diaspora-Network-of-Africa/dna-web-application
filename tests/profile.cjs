@@ -19,8 +19,11 @@ const {
   sheetWidthIs,
   BASE,
   SB,
+  JWT,
 } = M;
 const HANDLE = "thandiwe-dube";
+/** The handle the mock's own members row carries (tests/matrix.cjs, `members`), never the address opened. */
+const OWN_HANDLE = "amara-osei";
 const SB_RE = SB.replace(/\./g, "\\.");
 /**
  * WebKit words every failed load the same way it words a cross-origin denial: "Fetch API cannot
@@ -1063,6 +1066,161 @@ async function runGate(browserType, bname, vp, theme) {
   await browser.close();
 }
 
+/**
+ * Handoff 63-WS (ruling 1866): sign-in returns a member to their own profile. A signed-out request
+ * for /m/<handle>?edit=1 renders the gate with Share off, which is what every recipient of 1865
+ * reads; its Sign in carries next=profile and nothing else, no handle and no URL; the sign-in lands
+ * on the member's own /m/<handle> in Edit profile mode, the handle read from their members row (the
+ * mock's row is amara-osei and the address opened named thandiwe-dube, so the two are told apart);
+ * a provider round trip, which comes back to a bare /sign-in, lands there too, the word carried by
+ * its marker (src/lib/sign-in-next.ts); a member already signed in lands in Edit profile mode with
+ * no sign-in step; and a path or a handle in next is dropped and lands on the Feed. On main the
+ * controls carry no next and every sign-in lands on /feed, so the first four checks fail there.
+ */
+async function runSignInReturn(browserType, bname, vp, theme) {
+  const [w, h] = vp;
+  const tag = `${bname}-${w}x${h}-${theme} profile sign-in return`;
+  M.armStart(tag);
+  const { browser, page, errors } = await newPage(browserType, vp, theme, {
+    profile: { mode: "owner", switches: { shared: false, private: false } },
+  });
+  const ownProfile = (u) => u.pathname === "/m/" + OWN_HANDLE;
+  const editMode = async () =>
+    (await page.getAttribute('[data-testid="profile"]', "data-view")) === "owner" &&
+    (await page.getAttribute('[data-testid="profile"]', "data-edit")) === "1" &&
+    (await page.locator('[data-testid="edit-done"]').count()) === 1;
+  const carries = (u) =>
+    u.searchParams.get("next") === "profile" &&
+    [...u.searchParams.keys()].join() === "next" &&
+    !u.search.includes(HANDLE);
+  /** The landing after a sign-in: the member's own profile or, on main, the Feed. */
+  const landing = async () => {
+    await page.waitForURL((u) => ownProfile(u) || u.pathname === "/feed", { timeout: 15000 });
+    await page
+      .waitForSelector('[data-testid="profile"]:not([data-view="loading"])', { timeout: 20000 })
+      .catch(() => undefined);
+    await page.waitForTimeout(250);
+    return new URL(page.url());
+  };
+  // A sign-in control, tapped on the page, is always followed by a sign-in on the page it opens
+  // and never by a goto away from it: run 39188218825's WebKit job reported a goto issued from a
+  // tapped-to /sign-in as interrupted by a navigation back to that same address, at all six cells,
+  // where Chromium did not, so the arm does not depend on that departure.
+  const signedOut = async () => {
+    await page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
+    await openProfile(page, "?edit=1");
+  };
+  try {
+    // Done Means 1, first half: signed out, Share off, the gate, which is what every recipient of
+    // 1865 reads. The gate's own Sign in carries the word and nothing else.
+    await openProfile(page, "?edit=1");
+    const view = await page.getAttribute('[data-testid="profile"]', "data-view");
+    await tap(page, page.getByTestId("profile").getByRole("button", { name: "Sign in" }));
+    await page.waitForURL((u) => u.pathname === "/sign-in", { timeout: 15000 });
+    const fromGate = new URL(page.url());
+    record(
+      tag +
+        ": signed out, ?edit=1 renders the gate and its Sign in carries next=profile alone, no handle (1866)",
+      view === "gate" && carries(fromGate),
+      "view=" + view + " " + fromGate.search,
+    );
+    // Done Means 2: the provider round trip from that page. The mock's provider sends the member
+    // straight back to redirect_to with a session in the fragment, as a provider does on success;
+    // the redirect is the bare /sign-in the client registers, so the word can only have travelled
+    // by its marker.
+    const authorize = [];
+    await page.route("**/auth/v1/authorize**", (route) => {
+      const u = new URL(route.request().url());
+      authorize.push(u.searchParams.get("redirect_to"));
+      const to =
+        (u.searchParams.get("redirect_to") || BASE + "/sign-in") +
+        "#access_token=" +
+        JWT +
+        "&token_type=bearer&expires_in=3600&refresh_token=r";
+      return route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        headers: { "access-control-allow-origin": "*" },
+        body: `<!doctype html><meta charset="utf-8"><title>provider</title><script>location.replace(${JSON.stringify(to)})</script>`,
+      });
+    });
+    await M.hydrated(page);
+    await page.waitForSelector('[data-testid="provider-google"]', { timeout: 15000 });
+    await page.click('[data-testid="provider-google"]');
+    const viaProvider = await landing();
+    record(
+      tag +
+        ": a provider round trip, back to the bare /sign-in, lands on the member's own profile in Edit profile mode (1866)",
+      authorize.length === 1 &&
+        authorize[0] === BASE + "/sign-in" &&
+        ownProfile(viaProvider) &&
+        ["1", "true"].includes(viaProvider.searchParams.get("edit") || "") &&
+        (await editMode()),
+      JSON.stringify(authorize) + " " + viaProvider.pathname + viaProvider.search,
+    );
+    // Signed out again, in the same tab: the public chrome's Sign in carries the word too.
+    await signedOut();
+    await tap(page, page.getByRole("banner").getByRole("button", { name: "Sign in" }));
+    await page.waitForURL((u) => u.pathname === "/sign-in", { timeout: 15000 });
+    const fromChrome = new URL(page.url());
+    record(
+      tag + ": the public chrome's Sign in carries next=profile alone, no handle (1866)",
+      carries(fromChrome),
+      fromChrome.search,
+    );
+    // Done Means 1, second half: the password sign-in lands on the member's own profile, in Edit
+    // profile mode, at the handle their row carries and not the one the address named.
+    await M.hydrated(page);
+    await page.waitForSelector('input[type="email"]', { timeout: 15000 });
+    await page.fill('input[type="email"]', "member@test.invalid");
+    await page.fill('input[type="password"]', "x");
+    await page.click('button[type="submit"]');
+    const landed = await landing();
+    record(
+      tag +
+        ": the sign-in lands on the member's own /m/<handle>, from their row, in Edit profile mode (1866)",
+      ownProfile(landed) &&
+        ["1", "true"].includes(landed.searchParams.get("edit") || "") &&
+        !landed.searchParams.has("next") &&
+        (await editMode()),
+      landed.pathname + landed.search,
+    );
+    // Done Means 3: already signed in, the link lands in Edit profile mode with no sign-in step.
+    await openProfile(page, "?edit=1");
+    const direct = new URL(page.url());
+    record(
+      tag + ": signed in, ?edit=1 lands in Edit profile mode with no sign-in step",
+      direct.pathname === "/m/" + HANDLE && (await editMode()),
+      direct.pathname + direct.search,
+    );
+    // Done Means 4: a path, a handle and a URL in next are dropped and land on the Feed; the word
+    // itself, signed in, lands on the member's own profile.
+    const dropped = [];
+    for (const bad of ["%2Fm%2F" + OWN_HANDLE, OWN_HANDLE, "https%3A%2F%2Fexample.invalid"]) {
+      await page.goto(BASE + "/sign-in?next=" + bad, { waitUntil: "networkidle" });
+      await page.waitForURL((u) => u.pathname === "/feed" || ownProfile(u), { timeout: 15000 });
+      await page.waitForTimeout(300);
+      const at = new URL(page.url());
+      dropped.push(at.host + at.pathname + at.search);
+    }
+    await page.goto(BASE + "/sign-in?next=profile", { waitUntil: "networkidle" });
+    const word = await landing();
+    record(
+      tag +
+        ": a path, a handle and a URL in next land on /feed; the word profile lands on the member's own profile (1866)",
+      dropped.every((d) => d === new URL(BASE).host + "/feed") && ownProfile(word),
+      JSON.stringify(dropped) + " " + word.pathname + word.search,
+    );
+    record(tag + ": no page errors", errors.length === 0, errors.join(" | ").slice(0, 300));
+  } catch (e) {
+    record(tag + " flow", false, String(e).slice(0, 1200) + " | " + (await pageState(page)));
+  }
+  await browser.close();
+}
+
 /** One viewport, one theme: public, gate, owner, and the three visitor personas. */
 async function runProfile(browserType, bname, vp, theme) {
   // The visitor personas run at the three preview widths in every run shape. A SPECIAL run used to
@@ -1078,7 +1236,9 @@ async function runProfile(browserType, bname, vp, theme) {
     await M.drive(runVisitor, browserType, bname, vp, theme, "connected");
     await M.drive(runVisitor, browserType, bname, vp, theme, "anchor");
     await M.drive(runVisitor, browserType, bname, vp, theme, "stranger");
+    // Handoff 63-WS (1866): the sign-in return, at the three preview widths the personas run at.
+    await M.drive(runSignInReturn, browserType, bname, vp, theme);
   }
 }
 
-module.exports = { runProfile, runOwner, runVisitor, runPublic, runGate };
+module.exports = { runProfile, runOwner, runVisitor, runPublic, runGate, runSignInReturn };
