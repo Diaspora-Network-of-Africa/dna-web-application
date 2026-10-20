@@ -13,7 +13,7 @@
 // with the admin app's sign-in, so there is one sign-in implementation. This route keeps what is
 // the member app's own: the sign-up state, the providers, the reset link and the copy.
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   AuthPage,
   CheckEmail,
@@ -36,7 +36,12 @@ import {
   type Provider,
 } from "@/lib/auth-flow";
 import { recoveryPending } from "@/lib/recovery";
-import { readSignInNext, type SignInNext } from "@/lib/sign-in-next";
+import {
+  consumeSignInNext,
+  readSignInNext,
+  rememberSignInNext,
+  type SignInNext,
+} from "@/lib/sign-in-next";
 import { getSupabase } from "@/lib/supabase";
 import { useTheme } from "@/lib/tier";
 
@@ -47,9 +52,10 @@ export const Route = createFileRoute("/sign-in")({
   // ?email= prefills the address (handoff 30-D item 8.5: the guest's "Create an account" arrives
   // here, on the one sign-up path, with the address the link named).
   // ?next=email-preferences (handoff 60-NC, 1557): after sign-in the member lands on the
-  // notification panel's email view. That exact word is the only value kept and it maps to one
-  // destination (src/lib/sign-in-next.ts); the parameter never carries a URL, so it cannot redirect
-  // off the app.
+  // notification panel's email view. ?next=profile (handoff 63-WS, 1866): after sign-in the member
+  // lands on their own profile in Edit profile mode. Those two words are the only values kept and
+  // each maps to one destination (src/lib/sign-in-next.ts); the parameter never carries a URL or a
+  // handle, so it cannot redirect off the app or onto another member's page.
   validateSearch: (search: Record<string, unknown>): SignInSearch => {
     const out: SignInSearch = {};
     if (search["join"] === true || search["join"] === "1" || search["join"] === 1) out.join = true;
@@ -63,10 +69,20 @@ export const Route = createFileRoute("/sign-in")({
 });
 
 function SignIn() {
-  const { ready, member } = useAuth();
+  const { ready, member, refreshMember } = useAuth();
   const navigate = useNavigate();
-  const { join, email: prefill, next } = Route.useSearch();
+  const { join, email: prefill, next: nextInUrl } = Route.useSearch();
   useTheme();
+  // Handoff 63-WS (1866): a provider return lands on a bare /sign-in, so the word the member left
+  // with is read back from its marker (src/lib/sign-in-next.ts). The URL's word wins where both
+  // exist. Ruling 1893: read in the state initializer, so the first render already holds it and the
+  // redirect below can never run once without it. Read in a mount effect it arrived a render late,
+  // and a session the provider return had already published sent the member to the Feed on that
+  // run (run 39195183910, WebKit at 1280 light). The read is memoised per document, so a second
+  // mount on the return reads the same word; on the server it answers undefined, and the value
+  // reaches no markup, so hydration is unaffected.
+  const [carried] = useState<SignInNext | undefined>(() => consumeSignInNext());
+  const next = nextInUrl ?? carried;
   const [mode, setMode] = useState<"in" | "up">(join ? "up" : "in");
   // The form's state, in the shared hook: email, password, the alert and status lines, the field
   // flags, the password refusal (ruling 392, B8 item 3: in the field's own line) and busy.
@@ -91,22 +107,60 @@ function SignIn() {
 
   // Ruling 240: a recovery session is held at /reset/new by the gate in the root route, so this
   // route must not race it to the Feed.
+  //
+  // Handoff 63-WS (1866): next=profile lands on the member's own profile in Edit profile mode. The
+  // handle is the signed-in member's own, read from their members row by the auth provider
+  // (src/lib/auth.tsx, withProfile), and never the URL's. The provider publishes a member from the
+  // token before the row answers, after a password sign-in and again on the SIGNED_IN a provider
+  // return raises after the first read, so the redirect waits for the handle, asks the provider to
+  // re-read the row once, and sends once per mount: the profile when the handle is there, the Feed
+  // when the row has answered without one, rather than holding a signed-in member here. The route
+  // mounts again while that navigation is pending, so the send replaces rather than pushes, and
+  // the second mount's send lands on the same one history entry.
+  const askedRow = useRef(false);
+  const [rowAnswered, setRowAnswered] = useState(false);
+  const routed = useRef(false);
   useEffect(() => {
     if (!ready || !member || recoveryPending()) return;
+    if (next === "profile") {
+      if (routed.current) return;
+      if (member.handle) {
+        routed.current = true;
+        void navigate({
+          to: "/m/$handle",
+          params: { handle: member.handle },
+          search: { edit: true },
+          replace: true,
+        });
+        return;
+      }
+      if (rowAnswered) {
+        routed.current = true;
+        void navigate({ to: "/feed", search: {}, replace: true });
+        return;
+      }
+      if (askedRow.current) return;
+      askedRow.current = true;
+      void refreshMember().then(() => setRowAnswered(true));
+      return;
+    }
     void navigate(
       next === "email-preferences"
         ? { to: "/feed", search: { notifications: "email" } }
         : { to: "/feed", search: {} },
     );
-  }, [ready, member, navigate, next]);
+  }, [ready, member, navigate, next, refreshMember, rowAnswered]);
 
   const onProvider = async (p: Provider) => {
     clear();
     setWaitingFor(p);
     const sb = getSupabase();
     if (!sb) return;
+    // Handoff 63-WS: the word travels the round trip as a marker beside the provider's own.
+    rememberSignInNext(next);
     const { error } = await startProvider(sb, p);
     if (error) {
+      rememberSignInNext(undefined);
       setWaitingFor(null);
       setAlert(COPY.providerError(p));
     }

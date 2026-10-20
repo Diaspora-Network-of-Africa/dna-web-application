@@ -719,6 +719,28 @@ export function MessengerThread({ member, threadId }: { member: Member; threadId
       document.removeEventListener("keydown", key, true);
     };
   }, [picker, sheetOpen]);
+  // H62-G1 (the walk of 20 Oct, item 3): a bar opened on one of the newest messages renders at the
+  // log's foot, under the composer, where it cannot be reached; the log only follows a new message.
+  // So once a bar opens, the log is scrolled by the least that brings the bar, and the pointer
+  // panel with it, inside the log's own visible area. The log alone scrolls, never the window.
+  useEffect(() => {
+    if (!picker) return;
+    const frame = window.requestAnimationFrame(() => {
+      const el = log.current;
+      const row = el?.querySelector<HTMLElement>('[data-msg="' + CSS.escape(picker) + '"]');
+      const parts = row
+        ? [...row.querySelectorAll<HTMLElement>("[data-picker], [data-reaction-panel]")]
+        : [];
+      if (!el || !parts.length) return;
+      const box = el.getBoundingClientRect();
+      const top = Math.min(...parts.map((p) => p.getBoundingClientRect().top));
+      const bottom = Math.max(...parts.map((p) => p.getBoundingClientRect().bottom));
+      const pad = 8;
+      if (bottom + pad > box.bottom) el.scrollTop += bottom + pad - box.bottom;
+      else if (top - pad < box.top) el.scrollTop -= box.top - (top - pad);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [picker, more]);
   const [expandedBlocked, setExpandedBlocked] = useState<Record<string, boolean>>({});
   const [sheet, setSheet] = useState<
     | { kind: "info"; row: MessageView }
@@ -1914,6 +1936,7 @@ export function MessengerThread({ member, threadId }: { member: Member; threadId
       >
         <div
           data-messenger-thread
+          data-keyboard-frame={keyboardFrame ? "" : undefined}
           data-thread={threadId}
           data-upload-refusal={draft.refusal ?? undefined}
           style={{

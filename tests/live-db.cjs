@@ -92,6 +92,19 @@
 //                                   path, and null for a path no media row names; member-test reads
 //                                   the media row a visible post names and not the owner's unlinked
 //                                   one.
+//   H62-G1 (1905, 1817, 1677)        as member-test, comment_react stores a row read back from
+//                                   comment_reactions and removes it on the held kind, and
+//                                   comment_post with a parent stores a reply whose row names the
+//                                   parent, rolled back.
+//   H64-WG (1854, 1855; handoff     the launch gate's server half: member-test held inside the
+//   64-WG)                           transaction reads zero rows from every gated table and view,
+//                                   is refused with 42501 by every member-facing definer, keeps the
+//                                   allowlist (onboarding_state with admitted, the onboarding
+//                                   writes, the self row, own media, rate_limit_check,
+//                                   vocabularies), completes onboarding while held; the policy and
+//                                   function inventory is read from the catalog; admin_admit_all
+//                                   refuses a member and aal1, admits at aal2 with one
+//                                   admission.admitted_all row, and the gate lifts.
 //
 // Nothing here is secret: the connection string arrives from the runner and never from this file.
 const crypto = require("crypto");
@@ -113,6 +126,85 @@ const SEEDED_FILLING = [
   "0a527cb8-79e3-4fae-97e0-4e12b5caff2e",
   "829b0fb7-72d5-4da5-bfe4-cc3ee9c14637",
 ];
+
+/**
+ * Handoff 64-WG (20261018120000): the tables that carry the admission gate, one RESTRICTIVE policy
+ * each; members, media and storage.objects carry the own-row shape and are checked by name. The
+ * list is the migration's, so a table the gate misses fails here by name. The three comment tables
+ * are H62-G's (20261016120100), applied before the gate under ruling 1870.
+ */
+const H64_GATED_TABLES = [
+  "attestations",
+  "comment_intents",
+  "comment_reactions",
+  "comments",
+  "connection_requests",
+  "convene_picks",
+  "discovery_dismissals",
+  "dismissed_suggestions",
+  "edges",
+  "event_blocks",
+  "event_delivery",
+  "event_host_settings",
+  "event_parties",
+  "event_registrations",
+  "events",
+  "member_about",
+  "member_blocks",
+  "member_connections",
+  "member_corridors",
+  "member_focus_areas",
+  "member_follows",
+  "member_homes",
+  "member_industries",
+  "member_intent",
+  "member_intents",
+  "member_interests",
+  "member_lane_activity",
+  "member_languages",
+  "member_links",
+  "member_messaging_settings",
+  "member_origin",
+  "member_rail_state",
+  "member_reaction_picks",
+  "member_regional_expertise",
+  "member_skills",
+  "member_stance_details",
+  "member_subscriptions",
+  "member_visibility",
+  "message_mentions",
+  "message_reactions",
+  "message_reports",
+  "message_requests",
+  "messages",
+  "messenger_dia_dismissals",
+  "notification_preferences",
+  "notifications",
+  "opportunities",
+  "post_dia",
+  "post_drafts",
+  "post_intents",
+  "post_links",
+  "post_media",
+  "post_reactions",
+  "post_saves",
+  "posts",
+  "space_roles",
+  "spaces",
+  "stories",
+  "thread_members",
+  "threads",
+];
+/** The definers a held member may call (handoff 64-WG item 4); every other one refuses 42501. */
+const H64_ALLOWLIST = [
+  "onboarding_state",
+  "onboard_who",
+  "onboard_where",
+  "onboard_relationship",
+  "rate_limit_check",
+];
+/** How many public definers 20261018120000 rewrote to carry private.assert_admitted. */
+const H64_GATED_DEFINERS = 76;
 
 /**
  * The claims PostgREST would set for a signed-in member. `aal` is the session's authenticator
@@ -512,6 +604,25 @@ async function runLiveDbArms({ record, skip }) {
       "H62-G (1817, 1822): comment_react sets Asante and removes it when the held kind is chosen again, read through comment_reaction_rows; comment_intent stores its line trimmed for the commenter's sheet, which refuses a member who did not write the comment",
     h62gNotify:
       "H62-G (1849, 1817, 1316): a comment writes one comment_on_post row for the post's author with the post as object, a reply one reply_to_comment row for the commenter with the comment as object, an intent on a comment one intent_help row with the comment as object, the author's own comment writes none, and the reactions wrote none",
+    fixG1Save:
+      "H62-G1 (1905, 1817, 1677): as member-test, comment_react stores a comment_reactions row read back from the table and removes it when the held kind is chosen again, and comment_post with a parent stores a reply whose comments row names that parent and member-test, under the parent in post_comments",
+    h64: "H64-WG (1854, 1855): member-test held and not yet onboarded reads admitted false and next relationship; onboard_relationship completes onboarding as a held member; next is then null and admitted still false",
+    h64Self:
+      "H64-WG (handoff item 4): the held member reads and updates their own members row, reads their own media rows and no other member's, and vocabularies() and rate_limit_check answer them",
+    h64Tables:
+      "H64-WG (1854 item 4): every gated table, the feed and the Messenger views read zero rows to the held member, while the same member read posts, members and events before the hold",
+    h64Writes:
+      "H64-WG: the held member's direct insert into member_blocks and dismissed_suggestions is refused with 42501, and an update of member_visibility reaches no row",
+    h64Storage:
+      "H64-WG: storage.objects reads zero post-media rows to the held member and keeps their own profile-media rows",
+    h64Definers:
+      "H64-WG: every security definer function authenticated may execute and anon may not refuses the held member with 42501, the allowlist and admin_session_state aside; profile_view refuses signed in and answers signed out",
+    h64Policies:
+      "H64-WG: every gated table carries exactly one restrictive policy reaching private.is_admitted, members, media and storage.objects the own-row shape, no vocabulary carries one, and the gated definers carry private.assert_admitted",
+    h64Admit:
+      "H64-WG Done Means 4: admin_admit_all refuses member-test with 42501, the admin persona at aal1 with 42501 and a blank reason with 22023, admits every held member at aal2 and writes one admission.admitted_all row, after which the member reads again; nobody held is refused with 22023",
+    h64Backfill:
+      "H64-WG Done Means 2: both test accounts carry admitted_at, and one admission.backfilled row names every member the migration reached",
     // The conformance arm's checks (tests/visibility-conformance.cjs), listed here so that a run
     // that cannot connect reports each of them UNPROVEN by name (G143, 228).
     ...Object.fromEntries(Object.entries(CONFORMANCE).map(([k, v]) => ["conformance" + k, v])),
@@ -1857,6 +1968,117 @@ async function runLiveDbArms({ record, skip }) {
           (refused.ok ? "accepted" : refused.code + " " + refused.message) +
           "; after " +
           (again.ok ? "accepted" : again.code + " " + again.message),
+      );
+    });
+
+    // ------------------------------------------------------------------------------------------
+    // H62-G1 (1905). The founder's walk on 19 Oct recorded no comment reaction and no reply. The
+    // project's edge logs for that window hold no comment_react call and one comment_post, the
+    // walk's top-level comment, so neither write was refused or rolled back: neither was sent (the
+    // client's cause, fixed in the same PR). This arm proves the server half as member-test, the
+    // persona the founder's walk stands for, reading each row back from its own table rather than
+    // through a projection, in one rolled back transaction.
+    // ------------------------------------------------------------------------------------------
+    await inTransaction(client, async () => {
+      await actAsSelf(client);
+      const present = await client.query(
+        "select (to_regproc('public.comment_react') is not null and to_regproc('public.comment_post') is not null) as ok",
+      );
+      if (!present.rows[0] || present.rows[0].ok !== true) {
+        unreachedIn("fixG1", "20261016120100_h62g_feed_comments.sql is not on the project yet");
+        skip(names.fixG1Save, "20261016120100_h62g_feed_comments.sql is not on the project yet");
+        return;
+      }
+      await actAs(client, owner.id);
+      const post = await client.query(
+        "select id from public.feed where author_kind = 'member' and author_id = $1 and status = 'published' and audience = 'everyone' limit 1",
+        [owner.id],
+      );
+      let postId = post.rows[0] ? post.rows[0].id : null;
+      if (!postId) {
+        const pub = await attempt(client, "select public.publish_post($1::jsonb) as id", [
+          JSON.stringify({
+            body: "H62-G1 save arm. Rolled back by the same run.",
+            author_kind: "member",
+            author_id: owner.id,
+            audience: "everyone",
+            host_context: "live-checks",
+          }),
+        ]);
+        postId = pub.ok ? pub.rows[0].id : null;
+      }
+      const top = postId
+        ? await attempt(client, "select public.comment_post($1::uuid, null, $2) as c", [
+            postId,
+            "H62-G1: the comment member-test answers.",
+          ])
+        : { ok: false, code: "-", message: "no post by the owner could be read or published" };
+      const topId = top.ok ? top.rows[0].c.id : null;
+      if (!topId) {
+        skip(names.fixG1Save, "no comment to react to: " + top.code + " " + top.message);
+        return;
+      }
+
+      await actAs(client, member.id);
+      const own = () =>
+        client.query(
+          "select kind, emoji from public.comment_reactions where comment_id = $1 and member_id = $2",
+          [topId, member.id],
+        );
+      const set = await attempt(client, "select public.comment_react($1::uuid, 'asante') as r", [
+        topId,
+      ]);
+      const stored = await own();
+      const unset = await attempt(client, "select public.comment_react($1::uuid, 'asante') as r", [
+        topId,
+      ]);
+      const gone = await own();
+      const reply = await attempt(
+        client,
+        "select public.comment_post($1::uuid, $2::uuid, $3) as c",
+        [postId, topId, "H62-G1: member-test's reply."],
+      );
+      const replyId = reply.ok ? reply.rows[0].c.id : null;
+      const row = replyId
+        ? await client.query(
+            "select parent_id, author_id, body from public.comments where id = $1",
+            [replyId],
+          )
+        : { rows: [] };
+      const thread = await attempt(client, "select public.post_comments($1::uuid) as t", [postId]);
+      const parent = thread.ok
+        ? (thread.rows[0].t.comments || []).find((x) => x.id === topId)
+        : null;
+      record(
+        names.fixG1Save,
+        set.ok &&
+          set.rows[0].r &&
+          set.rows[0].r.kind === "asante" &&
+          stored.rows.length === 1 &&
+          stored.rows[0].kind === "asante" &&
+          stored.rows[0].emoji === null &&
+          unset.ok &&
+          unset.rows[0].r === null &&
+          gone.rows.length === 0 &&
+          reply.ok &&
+          row.rows.length === 1 &&
+          row.rows[0].parent_id === topId &&
+          row.rows[0].author_id === member.id &&
+          row.rows[0].body === "H62-G1: member-test's reply." &&
+          !!parent &&
+          (parent.replies || []).some((x) => x.id === replyId),
+        "react " +
+          (set.ok ? JSON.stringify(set.rows[0].r) : set.code + " " + set.message) +
+          ", row " +
+          JSON.stringify(stored.rows) +
+          "; again " +
+          (unset.ok ? JSON.stringify(unset.rows[0].r) : unset.code + " " + unset.message) +
+          ", rows " +
+          gone.rows.length +
+          "; reply " +
+          (reply.ok ? JSON.stringify(row.rows[0] || null) : reply.code + " " + reply.message) +
+          "; under the parent " +
+          (parent ? (parent.replies || []).some((x) => x.id === replyId) : "no parent"),
       );
     });
 
@@ -8341,6 +8563,394 @@ async function runLiveDbArms({ record, skip }) {
           JSON.stringify(quick) +
           (wrong.length ? "; " + wrong.slice(0, 5).join("; ") : ""),
       );
+    });
+    // ------------------------------------------------------------------------------------------
+    // H64-WG (rulings 1854, 1855; 20261018120000). The launch gate's server half, in one rolled
+    // back transaction: member-test is held (admitted_at null) and un-onboarded as live_arms; as
+    // that member every gated table, view and definer answers nothing or refuses, the allowlist
+    // answers, onboarding completes, the admin act admits them and the gate lifts. The control is
+    // the same member before the hold (270). Before the apply the block reports UNPROVEN (228).
+    // ------------------------------------------------------------------------------------------
+    await inTransaction(client, async () => {
+      await actAsSelf(client);
+      const present = await client.query(
+        `select to_regprocedure('public.admin_admit_all(text)') is not null
+            and exists (select 1 from pg_attribute
+                         where attrelid = 'public.members'::regclass
+                           and attname = 'admitted_at' and not attisdropped) as ok`,
+      );
+      if (!present.rows[0] || present.rows[0].ok !== true) {
+        unreachedIn("h64", "20261018120000_h64_wg_launch_gate.sql is not on the project yet");
+        skip(names.h64, "20261018120000_h64_wg_launch_gate.sql is not on the project yet");
+        return;
+      }
+      const count = async (sql, values) => {
+        const r = await attempt(client, sql, values);
+        return r.ok ? Number(r.rows[0].n) : null;
+      };
+      const code = (r) => (r.ok ? "answered" : r.code);
+
+      // The control: the admitted member reads.
+      await actAs(client, member.id);
+      const before = {
+        posts: await count("select count(*)::int as n from public.posts"),
+        members: await count("select count(*)::int as n from public.members where id <> $1", [
+          member.id,
+        ]),
+        events: await count("select count(*)::int as n from public.events"),
+        postMedia: await count(
+          "select count(*)::int as n from storage.objects where bucket_id = 'post-media'",
+        ),
+        ownProfileMedia: await count(
+          "select count(*)::int as n from storage.objects where bucket_id = 'profile-media' and (storage.foldername(name))[1] = $1",
+          [member.id],
+        ),
+      };
+      const stateBefore = await attempt(client, "select public.onboarding_state() as s");
+      const stance =
+        stateBefore.ok && stateBefore.rows[0].s && stateBefore.rows[0].s.relationship
+          ? stateBefore.rows[0].s.relationship.stance
+          : null;
+
+      // The hold.
+      await actAsSelf(client);
+      const backfilledBefore = await count(
+        "select private.admission_actions_count('admission.backfilled') as n",
+      );
+      const admittedBefore = await count(
+        "select private.admission_actions_count('admission.admitted_all') as n",
+      );
+      const accounts = await attempt(
+        client,
+        "select count(*) filter (where admitted_at is not null)::int as n from public.members where id in ($1, $2)",
+        [owner.id, member.id],
+      );
+      record(
+        names.h64Backfill,
+        accounts.ok && Number(accounts.rows[0].n) === 2 && backfilledBefore === 1,
+        "admitted test accounts " +
+          (accounts.ok ? accounts.rows[0].n : accounts.code) +
+          " of 2; admission.backfilled rows " +
+          backfilledBefore,
+      );
+      await client.query(
+        "update public.members set admitted_at = null, onboarded_at = null where id = $1",
+        [member.id],
+      );
+
+      // The held member: the allowlist.
+      await actAs(client, member.id);
+      const held = await attempt(client, "select public.onboarding_state() as s");
+      const heldState = held.ok ? held.rows[0].s : null;
+      const complete = await attempt(
+        client,
+        "select public.onboard_relationship($1::public.stance, false) as r",
+        [stance],
+      );
+      const after = await attempt(client, "select public.onboarding_state() as s");
+      const afterState = after.ok ? after.rows[0].s : null;
+      record(
+        names.h64,
+        !!heldState &&
+          heldState.admitted === false &&
+          heldState.next === "relationship" &&
+          complete.ok &&
+          !!afterState &&
+          afterState.admitted === false &&
+          afterState.next === null,
+        "held " +
+          JSON.stringify(heldState && { admitted: heldState.admitted, next: heldState.next }) +
+          "; onboard_relationship " +
+          code(complete) +
+          "; after " +
+          JSON.stringify(afterState && { admitted: afterState.admitted, next: afterState.next }),
+      );
+      const self = await count("select count(*)::int as n from public.members where id = $1", [
+        member.id,
+      ]);
+      const others = await count("select count(*)::int as n from public.members where id <> $1", [
+        member.id,
+      ]);
+      const selfUpdate = await attempt(
+        client,
+        "update public.members set headline = headline where id = $1 returning id",
+        [member.id],
+      );
+      const ownMedia = await count(
+        "select count(*)::int as n from public.media where owner_id = $1",
+        [member.id],
+      );
+      const otherMedia = await count(
+        "select count(*)::int as n from public.media where owner_id <> $1",
+        [member.id],
+      );
+      const vocab = await attempt(client, "select public.vocabularies() is not null as ok");
+      const rate = await attempt(client, "select public.rate_limit_check('message_send') as ok");
+      record(
+        names.h64Self,
+        self === 1 &&
+          others === 0 &&
+          selfUpdate.ok &&
+          selfUpdate.rows.length === 1 &&
+          otherMedia === 0 &&
+          vocab.ok &&
+          vocab.rows[0].ok === true &&
+          rate.ok &&
+          rate.rows[0].ok === true,
+        "self " +
+          self +
+          ", others " +
+          others +
+          ", self update " +
+          (selfUpdate.ok ? selfUpdate.rows.length + " row" : selfUpdate.code) +
+          ", own media " +
+          ownMedia +
+          ", other media " +
+          otherMedia +
+          ", vocabularies " +
+          code(vocab) +
+          ", rate_limit_check " +
+          code(rate),
+      );
+
+      // Every gated table, the feed and the Messenger views: zero rows.
+      const nonZero = [];
+      for (const t of H64_GATED_TABLES) {
+        const n = await count("select count(*)::int as n from public." + t);
+        if (n !== 0) nonZero.push(t + "=" + n);
+      }
+      for (const v of ["feed", "messenger_threads_view", "messenger_messages_view"]) {
+        const n = await count("select count(*)::int as n from public." + v);
+        if (n !== 0) nonZero.push(v + "=" + n);
+      }
+      record(
+        names.h64Tables,
+        nonZero.length === 0 && before.posts > 0 && before.members > 0 && before.events > 0,
+        H64_GATED_TABLES.length +
+          " tables and 3 views; control read posts " +
+          before.posts +
+          ", members " +
+          before.members +
+          ", events " +
+          before.events +
+          (nonZero.length ? "; non-zero: " + nonZero.join(" ") : ""),
+      );
+
+      // Writes.
+      const block = await attempt(
+        client,
+        "insert into public.member_blocks (blocker_id, blocked_id) values ($1, $2)",
+        [member.id, owner.id],
+      );
+      const dismiss = await attempt(
+        client,
+        "insert into public.dismissed_suggestions (member_id, dismissed_id) values ($1, $2)",
+        [member.id, owner.id],
+      );
+      const visibility = await attempt(
+        client,
+        "update public.member_visibility set audience = audience where member_id = $1 returning member_id",
+        [member.id],
+      );
+      record(
+        names.h64Writes,
+        !block.ok &&
+          block.code === "42501" &&
+          !dismiss.ok &&
+          dismiss.code === "42501" &&
+          visibility.ok &&
+          visibility.rows.length === 0,
+        "member_blocks " +
+          code(block) +
+          ", dismissed_suggestions " +
+          code(dismiss) +
+          ", member_visibility " +
+          (visibility.ok ? visibility.rows.length + " rows" : visibility.code),
+      );
+
+      // Storage.
+      const postMediaHeld = await count(
+        "select count(*)::int as n from storage.objects where bucket_id = 'post-media'",
+      );
+      const ownProfileHeld = await count(
+        "select count(*)::int as n from storage.objects where bucket_id = 'profile-media' and (storage.foldername(name))[1] = $1",
+        [member.id],
+      );
+      record(
+        names.h64Storage,
+        postMediaHeld === 0 && ownProfileHeld === before.ownProfileMedia,
+        "post-media " +
+          postMediaHeld +
+          " (control " +
+          before.postMedia +
+          "), own profile-media " +
+          ownProfileHeld +
+          " (control " +
+          before.ownProfileMedia +
+          ")",
+      );
+
+      // Every definer, discovered in the catalog, refuses with 42501.
+      const definers = await client.query(
+        `select p.proname as name,
+                format('select public.%I(%s)', p.proname,
+                  coalesce((select string_agg('null::' || format_type(x.t, null), ', ')
+                              from unnest(p.proargtypes::oid[]) with ordinality as x(t, i)), '')) as call
+           from pg_proc p
+          where p.pronamespace = 'public'::regnamespace and p.prokind = 'f' and p.prosecdef
+            and has_function_privilege('authenticated', p.oid, 'execute')
+            and not has_function_privilege('anon', p.oid, 'execute')
+          order by p.proname`,
+      );
+      const wrong = [];
+      let swept = 0;
+      for (const d of definers.rows) {
+        if (H64_ALLOWLIST.includes(d.name)) continue;
+        swept++;
+        const r = await attempt(client, d.call);
+        const want = d.name === "admin_session_state" ? "answered" : "42501";
+        if (code(r) !== want) wrong.push(d.name + "=" + code(r));
+      }
+      const pvHeld = await attempt(client, "select public.profile_view('owner-test', false) as p");
+      await client.query("set local role anon");
+      await client.query("select set_config('request.jwt.claims', $1, true)", [
+        JSON.stringify({ role: "anon", aud: "anon" }),
+      ]);
+      const pvAnon = await attempt(
+        client,
+        "select public.profile_view('owner-test', true) is not null as ok",
+      );
+      record(
+        names.h64Definers,
+        swept > 0 &&
+          wrong.length === 0 &&
+          !pvHeld.ok &&
+          pvHeld.code === "42501" &&
+          pvAnon.ok &&
+          pvAnon.rows[0].ok === true,
+        swept +
+          " definers swept" +
+          (wrong.length ? "; wrong: " + wrong.join(" ") : "") +
+          "; profile_view held " +
+          code(pvHeld) +
+          ", signed out " +
+          (pvAnon.ok ? "answers" : pvAnon.code),
+      );
+
+      // The policy and function inventory, read from the catalog as live_arms.
+      await actAsSelf(client);
+      const inv = await client.query(
+        `select
+           (select string_agg(g, ',') from unnest($1::text[]) g
+             where (select count(*) from pg_policies p
+                     where p.schemaname = 'public' and p.tablename = g and p.permissive = 'RESTRICTIVE'
+                       and p.qual like '%private.is_admitted()%'
+                       and p.with_check like '%private.is_admitted()%') <> 1) as missing,
+           (select count(*)::int from pg_policies
+             where permissive = 'RESTRICTIVE'
+               and (schemaname, tablename) in (('public', 'members'), ('public', 'media'), ('storage', 'objects'))
+               and qual like '%private.is_admitted()%') as own_row,
+           (select count(*)::int from pg_policies p
+             where p.permissive = 'RESTRICTIVE'
+               and p.tablename in (select tablename from pg_policies
+                                    where schemaname = 'public' and qual = 'true'
+                                      and roles::text[] && array['anon', 'authenticated', 'public'])) as vocab,
+           (select count(*)::int from pg_policies where permissive = 'RESTRICTIVE') as total,
+           (select count(*)::int from pg_proc p
+             where p.pronamespace = 'public'::regnamespace
+               and position('private.assert_admitted()' in p.prosrc) > 0) as gated_fns`,
+        [H64_GATED_TABLES],
+      );
+      const i = inv.rows[0];
+      record(
+        names.h64Policies,
+        i.missing === null &&
+          i.own_row === 3 &&
+          i.vocab === 0 &&
+          i.total === H64_GATED_TABLES.length + 3 &&
+          i.gated_fns === H64_GATED_DEFINERS,
+        "restrictive " +
+          i.total +
+          " (expected " +
+          (H64_GATED_TABLES.length + 3) +
+          "), own-row " +
+          i.own_row +
+          ", on a vocabulary " +
+          i.vocab +
+          ", definers with the gate " +
+          i.gated_fns +
+          " (expected " +
+          H64_GATED_DEFINERS +
+          ")" +
+          (i.missing ? "; without one policy: " + i.missing : ""),
+      );
+
+      // Done Means 4: the admin act.
+      const adminId = await adminMember();
+      let admit = "no admin persona";
+      let admitOk = false;
+      if (adminId) {
+        await actAs(client, member.id, "aal2");
+        const asMember = await attempt(client, "select public.admin_admit_all('H64-WG arm') as id");
+        await actAs(client, adminId, "aal1");
+        const aal1 = await attempt(client, "select public.admin_admit_all('H64-WG arm') as id");
+        await actAs(client, adminId, "aal2");
+        const blank = await attempt(client, "select public.admin_admit_all('   ') as id");
+        const act = await attempt(
+          client,
+          "select public.admin_admit_all('H64-WG arm: admit every held member') as id",
+        );
+        const again = await attempt(
+          client,
+          "select public.admin_admit_all('H64-WG arm: again') as id",
+        );
+        await actAsSelf(client);
+        const nowAdmitted = await count(
+          "select count(*)::int as n from public.members where id = $1 and admitted_at is not null",
+          [member.id],
+        );
+        const rows = await count(
+          "select private.admission_actions_count('admission.admitted_all') as n",
+        );
+        await actAs(client, member.id);
+        const lifted = await attempt(client, "select public.onboarding_state() as s");
+        const postsLifted = await count("select count(*)::int as n from public.posts");
+        admitOk =
+          code(asMember) === "42501" &&
+          code(aal1) === "42501" &&
+          code(blank) === "22023" &&
+          act.ok &&
+          act.rows[0].id != null &&
+          code(again) === "22023" &&
+          nowAdmitted === 1 &&
+          rows === admittedBefore + 1 &&
+          lifted.ok &&
+          lifted.rows[0].s &&
+          lifted.rows[0].s.admitted === true &&
+          postsLifted === before.posts;
+        admit =
+          "member-test " +
+          code(asMember) +
+          ", aal1 " +
+          code(aal1) +
+          ", blank " +
+          code(blank) +
+          ", aal2 " +
+          (act.ok ? "action " + act.rows[0].id : act.code) +
+          ", again " +
+          code(again) +
+          ", member admitted " +
+          nowAdmitted +
+          ", admission.admitted_all rows " +
+          rows +
+          " (before " +
+          admittedBefore +
+          "), lifted admitted " +
+          (lifted.ok && lifted.rows[0].s ? lifted.rows[0].s.admitted : code(lifted)) +
+          ", posts " +
+          postsLifted;
+      }
+      record(names.h64Admit, admitOk, admit);
     });
   } finally {
     await client.end().catch(() => {});

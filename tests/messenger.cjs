@@ -2320,8 +2320,93 @@ const FLOW_CELLS = [
   [[1280, 800], "dark"],
 ];
 
+/**
+ * H62-G1 (the walk of 20 Oct, item 3), at 390 in both themes: React on the newest message. On the
+ * walk the long-press menu's React opened the bar at the log's foot, under the composer, where the
+ * founder could not reach it; on an older message the same bar worked. The log follows only a new
+ * message, so the bar now brings itself inside the log's visible area when it opens.
+ */
+const NEWEST_CHECKS = [
+  "React on the newest message opens its bar inside the log's visible area, clear of the composer (1905)",
+  "a glyph on that bar writes messenger_react for the newest message (1905, 1739)",
+  "no page error (316)",
+];
+
+async function runMessengerNewest(browserType, bname, vp, theme) {
+  const [w, h] = vp;
+  const tag = `${bname}-${w}x${h}-${theme}-messenger newest`;
+  M.armStart(tag);
+  const { check, rest } = armCheck(tag, NEWEST_CHECKS);
+  let browser;
+  try {
+    const opened = await newPage(browserType, vp, theme);
+    browser = opened.browser;
+    const { page, db, errors, touch } = opened;
+    await signInMock(page);
+    await page.goto(BASE + "/messages/" + db.messenger.ids.kofi, { waitUntil: "networkidle" });
+    await page.waitForSelector("[data-messenger-thread] [data-msg]", { timeout: 10000 });
+    await page.waitForTimeout(400);
+    const newest = page.locator("[data-messenger-thread] [data-msg]").last();
+    const id = await newest.getAttribute("data-msg");
+    if (touch) {
+      await openMenu(page, newest, true, "");
+      await pick(page, "React");
+    } else {
+      await newest.hover();
+      await newest.locator('[data-cluster] button:has-text("React")').click();
+    }
+    await page.waitForSelector("[data-picker]", { timeout: 5000 });
+    await page.waitForTimeout(400);
+    const geo = await page.evaluate(() => {
+      const r = (el) => {
+        if (!el) return null;
+        const b = el.getBoundingClientRect();
+        return { top: Math.round(b.top), bottom: Math.round(b.bottom) };
+      };
+      return {
+        bar: r(document.querySelector("[data-picker]")),
+        log: r(document.querySelector('[data-testid="message-log"]')),
+        composer: r(document.querySelector('[data-testid="message-field"]')),
+        owner: document
+          .querySelector("[data-picker]")
+          ?.closest("[data-msg]")
+          ?.getAttribute("data-msg"),
+      };
+    });
+    check(
+      NEWEST_CHECKS[0],
+      !!geo.bar &&
+        !!geo.log &&
+        !!geo.composer &&
+        geo.owner === id &&
+        geo.bar.top >= geo.log.top &&
+        geo.bar.bottom <= geo.log.bottom &&
+        geo.bar.bottom <= geo.composer.top,
+      JSON.stringify({ id, ...geo }),
+    );
+    const glyph = page.locator('[data-picker] button[aria-label="Folded hands"]');
+    if (touch) await glyph.tap();
+    else await glyph.click();
+    await page.waitForTimeout(600);
+    const wrote = writesOf(db, "messenger_react").at(-1);
+    check(
+      NEWEST_CHECKS[1],
+      !!wrote && wrote.body.p_message === id && wrote.body.p_reaction === "\u{1F64F}",
+      JSON.stringify(wrote ? wrote.body : null),
+    );
+    check(NEWEST_CHECKS[2], errors.length === 0, errors.slice(0, 3).join(" | "));
+  } catch (e) {
+    record(`${tag} flow`, false, String(e).slice(0, 600));
+    rest("the flow ended before this check ran");
+  } finally {
+    if (browser) await browser.close();
+  }
+}
+
 module.exports = {
   runMessengerLayout,
+  runMessengerNewest,
+  NEWEST_CHECKS,
   runMessengerFlows,
   runMessengerReactions,
   runMessengerLive,

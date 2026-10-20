@@ -346,22 +346,52 @@ export function useReactionLayer({
     setBar(null);
   };
 
-  // Escape and a press outside close the bar (SPEC 3).
+  // Escape and a press outside close the bar (SPEC 3). H62-G1 (1905), the Messenger's 1739 rule: the
+  // close waits for the outside press's click, because closing on the pointerdown lifts everything
+  // under the bar before the release, and the click then lands on whatever moved under the pointer
+  // or nowhere. That was the walk's lost React and Reply: the post's bar, open above the thread from
+  // a pass over the post's React, closed on the press of a comment's React and lifted the thread
+  // away from it, so comment_react was never sent. No click (a scroll, a drag) closes it on
+  // pointercancel or 400 ms after the release. Only a press that began while the bar was open arms
+  // it, so the release that ends the hold which opened the bar does not close it.
   useEffect(() => {
     if (!bar) return;
+    const id = bar;
+    const close = () => {
+      if (!prompt && !picker) setBar((b) => (b === id ? null : b));
+    };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !prompt && !picker) setBar(null);
+      if (e.key === "Escape") close();
+    };
+    let armed = false;
+    let timer = 0;
+    const settle = (ms: number) => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(close, ms);
     };
     const onDown = (e: PointerEvent) => {
-      const el = belowRefs.current.get(bar);
-      if (el && e.target instanceof Node && el.contains(e.target)) return;
-      if (!prompt && !picker) setBar(null);
+      const el = belowRefs.current.get(id);
+      armed = !(el && e.target instanceof Node && el.contains(e.target));
+    };
+    const onUp = () => {
+      if (armed) settle(400);
+    };
+    const landed = () => {
+      if (armed) settle(0);
+      armed = false;
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("click", landed, true);
+    window.addEventListener("pointercancel", landed, true);
     return () => {
+      window.clearTimeout(timer);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("click", landed, true);
+      window.removeEventListener("pointercancel", landed, true);
     };
   }, [bar, prompt, picker]);
 
