@@ -11,9 +11,11 @@ export type KeyboardViewport = {
   viewportHeight: number;
   /** visualViewport.offsetTop while the keyboard is up; 0 otherwise. */
   offsetTop: number;
+  /** visualViewport.pageTop while the keyboard is up, so a reader sees the window move (1905); 0 otherwise. */
+  pageTop: number;
 };
 
-const NONE: KeyboardViewport = { height: 0, viewportHeight: 0, offsetTop: 0 };
+const NONE: KeyboardViewport = { height: 0, viewportHeight: 0, offsetTop: 0, pageTop: 0 };
 
 /** The keyboard and the visible area it leaves, while `active`. All zero when no keyboard or API. */
 export function useKeyboardViewport(active: boolean): KeyboardViewport {
@@ -32,11 +34,14 @@ export function useKeyboardViewport(active: boolean): KeyboardViewport {
       }
       const h = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
       const next =
-        h > 80 ? { height: h, viewportHeight: vv.height, offsetTop: vv.offsetTop } : NONE;
+        h > 80
+          ? { height: h, viewportHeight: vv.height, offsetTop: vv.offsetTop, pageTop: vv.pageTop }
+          : NONE;
       setKb((prev) =>
         prev.height === next.height &&
         prev.viewportHeight === next.viewportHeight &&
-        prev.offsetTop === next.offsetTop
+        prev.offsetTop === next.offsetTop &&
+        prev.pageTop === next.pageTop
           ? prev
           : next,
       );

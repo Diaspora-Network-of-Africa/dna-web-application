@@ -92,6 +92,10 @@
 //                                   path, and null for a path no media row names; member-test reads
 //                                   the media row a visible post names and not the owner's unlinked
 //                                   one.
+//   H62-G1 (1905, 1817, 1677)        as member-test, comment_react stores a row read back from
+//                                   comment_reactions and removes it on the held kind, and
+//                                   comment_post with a parent stores a reply whose row names the
+//                                   parent, rolled back.
 //   H64-WG (1854, 1855; handoff     the launch gate's server half: member-test held inside the
 //   64-WG)                           transaction reads zero rows from every gated table and view,
 //                                   is refused with 42501 by every member-facing definer, keeps the
@@ -600,6 +604,8 @@ async function runLiveDbArms({ record, skip }) {
       "H62-G (1817, 1822): comment_react sets Asante and removes it when the held kind is chosen again, read through comment_reaction_rows; comment_intent stores its line trimmed for the commenter's sheet, which refuses a member who did not write the comment",
     h62gNotify:
       "H62-G (1849, 1817, 1316): a comment writes one comment_on_post row for the post's author with the post as object, a reply one reply_to_comment row for the commenter with the comment as object, an intent on a comment one intent_help row with the comment as object, the author's own comment writes none, and the reactions wrote none",
+    fixG1Save:
+      "H62-G1 (1905, 1817, 1677): as member-test, comment_react stores a comment_reactions row read back from the table and removes it when the held kind is chosen again, and comment_post with a parent stores a reply whose comments row names that parent and member-test, under the parent in post_comments",
     h64: "H64-WG (1854, 1855): member-test held and not yet onboarded reads admitted false and next relationship; onboard_relationship completes onboarding as a held member; next is then null and admitted still false",
     h64Self:
       "H64-WG (handoff item 4): the held member reads and updates their own members row, reads their own media rows and no other member's, and vocabularies() and rate_limit_check answer them",
@@ -1962,6 +1968,117 @@ async function runLiveDbArms({ record, skip }) {
           (refused.ok ? "accepted" : refused.code + " " + refused.message) +
           "; after " +
           (again.ok ? "accepted" : again.code + " " + again.message),
+      );
+    });
+
+    // ------------------------------------------------------------------------------------------
+    // H62-G1 (1905). The founder's walk on 19 Oct recorded no comment reaction and no reply. The
+    // project's edge logs for that window hold no comment_react call and one comment_post, the
+    // walk's top-level comment, so neither write was refused or rolled back: neither was sent (the
+    // client's cause, fixed in the same PR). This arm proves the server half as member-test, the
+    // persona the founder's walk stands for, reading each row back from its own table rather than
+    // through a projection, in one rolled back transaction.
+    // ------------------------------------------------------------------------------------------
+    await inTransaction(client, async () => {
+      await actAsSelf(client);
+      const present = await client.query(
+        "select (to_regproc('public.comment_react') is not null and to_regproc('public.comment_post') is not null) as ok",
+      );
+      if (!present.rows[0] || present.rows[0].ok !== true) {
+        unreachedIn("fixG1", "20261016120100_h62g_feed_comments.sql is not on the project yet");
+        skip(names.fixG1Save, "20261016120100_h62g_feed_comments.sql is not on the project yet");
+        return;
+      }
+      await actAs(client, owner.id);
+      const post = await client.query(
+        "select id from public.feed where author_kind = 'member' and author_id = $1 and status = 'published' and audience = 'everyone' limit 1",
+        [owner.id],
+      );
+      let postId = post.rows[0] ? post.rows[0].id : null;
+      if (!postId) {
+        const pub = await attempt(client, "select public.publish_post($1::jsonb) as id", [
+          JSON.stringify({
+            body: "H62-G1 save arm. Rolled back by the same run.",
+            author_kind: "member",
+            author_id: owner.id,
+            audience: "everyone",
+            host_context: "live-checks",
+          }),
+        ]);
+        postId = pub.ok ? pub.rows[0].id : null;
+      }
+      const top = postId
+        ? await attempt(client, "select public.comment_post($1::uuid, null, $2) as c", [
+            postId,
+            "H62-G1: the comment member-test answers.",
+          ])
+        : { ok: false, code: "-", message: "no post by the owner could be read or published" };
+      const topId = top.ok ? top.rows[0].c.id : null;
+      if (!topId) {
+        skip(names.fixG1Save, "no comment to react to: " + top.code + " " + top.message);
+        return;
+      }
+
+      await actAs(client, member.id);
+      const own = () =>
+        client.query(
+          "select kind, emoji from public.comment_reactions where comment_id = $1 and member_id = $2",
+          [topId, member.id],
+        );
+      const set = await attempt(client, "select public.comment_react($1::uuid, 'asante') as r", [
+        topId,
+      ]);
+      const stored = await own();
+      const unset = await attempt(client, "select public.comment_react($1::uuid, 'asante') as r", [
+        topId,
+      ]);
+      const gone = await own();
+      const reply = await attempt(
+        client,
+        "select public.comment_post($1::uuid, $2::uuid, $3) as c",
+        [postId, topId, "H62-G1: member-test's reply."],
+      );
+      const replyId = reply.ok ? reply.rows[0].c.id : null;
+      const row = replyId
+        ? await client.query(
+            "select parent_id, author_id, body from public.comments where id = $1",
+            [replyId],
+          )
+        : { rows: [] };
+      const thread = await attempt(client, "select public.post_comments($1::uuid) as t", [postId]);
+      const parent = thread.ok
+        ? (thread.rows[0].t.comments || []).find((x) => x.id === topId)
+        : null;
+      record(
+        names.fixG1Save,
+        set.ok &&
+          set.rows[0].r &&
+          set.rows[0].r.kind === "asante" &&
+          stored.rows.length === 1 &&
+          stored.rows[0].kind === "asante" &&
+          stored.rows[0].emoji === null &&
+          unset.ok &&
+          unset.rows[0].r === null &&
+          gone.rows.length === 0 &&
+          reply.ok &&
+          row.rows.length === 1 &&
+          row.rows[0].parent_id === topId &&
+          row.rows[0].author_id === member.id &&
+          row.rows[0].body === "H62-G1: member-test's reply." &&
+          !!parent &&
+          (parent.replies || []).some((x) => x.id === replyId),
+        "react " +
+          (set.ok ? JSON.stringify(set.rows[0].r) : set.code + " " + set.message) +
+          ", row " +
+          JSON.stringify(stored.rows) +
+          "; again " +
+          (unset.ok ? JSON.stringify(unset.rows[0].r) : unset.code + " " + unset.message) +
+          ", rows " +
+          gone.rows.length +
+          "; reply " +
+          (reply.ok ? JSON.stringify(row.rows[0] || null) : reply.code + " " + reply.message) +
+          "; under the parent " +
+          (parent ? (parent.replies || []).some((x) => x.id === replyId) : "no parent"),
       );
     });
 

@@ -8449,6 +8449,13 @@ function fullUnits(bt, bname, only = null) {
   for (const vp of cm.FLOW_CELLS)
     for (const theme of THEMES)
       unit(`comments ${cell(vp)} ${theme}`, () => drive(cm.runComments, bt, bname, vp, theme));
+  // H62-G1 (1905): the comment control's landing, Show less, and React and Reply by the member's
+  // own input, on the same cells.
+  for (const vp of cm.FLOW_CELLS)
+    for (const theme of THEMES)
+      unit(`comments-g1 ${cell(vp)} ${theme}`, () =>
+        drive(cm.runCommentsLanding, bt, bname, vp, theme),
+      );
   // Brief 10 (handoff 30-C item 13): the member's event page at every cell, its flows on the
   // two representative layouts.
   const {

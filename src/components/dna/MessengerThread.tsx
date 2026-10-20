@@ -1914,6 +1914,7 @@ export function MessengerThread({ member, threadId }: { member: Member; threadId
       >
         <div
           data-messenger-thread
+          data-keyboard-frame={keyboardFrame ? "" : undefined}
           data-thread={threadId}
           data-upload-refusal={draft.refusal ?? undefined}
           style={{

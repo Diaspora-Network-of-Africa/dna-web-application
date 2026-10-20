@@ -16,6 +16,7 @@ import { IconButton } from "@/components/strand/IconButton";
 import { Input } from "@/components/strand/Input";
 import { Popover } from "@/components/strand/Popover";
 import { Sheet } from "@/components/strand/Sheet";
+import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import type { Member } from "@/lib/auth";
 import { uploadCommentImage } from "@/lib/comments";
 import { toneFor } from "@/lib/emoji";
@@ -47,6 +48,8 @@ export type CommentBoxProps = {
   onSend: (body: string, image: CommentDraftImage | null) => void;
   /** The thread's own failure line, when its send did not go (F17 is on the comment; this is the box's). */
   onEmojiPicked?: ((emoji: string) => void) | undefined;
+  /** H62-G1 (1905): the section's close, the card's own Show less (84, 105), in the box's foot. */
+  onClose?: (() => void) | undefined;
   compact: boolean;
 };
 
@@ -64,6 +67,7 @@ export function CommentBox({
   replyingTo,
   onCancelReply,
   onSend,
+  onClose,
   compact,
 }: CommentBoxProps) {
   const qc = useQueryClient();
@@ -76,6 +80,20 @@ export function CommentBox({
   const emojiAnchor = useRef<HTMLSpanElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  // H62-G1 (1905, 1457): while this field holds focus with the keyboard up, the box stands on the
+  // keyboard, fixed at its measured place in the column, as the Messenger's frame does, and a
+  // placeholder keeps its height in the thread so nothing under it moves. Marked as a keyboard
+  // frame, so the shell holds the window at the origin meanwhile. The measurement is the app's one.
+  const [focused, setFocused] = useState(false);
+  const keyboard = useKeyboardHeight(touch && focused);
+  const [rest, setRest] = useState<{ left: number; width: number; height: number } | null>(null);
+  const lifted = focused && keyboard > 0 && !!rest;
+  const measure = () => {
+    const el = boxRef.current;
+    if (!el || lifted) return;
+    const r = el.getBoundingClientRect();
+    setRest({ left: r.left, width: r.width, height: r.height });
+  };
 
   // The one picker's tone and quick eight, the Messenger's (1651, 1776).
   const settings = useQuery({
@@ -111,7 +129,7 @@ export function CommentBox({
     window.requestAnimationFrame(() => {
       const el = field();
       if (!el) return;
-      el.focus();
+      el.focus({ preventScroll: true });
       try {
         el.setSelectionRange(pos, pos);
       } catch {
@@ -122,7 +140,7 @@ export function CommentBox({
   };
 
   useEffect(() => {
-    if (replyingTo) window.requestAnimationFrame(() => field()?.focus());
+    if (replyingTo) window.requestAnimationFrame(() => field()?.focus({ preventScroll: true }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [replyingTo?.id]);
 
@@ -199,205 +217,243 @@ export function CommentBox({
     />
   );
   return (
-    <div
-      ref={boxRef}
-      data-comment-box=""
-      data-replying-to={replyingTo?.id}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-        padding: "8px 0",
-        position: compact ? "sticky" : undefined,
-        bottom: compact ? "calc(var(--dock-height) + env(safe-area-inset-bottom))" : undefined,
-        background: "var(--surface)",
-        zIndex: compact ? 2 : undefined,
-      }}
-    >
-      {replyingTo && (
-        <div
-          data-reply-strip=""
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 8,
-            fontSize: 13,
-            color: "var(--ink-2)",
-            minHeight: touch ? 44 : "var(--target-min)",
-          }}
-        >
-          <span>Replying to {replyingTo.first}</span>
-          <Button variant="ghost" size="sm" onClick={onCancelReply} data-reply-cancel="">
-            Cancel
-          </Button>
-        </div>
-      )}
-      <Input
-        id={fieldId}
-        multiline
-        rows={1}
-        label={
-          <span
-            style={{
-              position: "absolute",
-              width: 1,
-              height: 1,
-              overflow: "hidden",
-              clip: "rect(0 0 0 0)",
-            }}
-          >
-            {replyingTo ? "Write a reply" : "Write a comment"}
-          </span>
-        }
-        placeholder={replyingTo ? "Write a reply" : "Write a comment"}
-        aria-label={replyingTo ? "Write a reply" : "Write a comment"}
-        value={text}
-        maxLength={COMMENT_MAX}
-        onChange={(e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-          setText(e.target.value)
-        }
-        onSelect={rememberCaret}
-        onKeyUp={rememberCaret}
-        onClick={rememberCaret}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-            e.preventDefault();
-            send();
-          }
+    <>
+      {lifted && rest ? (
+        <div aria-hidden="true" data-comment-box-rest="" style={{ height: rest.height }} />
+      ) : null}
+      <div
+        ref={boxRef}
+        data-comment-box=""
+        data-replying-to={replyingTo?.id}
+        data-keyboard-frame={lifted ? "" : undefined}
+        onFocus={measure}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
         }}
-        data-comment-field=""
-      />
-      {tile}
-      {upload.status === "failed" && (
-        <div
-          role="alert"
-          data-comment-upload-failed=""
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            fontSize: 13,
-            color: "var(--error)",
-            flexWrap: "wrap",
-          }}
-        >
-          <span>The image did not upload.</span>
-          <Button variant="ghost" size="sm" onClick={() => void start(upload.file)}>
-            Try again
-          </Button>
-          <Button variant="ghost" size="sm" onClick={remove}>
-            Remove
-          </Button>
-        </div>
-      )}
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-        <span ref={emojiAnchor} style={{ position: "relative", display: "inline-flex" }}>
-          <Button
-            variant="ghost"
-            size={touch ? "md" : "sm"}
-            aria-haspopup="dialog"
-            aria-expanded={picker}
-            onClick={() => {
-              rememberCaret();
-              setPicker((v) => !v);
-            }}
-            data-comment-emoji=""
-          >
-            Emoji
-          </Button>
-          {picker && !touch && (
-            <Popover
-              open
-              onClose={() => setPicker(false)}
-              anchorRef={emojiAnchor}
-              title="React"
-              input="pointer"
-              portal={false}
-              placement="top-start"
-            >
-              {pickerBody}
-            </Popover>
-          )}
-        </span>
-        <input
-          ref={fileInput}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          onChange={choose}
-          style={{ display: "none" }}
-          data-comment-file=""
-          aria-hidden="true"
-          tabIndex={-1}
-        />
-        <IconButton
-          name="image"
-          label="Add an image"
-          size={control}
-          input={mode}
-          disabled={upload.status !== "none"}
-          onClick={() => fileInput.current?.click()}
-          data-comment-image=""
-        />
-        <span style={{ flex: 1 }} />
-        <IconButton
-          name="send"
-          label="Send"
-          size={control}
-          input={mode}
-          disabled={!canSend}
-          onClick={send}
-          data-comment-send=""
-        />
-      </div>
-      {picker && touch && (
-        <Sheet
-          open
-          onClose={() => setPicker(false)}
-          variant={tier === "compact" ? "sheet" : "drawer"}
-          label="React"
-          actions={
-            <Button variant="secondary" onClick={() => setPicker(false)}>
-              Done
-            </Button>
-          }
-        >
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          padding: "8px 0",
+          position: lifted ? "fixed" : compact ? "sticky" : undefined,
+          bottom: lifted
+            ? keyboard
+            : compact
+              ? "calc(var(--dock-height) + env(safe-area-inset-bottom))"
+              : undefined,
+          left: lifted && rest ? rest.left : undefined,
+          width: lifted && rest ? rest.width : undefined,
+          boxSizing: "border-box",
+          background: "var(--surface)",
+          zIndex: lifted
+            ? ("calc(var(--z-sticky) + 1)" as unknown as number)
+            : compact
+              ? 2
+              : undefined,
+        }}
+      >
+        {replyingTo && (
           <div
+            data-reply-strip=""
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              fontSize: 13,
+              color: "var(--ink-2)",
+              minHeight: touch ? 44 : "var(--target-min)",
+            }}
+          >
+            <span>Replying to {replyingTo.first}</span>
+            <Button variant="ghost" size="sm" onClick={onCancelReply} data-reply-cancel="">
+              Cancel
+            </Button>
+          </div>
+        )}
+        <Input
+          id={fieldId}
+          multiline
+          rows={1}
+          label={
+            <span
+              style={{
+                position: "absolute",
+                width: 1,
+                height: 1,
+                overflow: "hidden",
+                clip: "rect(0 0 0 0)",
+              }}
+            >
+              {replyingTo ? "Write a reply" : "Write a comment"}
+            </span>
+          }
+          placeholder={replyingTo ? "Write a reply" : "Write a comment"}
+          aria-label={replyingTo ? "Write a reply" : "Write a comment"}
+          value={text}
+          maxLength={COMMENT_MAX}
+          onChange={(e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+            setText(e.target.value)
+          }
+          onFocus={() => setFocused(true)}
+          onSelect={rememberCaret}
+          onKeyUp={rememberCaret}
+          onClick={rememberCaret}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              send();
+            }
+          }}
+          data-comment-field=""
+        />
+        {tile}
+        {upload.status === "failed" && (
+          <div
+            role="alert"
+            data-comment-upload-failed=""
             style={{
               display: "flex",
               alignItems: "center",
               gap: 8,
-              height: 56,
-              padding: "0 8px 0 20px",
-              borderBottom: "1px solid var(--line)",
-              flex: "none",
+              fontSize: 13,
+              color: "var(--error)",
+              flexWrap: "wrap",
             }}
           >
-            <h2 data-sheet-heading style={{ flex: 1, margin: 0, fontSize: 17, fontWeight: 700 }}>
-              React
-            </h2>
-            <IconButton name="x" label="Close" onClick={() => setPicker(false)} />
+            <span>The image did not upload.</span>
+            <Button variant="ghost" size="sm" onClick={() => void start(upload.file)}>
+              Try again
+            </Button>
+            <Button variant="ghost" size="sm" onClick={remove}>
+              Remove
+            </Button>
           </div>
-          <div
-            style={{
-              flex: 1,
-              overflowY: "hidden",
-              padding: 20,
-              display: "flex",
-              flexDirection: "column",
-            }}
+        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span ref={emojiAnchor} style={{ position: "relative", display: "inline-flex" }}>
+            <Button
+              variant="ghost"
+              size={touch ? "md" : "sm"}
+              aria-haspopup="dialog"
+              aria-expanded={picker}
+              onClick={() => {
+                rememberCaret();
+                setPicker((v) => !v);
+              }}
+              data-comment-emoji=""
+            >
+              Emoji
+            </Button>
+            {picker && !touch && (
+              <Popover
+                open
+                onClose={() => setPicker(false)}
+                anchorRef={emojiAnchor}
+                title="React"
+                input="pointer"
+                portal={false}
+                placement="top-start"
+              >
+                {pickerBody}
+              </Popover>
+            )}
+          </span>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={choose}
+            style={{ display: "none" }}
+            data-comment-file=""
+            aria-hidden="true"
+            tabIndex={-1}
+          />
+          <IconButton
+            name="image"
+            label="Add an image"
+            size={control}
+            input={mode}
+            disabled={upload.status !== "none"}
+            onClick={() => fileInput.current?.click()}
+            data-comment-image=""
+          />
+          <span style={{ flex: 1 }} />
+          <IconButton
+            name="send"
+            label="Send"
+            size={control}
+            input={mode}
+            disabled={!canSend}
+            onClick={send}
+            data-comment-send=""
+          />
+        </div>
+        {/* H62-G1 (1905): the section closes from the box's own foot, so the control is in view
+            wherever the box is, sticky above the dock at compact included. It is the card's Show
+            less: it pops the expansion and the Feed returns to the card. Not while the box stands
+            on the keyboard, where it would only cover the thread. */}
+        {onClose && !lifted && (
+          <Button
+            variant="ghost"
+            size={touch ? "md" : "sm"}
+            aria-expanded={true}
+            onClick={onClose}
+            style={{ alignSelf: "flex-start", marginLeft: -12 }}
+            data-comments-close=""
           >
-            <ReactionPicker
-              tone={tone}
-              onTone={setTone}
-              recent={[]}
-              quick={quick}
-              onPick={insert}
-              input={mode}
-            />
-          </div>
-        </Sheet>
-      )}
-    </div>
+            Show less
+          </Button>
+        )}
+        {picker && touch && (
+          <Sheet
+            open
+            onClose={() => setPicker(false)}
+            variant={tier === "compact" ? "sheet" : "drawer"}
+            label="React"
+            actions={
+              <Button variant="secondary" onClick={() => setPicker(false)}>
+                Done
+              </Button>
+            }
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                height: 56,
+                padding: "0 8px 0 20px",
+                borderBottom: "1px solid var(--line)",
+                flex: "none",
+              }}
+            >
+              <h2 data-sheet-heading style={{ flex: 1, margin: 0, fontSize: 17, fontWeight: 700 }}>
+                React
+              </h2>
+              <IconButton name="x" label="Close" onClick={() => setPicker(false)} />
+            </div>
+            <div
+              style={{
+                flex: 1,
+                overflowY: "hidden",
+                padding: 20,
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <ReactionPicker
+                tone={tone}
+                onTone={setTone}
+                recent={[]}
+                quick={quick}
+                onPick={insert}
+                input={mode}
+              />
+            </div>
+          </Sheet>
+        )}
+      </div>
+    </>
   );
 }

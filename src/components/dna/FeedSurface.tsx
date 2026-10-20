@@ -286,8 +286,15 @@ export function FeedSurface({ member, view }: { member: Member; view: FeedView }
     sc.scrollTop = Math.max(0, Math.round(list.offsetTop - blockBottom));
   }, [lens, expandedTier, scrollerRef]);
 
+  // H62-G1 (1905): the comment control lands on the card's comment section. It expands a collapsed
+  // card as Read more does, and on an expanded card it lands again; the press count makes a second
+  // press a new request. The thread does the landing once it has loaded. Read more and every other
+  // opening clear it, so only the comment control lands.
+  const [land, setLand] = useState<{ id: string; n: number } | null>(null);
+  const landOn = (id: string) => setLand((l) => ({ id, n: (l?.n ?? 0) + 1 }));
   // Read more expands in place: a pushState to /posts/:id carrying fromFeed, scroll untouched.
   const openPost = (id: string) => {
+    setLand(null);
     // 12C part 2: a post opened from its card, with the card's C and the post as the object.
     const c = posts?.find((p) => p.id === id)?.c_category;
     record("card_opened", c ? { card_c: c } : {}, { kind: "post", id });
@@ -405,6 +412,8 @@ export function FeedSurface({ member, view }: { member: Member; view: FeedView }
               tier={tier}
               mode={mode}
               focusCommentId={search.comment ?? null}
+              land={land?.id === id ? land.n : undefined}
+              onClose={opts.inPlace ? collapse : undefined}
             />
           ) : newest ? (
             <LatestCommentLine
@@ -430,7 +439,16 @@ export function FeedSurface({ member, view }: { member: Member; view: FeedView }
               void navigate({ to: "/m/$handle", params: { handle: p.author_handle }, search: {} });
           }}
           onShare={() => void share(id)}
-          onRespond={opts.inPlace && !opts.expanded ? () => openPost(id) : undefined}
+          onRespond={
+            opts.expanded
+              ? () => landOn(id)
+              : opts.inPlace
+                ? () => {
+                    openPost(id);
+                    landOn(id);
+                  }
+                : undefined
+          }
           onClick={opts.inPlace ? () => openPost(id) : undefined}
           onAct={() => {
             if (p.c_category !== "system")
