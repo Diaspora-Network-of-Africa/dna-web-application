@@ -37,6 +37,12 @@ import {
   placeWord,
 } from "./EventParts";
 
+// 1892, 1902: the 1A wordmark in --ink in both themes. The span paints --ink through the file as a
+// mask; the hidden img of the same file at the mark's height gives the span its width from the
+// file's own ratio, so no ratio is written here (184: size by height, width auto).
+const WORDMARK = assetBase() + "wordmark-mono.svg";
+const WORDMARK_MASK = `url("${WORDMARK}") center / contain no-repeat`;
+
 /** The quiet line a cancelled page ends on: the card's own sentence (src/lib/feed.ts). */
 const CANCELLED_SURVIVES = "If you had said you were going, you were told by email.";
 
@@ -357,11 +363,22 @@ export function PublicEventSurface({ page, slug }: { page: PublicEventPage; slug
             aria-label="DNA"
             style={{ display: "inline-flex", alignItems: "center", minHeight: 44 }}
           >
-            <img
-              src={assetBase() + "logo.png"}
-              alt="DNA"
-              style={{ height: 24, display: "block" }}
-            />
+            <span
+              role="img"
+              aria-label="DNA"
+              style={{
+                display: "block",
+                background: "var(--ink)",
+                WebkitMask: WORDMARK_MASK,
+                mask: WORDMARK_MASK,
+              }}
+            >
+              <img
+                src={WORDMARK}
+                alt=""
+                style={{ height: 24, width: "auto", display: "block", visibility: "hidden" }}
+              />
+            </span>
           </a>
           <a href="/sign-in" style={{ textDecoration: "none" }}>
             <Button variant="secondary" size="sm" tabIndex={-1}>

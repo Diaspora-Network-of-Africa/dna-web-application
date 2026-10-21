@@ -821,7 +821,7 @@ async function runAdminSignedOut(browserType, bname, [w, h], theme) {
         page.url(),
       );
     }
-    record(`${tag} | the heading reads DNA Admin`, (await heading(page)) === "DNA Admin");
+    record(`${tag} | the heading reads Admin`, (await heading(page)) === "Admin");
     record(
       `${tag} | no provider button`,
       (await page.locator('[data-testid^="provider-"]').count()) === 0,

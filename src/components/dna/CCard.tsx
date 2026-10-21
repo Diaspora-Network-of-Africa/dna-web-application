@@ -48,6 +48,7 @@ export function CCard({ c, onOpen, style }: CCardProps) {
       <span
         style={{
           fontFamily: "var(--font-display)",
+          fontWeight: 700,
           fontSize: 22,
           lineHeight: 1.2,
           color: h ? "var(--c-" + c + "-text)" : "var(--ink)",

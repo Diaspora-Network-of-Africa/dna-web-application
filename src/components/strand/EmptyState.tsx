@@ -74,6 +74,7 @@ export function EmptyState({
         <div
           style={{
             fontFamily: "var(--font-display)",
+            fontWeight: 700,
             fontSize: "var(--display-s)",
             lineHeight: "var(--display-s-lh)",
             color: "var(--ink)",

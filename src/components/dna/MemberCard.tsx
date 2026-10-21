@@ -646,6 +646,7 @@ export function MemberCard({
         {
           "--_member-name-base": tier === "expanded" ? "var(--display-m)" : "var(--display-s)",
           fontFamily: "var(--font-display)",
+          fontWeight: 700,
           fontSize: "var(--_member-name-base)",
           lineHeight: tier === "expanded" ? "var(--display-m-lh)" : "var(--display-s-lh)",
           minWidth: 0,

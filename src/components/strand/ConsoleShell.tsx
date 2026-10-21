@@ -69,14 +69,14 @@ export type ConsoleShellProps = {
 };
 
 /** ConsoleShell (1306, 1308). The admin app's chrome; mounted once at the admin root, no page composes its own (69 applied to the console).
- *  Top bar --console-bar-height 56 on --bg with a 1px --line below: mark (logo.png at 24), the word (default "Admin"), staff name over role (13px caps; role hidden at compact), Sign out (Button ghost sm).
+ *  Top bar --console-bar-height 56 on --bg with a 1px --line below: mark (wordmark-mono.svg in --ink at 24), the word (default "Admin"), staff name over role (13px caps; role hidden at compact), Sign out (Button ghost sm).
  *  Expanded (over --tier-expanded): a --console-nav-width 248 left navigation, 44px rows, --radius-m. Compact and medium: a navigation opener (IconButton panel-left-open, "Open navigation") in the bar
  *  and the shell's own ConsoleMenu, a left-anchored navigation drawer (native <dialog>, focus trap, Escape, scrim --scrim at --z-scrim, panel at --z-sheet). It is not a Sheet: a sheet holds one decision and has no navigation of its own (561).
  *  Destinations: current (aria-current page, --ink, 500, --bg-sunken ground), available (--ink-2, hover --bg-sunken, onNavigate(id)), not yet available (`available: false`: --ink-3, "Not yet" at right, aria-disabled, cursor not-allowed, does nothing). Each with one explanatory line (--ink-3, 13px).
  *  No role (`access="none"`): the bar stays; navigation and page are gone; one 19px sentence under the bar (`noRoleText`).
  *  Motion: the drawer enters from its left edge by one transform transition of --dur-slow on --ease (as Sheet, 1229); immediate under prefers-reduced-motion.
  *  Pointer: hover grounds on rows and Sign out. Touch: tap; the drawer closes on scrim tap, Close or choosing a destination. `tier` and `input` follow the container and device unless given.
- *  Both themes from tokens; nothing branches on theme. The mark is the colour PNG on either ground (readme: no monochrome variant). */
+ *  Both themes from tokens; nothing branches on theme. The mark is the 1A wordmark masked in --ink, which flips with the theme (1892, 1902). */
 const reducedMotion = () =>
   typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 const FOCUSABLE = 'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
@@ -119,7 +119,11 @@ export function ConsoleShell({
     touch = mode === "touch";
   const [open, setOpen] = useState(false);
   const wide = t === "expanded";
-  const logo = assetBase() + "logo.png";
+  // 1892, 1902, compile sha256-89356d2d39fef8a6 (1894): the wordmark is painted --ink through the
+  // file as a mask, and sized by a hidden img of the same file at the mark's height, so its width is
+  // the file's own rather than the compile's height x 3.2022 (184; docs/strand-ports/sha256-89356d2d39fef8a6.md).
+  const wordmark = assetBase() + "wordmark-mono.svg";
+  const wordmarkMask = `url("${wordmark}") center / contain no-repeat`;
   const go = (id: string) => {
     setOpen(false);
     if (onNavigate) onNavigate(id);
@@ -175,7 +179,23 @@ export function ConsoleShell({
             paddingLeft: wide ? 0 : 4,
           }}
         >
-          <img src={logo} alt="DNA" style={{ height: 24, display: "block", flex: "none" }} />
+          <span
+            role="img"
+            aria-label="DNA"
+            style={{
+              display: "block",
+              flex: "none",
+              background: "var(--ink)",
+              WebkitMask: wordmarkMask,
+              mask: wordmarkMask,
+            }}
+          >
+            <img
+              src={wordmark}
+              alt=""
+              style={{ height: 24, width: "auto", display: "block", visibility: "hidden" }}
+            />
+          </span>
           <span
             style={{ fontSize: 15, fontWeight: 500, color: "var(--ink-2)", whiteSpace: "nowrap" }}
           >

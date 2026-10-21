@@ -17,6 +17,12 @@
 import type { CSSProperties, ReactNode, RefObject } from "react";
 import { assetBase } from "@/components/strand/cmeta";
 
+// 1892, 1902: the 1A wordmark in --ink in both themes. The span paints --ink through the file as a
+// mask; the hidden img of the same file at the mark's height gives the span its width from the
+// file's own ratio, so no ratio is written here (184: size by height, width auto).
+const WORDMARK = assetBase() + "wordmark-mono.svg";
+const WORDMARK_MASK = `url("${WORDMARK}") center / contain no-repeat`;
+
 export function AuthHead({
   heading,
   lead,
@@ -42,11 +48,27 @@ export function AuthHead({
           flex: "none",
         }}
       >
-        <img
-          src={assetBase() + "logo.png"}
-          alt="DNA"
-          style={{ height: "var(--_auth-logo)", width: "auto", display: "block" }}
-        />
+        <span
+          role="img"
+          aria-label="DNA"
+          style={{
+            display: "block",
+            background: "var(--ink)",
+            WebkitMask: WORDMARK_MASK,
+            mask: WORDMARK_MASK,
+          }}
+        >
+          <img
+            src={WORDMARK}
+            alt=""
+            style={{
+              height: "var(--_auth-logo)",
+              width: "auto",
+              display: "block",
+              visibility: "hidden",
+            }}
+          />
+        </span>
       </div>
       <h1
         ref={headingRef ?? null}
@@ -56,7 +78,7 @@ export function AuthHead({
           fontFamily: "var(--font-display)",
           fontSize: "var(--_auth-heading)",
           lineHeight: 1.15,
-          fontWeight: 400,
+          fontWeight: 700,
           color: "var(--ink)",
           textAlign: "center",
           textWrap: "balance",

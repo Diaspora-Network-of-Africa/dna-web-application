@@ -124,6 +124,7 @@ export function PersonCard({
           style={
             {
               fontFamily: "var(--font-display)",
+              fontWeight: 700,
               fontSize: "var(--display-s)",
               lineHeight: "var(--display-s-lh)",
               textWrap: "pretty",

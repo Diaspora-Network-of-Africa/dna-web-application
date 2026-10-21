@@ -97,7 +97,14 @@ export function ProfileBlockControl({
     const el = triggerEl();
     if (el) {
       const r = el.getBoundingClientRect();
-      setFlip(r.left + MENU_WIDTH > document.documentElement.clientWidth - 8);
+      // The panel must fit the scroller it sits in, not only the window: at expanded the feed
+      // column ends well inside the viewport, and a wider face (1884) left it 11px past that edge.
+      const scroller = el.closest("[data-scroller]");
+      const edge = Math.min(
+        document.documentElement.clientWidth,
+        scroller ? scroller.getBoundingClientRect().right : Infinity,
+      );
+      setFlip(r.left + MENU_WIDTH > edge - 8);
     }
     setMenu(true);
   };
@@ -168,7 +175,7 @@ export function ProfileBlockControl({
           margin: 0,
           outline: "none",
           fontFamily: "var(--font-display)",
-          fontWeight: 400,
+          fontWeight: 600,
           fontSize: 26,
           lineHeight: 1.2,
           color: "var(--ink)",

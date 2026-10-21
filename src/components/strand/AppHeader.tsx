@@ -152,7 +152,12 @@ export function AppHeader({
   const exp = variant === "expanded";
   // Brief 14 (5.1): the side track reserves the fourth control only when the slot is passed.
   const side = messages !== undefined && messages !== null ? SIDE_TRACK_FOUR : SIDE_TRACK;
-  const logo = assetBase() + "logo.png";
+  // 1892, 1902, compile sha256-89356d2d39fef8a6 (1894): the 1A wordmark in --ink in both themes. The
+  // span paints --ink through the file as a mask; the hidden img of the same file at the mark's height
+  // gives the span its width from the file's own ratio, where the compile writes height x 3.2022, so
+  // no ratio is written here (184: size by height, width auto; docs/strand-ports/sha256-89356d2d39fef8a6.md).
+  const wordmark = assetBase() + "wordmark-mono.svg";
+  const wordmarkMask = `url("${wordmark}") center / contain no-repeat`;
   const [hh, setHh] = useState(false);
   const HomeTag = homeHref ? "a" : "button";
   const homeProps = homeHref ? { href: homeHref } : { type: "button" as const };
@@ -217,7 +222,27 @@ export function AppHeader({
             justifySelf: "start",
           }}
         >
-          <img src={logo} alt="DNA" style={{ height: exp ? 28 : 24, display: "block" }} />
+          <span
+            role="img"
+            aria-label="DNA"
+            style={{
+              display: "block",
+              background: "var(--ink)",
+              WebkitMask: wordmarkMask,
+              mask: wordmarkMask,
+            }}
+          >
+            <img
+              src={wordmark}
+              alt=""
+              style={{
+                height: exp ? 28 : 24,
+                width: "auto",
+                display: "block",
+                visibility: "hidden",
+              }}
+            />
+          </span>
         </HomeTag>
         {!exp &&
           (showLens && lensBar ? (

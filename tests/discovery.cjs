@@ -643,10 +643,17 @@ async function readMenu(page, card) {
   await page.locator(`${card} button[aria-label^="More"]`).click();
   const menu = page.locator('[role="menu"][data-menu]');
   await menu.waitFor({ timeout: 10000 });
-  const box = await menu.evaluate((m) => ({
-    width: Math.round(m.getBoundingClientRect().width * 10) / 10,
-    min: getComputedStyle(m).minWidth,
-  }));
+  const box = await menu.evaluate((m) => {
+    const width = Math.round(m.getBoundingClientRect().width * 10) / 10;
+    const min = getComputedStyle(m).minWidth;
+    // The menu's width by its words alone, read with the floor lifted for one synchronous layout and
+    // put back before anything paints (G113 under BS7: the words' width moves with the font).
+    const prev = m.style.minWidth;
+    m.style.minWidth = "0px";
+    const own = Math.round(m.getBoundingClientRect().width * 10) / 10;
+    m.style.minWidth = prev;
+    return { width, min, own };
+  });
   const read = await menu.evaluate((m) =>
     Array.from(m.children).map((c) =>
       c.getAttribute("role") === "separator"
@@ -1313,11 +1320,12 @@ async function runDiscovery(browserType, bname, [w, h], theme) {
     );
     const plain = await readMenu(page, cardSel(E.loaded, "curated"));
     await closeMenu(page);
-    // G113: this menu's items are narrower than 240 by their words (217 at their own width), so its
-    // rendered width is the minimum: 240 now, 220 before correction 28.
+    // G113: the menu's floor is 240 (220 before correction 28), and above it the menu is its words'
+    // width. These items measured 217 in Alegreya Sans and so rendered at the floor; in Inter (1884)
+    // the same words are wider, so the reading is the rule itself rather than one font's outcome.
     record(
-      tag + " menu: a menu whose words are narrower renders at the 240 minimum (G113)",
-      plain.box.min === "240px" && Math.abs(plain.box.width - 240) <= 0.5,
+      tag + " menu: a menu renders at its words' width and never under the 240 minimum (G113)",
+      plain.box.min === "240px" && Math.abs(plain.box.width - Math.max(240, plain.box.own)) <= 0.5,
       JSON.stringify(plain.box),
     );
     const other = await readMenu(page, cardSel(E.stream, "network"));

@@ -104,20 +104,23 @@ The lint's allowlist. A raw `<img>` or a URL background outside `src/components/
 when its file and source are a row here, or a row in Held below. `Source` is text that appears in the
 `src` attribute or in the `url(` expression.
 
-| File                                        | Line | Source                                                | What                                   |
-| ------------------------------------------- | ---- | ----------------------------------------------------- | -------------------------------------- |
-| `src/components/dna/ProfileSurface.tsx`     | 1177 | `assetBase() + "logo.png"`                            | the wordmark, public profile chrome    |
-| `src/components/dna/PublicEventSurface.tsx` | 361  | `assetBase() + "logo.png"`                            | the wordmark, public event chrome      |
-| `src/components/dna/AuthHead.tsx`           | 45   | `assetBase() + "logo.png"`                            | the wordmark, sign-in                  |
-| `src/components/dna/AuthSurface.tsx`        | 181  | `PROVIDER_MARK[p]`                                    | a sign-in provider's mark              |
-| `src/components/dna/EventShareSheet.tsx`    | 187  | `code`                                                | the share sheet's QR code, generated   |
-| `src/components/dna/PatternPicker.tsx`      | 64   | `url(" + base + "patterns/" + pt.id + "-pattern.svg)` | a pattern swatch                       |
-| `src/components/dna/MemberCard.tsx`         | 137  | `url(" + assetBase() + "adinkra/nkonsonkonson.svg)`   | the Connect mark, a mask               |
-| `admin/src/components/Enrolment.tsx`        | 68   | `enrolled.qrCode`                                     | the admin enrolment QR code, generated |
-| `admin/src/routes/_console/settings.tsx`    | 1406 | `enrolled.qrCode`                                     | the admin enrolment QR code, generated |
+| File                                        | Line | Source                                                | What                                                     |
+| ------------------------------------------- | ---- | ----------------------------------------------------- | -------------------------------------------------------- |
+| `src/components/dna/ProfileSurface.tsx`     | 84   | `url("${WORDMARK}")`                                  | the wordmark's mask, public profile chrome (1892, 1902)  |
+| `src/components/dna/ProfileSurface.tsx`     | 1204 | `WORDMARK`                                            | the wordmark's sizing img, hidden, public profile chrome |
+| `src/components/dna/PublicEventSurface.tsx` | 44   | `url("${WORDMARK}")`                                  | the wordmark's mask, public event chrome (1892, 1902)    |
+| `src/components/dna/PublicEventSurface.tsx` | 377  | `WORDMARK`                                            | the wordmark's sizing img, hidden, public event chrome   |
+| `src/components/dna/AuthHead.tsx`           | 24   | `url("${WORDMARK}")`                                  | the wordmark's mask, sign-in (1892, 1902)                |
+| `src/components/dna/AuthHead.tsx`           | 62   | `WORDMARK`                                            | the wordmark's sizing img, hidden, sign-in               |
+| `src/components/dna/AuthSurface.tsx`        | 181  | `PROVIDER_MARK[p]`                                    | a sign-in provider's mark                                |
+| `src/components/dna/EventShareSheet.tsx`    | 187  | `code`                                                | the share sheet's QR code, generated                     |
+| `src/components/dna/PatternPicker.tsx`      | 64   | `url(" + base + "patterns/" + pt.id + "-pattern.svg)` | a pattern swatch                                         |
+| `src/components/dna/MemberCard.tsx`         | 137  | `url(" + assetBase() + "adinkra/nkonsonkonson.svg)`   | the Connect mark, a mask                                 |
+| `admin/src/components/Enrolment.tsx`        | 68   | `enrolled.qrCode`                                     | the admin enrolment QR code, generated                   |
+| `admin/src/routes/_console/settings.tsx`    | 1406 | `enrolled.qrCode`                                     | the admin enrolment QR code, generated                   |
 
 Inside `src/components/strand/`, which the lint does not read, the assets are the wordmark
-(`AppHeader.tsx`, `ConsoleShell.tsx:178`), the pattern ground (`EmptyState.tsx:50`), the masthead's
+(`AppHeader.tsx:236`, `ConsoleShell.tsx:194`, each a `wordmark-mono.svg` mask sized by a hidden img of the same file), the pattern ground (`EmptyState.tsx:50`), the masthead's
 textile tiles (`ProfileHeader.tsx:460`, `:487`, `:548`, `:614`, `:626`, `:708`, since item 13 moved the
 part here), the checkbox's tick (`Checkbox.tsx:50`) and the glyph masks (`Icon.tsx:15`, `CBadge.tsx:15`,
 `PulseDock.tsx:37`, `BadgeRow.tsx:41`).

@@ -1,6 +1,6 @@
 // Handoff 40-B section 3: the exact copy of the admin app's screens, and no other words on them.
 export const ADMIN_COPY = {
-  signInHeading: "DNA Admin",
+  signInHeading: "Admin",
   signInButton: "Sign in",
   /** Ruling 1329: the address itself comes from src/lib/contact.ts (387), never from here. */
   resetBefore: "Forgot your password? Email ",

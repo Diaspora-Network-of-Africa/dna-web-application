@@ -60,6 +60,7 @@ export function CSheetBody({
           <span
             style={{
               fontFamily: "var(--font-display)",
+              fontWeight: 700,
               fontSize: 32,
               lineHeight: 1.1,
               color: "var(--c-" + c + "-text)",

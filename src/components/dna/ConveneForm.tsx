@@ -813,6 +813,7 @@ export function ConveneForm({
           style={{
             margin: 0,
             fontFamily: "var(--font-display)",
+            fontWeight: 600,
             fontSize: 22,
             lineHeight: 1.2,
             color: "var(--ink)",

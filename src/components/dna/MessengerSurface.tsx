@@ -743,7 +743,7 @@ export function MessengerSurface({
         style={{
           margin: 0,
           fontFamily: "var(--font-display)",
-          fontWeight: "var(--weight-regular)" as unknown as number,
+          fontWeight: "var(--weight-bold)" as unknown as number,
           fontSize: "var(--display-m)",
           lineHeight: "var(--display-m-lh)",
         }}

@@ -58,7 +58,10 @@ if [ "${APP:-member}" = "admin" ]; then
   serves /
   serves /settings
   serves /strand/logo.png
+  # 1892, 1902: the console and the admin sign-in draw the wordmark; 1885: the dark tab icon.
+  serves /strand/wordmark-mono.svg
   serves /favicon.ico /tmp/admin-favicon.ico
+  serves /favicon-dark.png
   serves /robots.txt /tmp/admin-robots.txt
   if [ "$failed" -ne 0 ]; then
     echo "::error::The admin deployment did not serve every path the arms open. Nothing was tested."
@@ -90,7 +93,8 @@ serves /convene
 serves /collaborate
 # Brief 10's member event page, opened by tests/event.cjs; the shell serves it signed out too.
 serves /convene/events/00000000-0000-4000-8000-000000000000
-serves /strand/adinkra/mate-masie.svg
+# 1891: the brand slot's glyph (C_GLYPH.brand), which took over from the retired mate-masie.svg.
+serves /strand/adinkra/dna-icon.svg
 # Handoff 32-A's mount arms (tests/mount.cjs) open these by document load; the shell, profile and
 # Discovery suites open them too and were not listed here.
 serves /feed
@@ -101,9 +105,12 @@ serves /convene/curated
 # overwrite. Ruling 1246 (handoff 38-A) returns favicon.ico to the contract, generated from
 # icon-512.png: browsers fetch it unasked, and a 404 there left tabs on the icon cached for the host
 # before 1139 (Lovable's).
+# 1892, 1902: logo.png is the email lockup, served at its path; every component draws the wordmark.
 serves /strand/logo.png
+serves /strand/wordmark-mono.svg
 serves /favicon.ico /tmp/favicon.ico
 serves /favicon.png
+serves /favicon-dark.png
 serves /apple-touch-icon.png
 serves /icon-192.png
 serves /icon-512.png

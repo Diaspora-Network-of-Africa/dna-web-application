@@ -47,6 +47,7 @@ export function PlaceTile({ name, onPick, pointer, style }: PlaceTileProps) {
       <span
         style={{
           fontFamily: "var(--font-display)",
+          fontWeight: 700,
           fontSize: 22,
           lineHeight: 1.15,
           textWrap: "balance",

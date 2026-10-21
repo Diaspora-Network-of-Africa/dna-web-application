@@ -519,7 +519,7 @@ function FeedFace({
             style={{
               margin: 0,
               fontFamily: "var(--font-display)",
-              fontWeight: 400,
+              fontWeight: 600,
               fontSize: 22,
               lineHeight: 1.25,
               textWrap: "pretty",
@@ -983,7 +983,7 @@ function DiscoveryFace({
           margin: 0,
           minHeight: DISC_TITLE_H,
           fontFamily: "var(--font-display)",
-          fontWeight: "var(--weight-regular)" as unknown as number,
+          fontWeight: "var(--weight-semibold)" as unknown as number,
           fontSize: "var(--display-s)",
           lineHeight: "var(--display-s-lh)",
         }}
