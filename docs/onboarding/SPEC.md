@@ -1,6 +1,6 @@
 # DNA Brief 5 — Onboarding — Handoff spec
 
-Extracted from `onboarding/B5-Onboarding-v2.dc.html`, approved at ruling 330 (gate 3). Rulings governing this surface: 62, 65, 67, 97, 107, 156, 171, 180, 181, 212, 222, 235, 242, 244, 247, 248, 259, 279, 293 to 300, 307 to 309, 311, 315, 320 to 331. Code reads this file; it never reads the page markup. Section 11 names every place the two differ.
+Extracted from `onboarding/B5-Onboarding-v2.dc.html`, approved at ruling 330 (gate 3). Rulings governing this surface: 62, 65, 67, 97, 107, 156, 171, 180, 181, 212, 222, 235, 242, 244, 247, 248, 259, 279, 293 to 300, 307 to 309, 311, 315, 320 to 331; sections 3, 6, 7 and 10 corrected to H-BS7-STANCE (1856 to 1862) under 763. Code reads this file; it never reads the page markup. Section 11 names every place the two differ.
 
 Not in this spec (arrives in the Code handoff): schema, migration, RLS, RPC bodies.
 
@@ -24,7 +24,7 @@ Anonymous auth layout, identical to 4B sign-in: no `AppHeader`, no `PulseDock`, 
 | --- | --- | --- | --- | --- |
 | Compact 390 | full width, max 448 incl. padding | `32px 24px 64px` | 30 display, centred | page scrolls |
 | Medium 820 | 400, centred | `64px 32px` | 30 display, centred | page scrolls |
-| Expanded 1280 | 400, centred | `64px 32px` | 30 display, centred | screen three's card row bleeds to 1200 (section 6) |
+| Expanded 1280 | 400, centred | `64px 32px` | 30 display, centred | screen three's card grid bleeds to 1200 (section 6) |
 
 - Head: Strand's `AuthHead` (Design pass 01, B9 item 5, rulings 377, 390, 491). Logo `assets/logo.png`
   48 tall on compact and 56 above, top-aligned in an 84/100 band whose height never changes with
@@ -63,11 +63,12 @@ Screen two (`/where`)
 Screen three (`/relationship`)
 - Heading: What's your relationship to the continent right now?
 - Lead (300's sub-heading): There's no wrong answer here, and nothing is permanent. Choose what feels closest to where you are today.
-- Five cards (300, 331), verbatim, in this order. Each is title, body, label.
-  - Returnee. You're of the African Diaspora and you're moving toward the continent in some way. That might be visiting more often, investing, building something, relocating one day, or simply keeping the door open. Return looks different for everyone, and all of it counts. Label: I am a Returnee
-  - Kin. You're of the African Diaspora and return isn't your path, and that's completely alright. You're here for the people, the culture, the ideas and the work. Connection matters on its own terms, and you belong here without needing a plan. Label: I am Kin
-  - Anchor. You're on the continent, living and rooted there. You might have been born there or found your way back, you might be building something or teaching, studying, creating, raising a family. What matters is that you're present, and that when the Diaspora reaches toward this work, you're who they reach. Label: I am an Anchor
-  - Ally. You're not of the Diaspora, and you're choosing to show up anyway. What you bring might be capital, expertise, networks, time or advocacy, and it strengthens the work. You walk alongside. You support and partner. You don't represent. Label: I am an Ally
+- Six cards (300, 331; 1856, 1857, 1859, 1861), verbatim, in this order, which is `public.member_stances.position` (1859). Each is title, body, label. The title is the stance's label in `public.member_stances`, read through `vocabularies()`; no component holds the order or the titles (187).
+  - Kin. You're of the African Diaspora, by birth, by ancestry or by heritage. Return isn't your path, and that's completely alright. You're here for the people, the culture, the ideas and the work. Connection matters on its own terms, and you belong here without needing a plan. Label: I am Kin
+  - Returnee. You're of the African Diaspora and you're moving toward the continent in some way, whether your family left one generation ago or many. That might be visiting more often, investing, building something, relocating one day, or simply keeping the door open. Return looks different for everyone, and all of it counts. Label: I am a Returnee
+  - Bridge. You live across both. Your life, work or family keeps you moving between the continent and the Diaspora, and neither place is the one you're leaving. You carry each side to the other, and that movement is what you bring. Label: I am a Bridge
+  - Anchor. You're on the continent, living and rooted there. You might have been born there, found your way back, or made your home in an African country other than the one you're from. You might be building something or teaching, studying, creating, raising a family. What matters is that you're present, and that when the Diaspora reaches toward this work, you're who they reach. Label: I am an Anchor
+  - Ally. You're not of the Diaspora, and you're choosing to show up anyway. You might be family by marriage, a partner in the work, or someone who stands with it. What you bring might be capital, expertise, networks, time or advocacy, and it strengthens the work. You walk alongside. You support and partner. You don't represent. Label: I am an Ally
   - Still exploring. You've arrived and you're not ready to name where you fit yet, which is honestly the most reasonable place to start. Take your time, look around, and choose when it feels right. Nothing here is waiting on you. Label: I'm still exploring
 - Chosen line (327): You're marked as still exploring for now. Change it below if something fits better.
 - Footer (300): You can change this whenever you like. It's meant to move as you do.
@@ -102,7 +103,8 @@ Three required controls, peers in one form, gap 24. Continue is live only when n
 - Chosen line under the lead: sans 15/1.5 `--ink`, centred, `padding 10px 14px`, radius `--radius-m`, `--bg-sunken`, `role="status"`. Rendered while the selection is the default and untouched; hidden the moment the member touches any card (329). It never returns within the session.
 - Cards: `role="radiogroup"` labelled by the heading text; each card `role="radio"`, `aria-checked`, `aria-disabled` while saving. Roving tabindex: the checked card is the single tab stop; arrow keys move selection and focus; Space and Enter select.
 - Card chassis: `--surface`, radius `--radius-l` (14), padding 20/19, gap 14, `1px --line`. Selected: `1.5px --ink` frame, padding 19/18 so the box does not shift. Title row: radio glyph 22 (`circle` in `--ink-3`; `circle-dot` in `--c-connect` when selected) then title `--font-display` 400 22/1.2. Body sans 15/1.65 `--ink-2`. Label sans 15, 500 `--ink-3`, 700 `--ink` when selected, pinned to the card foot.
-- Layout (320): compact and medium stack the five cards in a column, gap 12, full column width. Expanded shows all five in one row: `grid repeat(5, minmax(0,1fr))`, gap 12, bleeding out of the 400 column to 1200 (inset 40 each side of the 1280 frame), cards equal height. No horizontal scrolling at any tier, no scroll indicator.
+- Cards come from `vocabularies().stances`, six in `public.member_stances.position` order (187, 1859); each card's body and foot label are section 3's copy for that value. A vocabulary that does not load renders no card (194); Finish still writes the default.
+- Layout (320, amended by 1860): compact and medium stack the six cards in a column, gap 12, full column width. Expanded shows the six as two rows of three, read left to right: `grid repeat(3, minmax(0,1fr))`, gap 12, bleeding out of the 400 column to 1200 (inset 40 each side of the 1280 frame), cards equal height within a row. No horizontal scrolling at any tier, no scroll indicator.
 - Still exploring is `aria-checked` on load. Finish is enabled without any interaction.
 - Footer and link follow the cards, centred; the link is a text button, 44 tall, underlined, `--ink`.
 - Write on Finish: `stance`; `stance_declared_at` only if the member touched a card in this session (touched is a client flag set by any selection, including re-selecting the default); `onboarded_at` set once by the same write path. Screen three's RPC. Opening the explainer does not set touched.
@@ -120,14 +122,16 @@ Body: padding `20px 20px 8px` compact, `40px 32px 16px` otherwise; column max 62
 
 1. h2: What these mean, and why we ask
 2. Lead: DNA connects people across the African Diaspora and the continent, and the way it finds people for you starts here. Your answer shapes who you're suggested to, and who sees you when they search by relationship. It never ranks you, and no one is ever shown a score.
-3. Kicker (13 caps `--ink-3`): What the five mean. Four paragraphs, sans 15/1.6 `--ink-2`:
-   - Returnee and Kin are both of the Diaspora. The difference is direction, not belonging. A Returnee is moving toward the continent in some way; Kin has chosen a different path and is here for the people, the culture and the work.
-   - An Anchor is on the continent, born there or returned and rooted. They are who the Diaspora reaches.
+3. Kicker (13 caps `--ink-3`): What the six mean. Five paragraphs (1862), sans 15/1.6 `--ink-2`:
+   - Kin and Returnees are both of the Diaspora. The difference is direction, not belonging. Kin is here for the people, the culture and the work; a Returnee is moving toward the continent in some way.
+   - A Bridge lives across both, at home on the continent and in the Diaspora at once. They carry each side to the other.
+   - An Anchor is on the continent, born there, returned, or rooted in an African country other than their own. They are who the Diaspora reaches.
    - An Ally is not of the Diaspora and chooses to contribute. They walk alongside.
    - Still exploring is a real answer, and most people start there.
-4. Kicker: What changes when you choose. Five rows, `grid 132px 1fr` (single column on compact), `1px --line` above each, padding `12px 0`; term `--font-display` 19, body sans 15/1.55 `--ink-2`:
-   - Returnee: DNA points you toward Anchors on the continent and members building in the same direction, at whatever pace suits the life you have. You surface when someone looks for people facing the continent.
+4. Kicker: What changes when you choose. Six rows in `public.member_stances.position` order (1859, 1862), the term being the stance's label from `vocabularies()`, `grid 132px 1fr` (single column on compact), `1px --line` above each, padding `12px 0`; term `--font-display` 19, body sans 15/1.55 `--ink-2`:
    - Kin: DNA looks for people rather than plans: members who share your city, your heritage or your work, wherever they sit. Nothing assumes you are moving, and nothing asks you about it again.
+   - Returnee: DNA points you toward Anchors on the continent and members building in the same direction, at whatever pace suits the life you have. You surface when someone looks for people facing the continent.
+   - Bridge: You're reachable from both sides. Members on the continent and in the Diaspora can find you, and DNA suggests you where a connection needs someone who knows both places. Nothing asks you to pick one.
    - Anchor: You become reachable to a Diaspora looking for partners on the ground, in your city and your field. Intros, Space invitations and event asks tend to arrive here first, because you are who they reach.
    - Ally: DNA matches what you bring to the Needs and Spaces that asked for it. You are never put in front of the Diaspora as one of them. You walk alongside, and the distinction holds everywhere it matters.
    - Still exploring: Nothing narrows. You are suggested broadly and you see the whole network while you look around. DNA records that you have not answered yet, not that you answered no.
@@ -166,7 +170,7 @@ Client and server derive the same string: trim, lowercase, strip everything exce
 - Screen one RPC: `name`, `username`, `avatar_url`. Returns taken on username collision.
 - Screen two RPC: `current_place`.
 - Screen three RPC: `stance`, `stance_declared_at` (only when touched), `onboarded_at` (once). No separate completion call.
-- `stance` values: `returnee | kin | anchor | ally | exploring`; database default `exploring`.
+- `stance` values: the `public.stance` enum, `kin | returnee | bridge | anchor | ally | exploring` (1856), listed here in `public.member_stances.position` order (1859), which is the one order any surface shows; database default `exploring`.
 - Resume reads the first null of `name`, `current_place`, `onboarded_at`.
 - Company-facing (311), emitted at each write: completion and abandonment per screen; time on screen three; stance declared versus default; photo and username adoption here versus later; completion by entry path (email, Google, LinkedIn). Add: explainer opens.
 - Matrix arm (279): layout at nine viewports, state proofs on two.

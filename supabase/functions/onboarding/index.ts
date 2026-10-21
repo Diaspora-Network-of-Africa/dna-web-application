@@ -27,7 +27,9 @@ const json = (body: unknown, status = 200) =>
 
 type Screen = "who" | "where" | "relationship";
 const SCREEN_NUMBER: Record<Screen, number> = { who: 1, where: 2, relationship: 3 };
-const STANCES = new Set(["returnee", "kin", "anchor", "ally", "exploring"]);
+// The enum's values, as a guard on what reaches the RPC and the record; no order and no label
+// (187). BS7 (1856) adds bridge. Named in H-BS7-STANCE's PR as the one literal list the tree holds.
+const STANCES = new Set(["returnee", "kin", "bridge", "anchor", "ally", "exploring"]);
 
 type Body = {
   screen?: unknown;

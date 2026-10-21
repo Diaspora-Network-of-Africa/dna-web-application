@@ -90,74 +90,72 @@ export const COPY = {
   saveFailed: "We couldn't save that just now. Nothing you entered is lost. Try again.",
 } as const;
 
-/** The five cards (rulings 300, 331), in this order. Title, body, label. */
-export const STANCE_CARDS: { value: Stance; title: string; body: string; label: string }[] = [
-  {
-    value: "returnee",
-    title: "Returnee",
-    body: "You're of the African Diaspora and you're moving toward the continent in some way. That might be visiting more often, investing, building something, relocating one day, or simply keeping the door open. Return looks different for everyone, and all of it counts.",
-    label: "I am a Returnee",
-  },
-  {
-    value: "kin",
-    title: "Kin",
-    body: "You're of the African Diaspora and return isn't your path, and that's completely alright. You're here for the people, the culture, the ideas and the work. Connection matters on its own terms, and you belong here without needing a plan.",
+/**
+ * The cards' copy (rulings 300, 331, 1857, 1861), verbatim, keyed by stance value. The cards' order
+ * and titles are not here: screen three renders vocabularies().stances, read from
+ * public.member_stances in its position order (187, 1859), and takes each card's body and foot label
+ * from this record by value. A stance the vocabulary carries and this record does not renders its
+ * title alone.
+ */
+export const STANCE_CARD_COPY: Record<Stance, { body: string; label: string }> = {
+  kin: {
+    body: "You're of the African Diaspora, by birth, by ancestry or by heritage. Return isn't your path, and that's completely alright. You're here for the people, the culture, the ideas and the work. Connection matters on its own terms, and you belong here without needing a plan.",
     label: "I am Kin",
   },
-  {
-    value: "anchor",
-    title: "Anchor",
-    body: "You're on the continent, living and rooted there. You might have been born there or found your way back, you might be building something or teaching, studying, creating, raising a family. What matters is that you're present, and that when the Diaspora reaches toward this work, you're who they reach.",
+  returnee: {
+    body: "You're of the African Diaspora and you're moving toward the continent in some way, whether your family left one generation ago or many. That might be visiting more often, investing, building something, relocating one day, or simply keeping the door open. Return looks different for everyone, and all of it counts.",
+    label: "I am a Returnee",
+  },
+  bridge: {
+    body: "You live across both. Your life, work or family keeps you moving between the continent and the Diaspora, and neither place is the one you're leaving. You carry each side to the other, and that movement is what you bring.",
+    label: "I am a Bridge",
+  },
+  anchor: {
+    body: "You're on the continent, living and rooted there. You might have been born there, found your way back, or made your home in an African country other than the one you're from. You might be building something or teaching, studying, creating, raising a family. What matters is that you're present, and that when the Diaspora reaches toward this work, you're who they reach.",
     label: "I am an Anchor",
   },
-  {
-    value: "ally",
-    title: "Ally",
-    body: "You're not of the Diaspora, and you're choosing to show up anyway. What you bring might be capital, expertise, networks, time or advocacy, and it strengthens the work. You walk alongside. You support and partner. You don't represent.",
+  ally: {
+    body: "You're not of the Diaspora, and you're choosing to show up anyway. You might be family by marriage, a partner in the work, or someone who stands with it. What you bring might be capital, expertise, networks, time or advocacy, and it strengthens the work. You walk alongside. You support and partner. You don't represent.",
     label: "I am an Ally",
   },
-  {
-    value: "exploring",
-    title: "Still exploring",
+  exploring: {
     body: "You've arrived and you're not ready to name where you fit yet, which is honestly the most reasonable place to start. Take your time, look around, and choose when it feels right. Nothing here is waiting on you.",
     label: "I'm still exploring",
   },
-];
+};
 
-/** The explainer sheet (SPEC section 7), verbatim. */
+/** One stance as vocabularies().stances carries it: the value and the label public.member_stances holds. */
+export type StanceOption = { value: Stance; label: string };
+
+/**
+ * The explainer sheet (SPEC section 7; 1862), verbatim. The what-changes rows are keyed by value and
+ * rendered in the vocabulary's order with the vocabulary's label as the term, so no order or label
+ * sits here (187, 1859).
+ */
 export const EXPLAINER = {
   h2: "What these mean, and why we ask",
   lead: "DNA connects people across the African Diaspora and the continent, and the way it finds people for you starts here. Your answer shapes who you're suggested to, and who sees you when they search by relationship. It never ranks you, and no one is ever shown a score.",
-  meanKicker: "What the five mean",
+  meanKicker: "What the six mean",
   mean: [
-    "Returnee and Kin are both of the Diaspora. The difference is direction, not belonging. A Returnee is moving toward the continent in some way; Kin has chosen a different path and is here for the people, the culture and the work.",
-    "An Anchor is on the continent, born there or returned and rooted. They are who the Diaspora reaches.",
+    "Kin and Returnees are both of the Diaspora. The difference is direction, not belonging. Kin is here for the people, the culture and the work; a Returnee is moving toward the continent in some way.",
+    "A Bridge lives across both, at home on the continent and in the Diaspora at once. They carry each side to the other.",
+    "An Anchor is on the continent, born there, returned, or rooted in an African country other than their own. They are who the Diaspora reaches.",
     "An Ally is not of the Diaspora and chooses to contribute. They walk alongside.",
     "Still exploring is a real answer, and most people start there.",
   ],
   changesKicker: "What changes when you choose",
-  changes: [
-    {
-      term: "Returnee",
-      body: "DNA points you toward Anchors on the continent and members building in the same direction, at whatever pace suits the life you have. You surface when someone looks for people facing the continent.",
-    },
-    {
-      term: "Kin",
-      body: "DNA looks for people rather than plans: members who share your city, your heritage or your work, wherever they sit. Nothing assumes you are moving, and nothing asks you about it again.",
-    },
-    {
-      term: "Anchor",
-      body: "You become reachable to a Diaspora looking for partners on the ground, in your city and your field. Intros, Space invitations and event asks tend to arrive here first, because you are who they reach.",
-    },
-    {
-      term: "Ally",
-      body: "DNA matches what you bring to the Needs and Spaces that asked for it. You are never put in front of the Diaspora as one of them. You walk alongside, and the distinction holds everywhere it matters.",
-    },
-    {
-      term: "Still exploring",
-      body: "Nothing narrows. You are suggested broadly and you see the whole network while you look around. DNA records that you have not answered yet, not that you answered no.",
-    },
-  ],
+  changes: {
+    kin: "DNA looks for people rather than plans: members who share your city, your heritage or your work, wherever they sit. Nothing assumes you are moving, and nothing asks you about it again.",
+    returnee:
+      "DNA points you toward Anchors on the continent and members building in the same direction, at whatever pace suits the life you have. You surface when someone looks for people facing the continent.",
+    bridge:
+      "You're reachable from both sides. Members on the continent and in the Diaspora can find you, and DNA suggests you where a connection needs someone who knows both places. Nothing asks you to pick one.",
+    anchor:
+      "You become reachable to a Diaspora looking for partners on the ground, in your city and your field. Intros, Space invitations and event asks tend to arrive here first, because you are who they reach.",
+    ally: "DNA matches what you bring to the Needs and Spaces that asked for it. You are never put in front of the Diaspora as one of them. You walk alongside, and the distinction holds everywhere it matters.",
+    exploring:
+      "Nothing narrows. You are suggested broadly and you see the whole network while you look around. DNA records that you have not answered yet, not that you answered no.",
+  } satisfies Record<Stance, string>,
   returnTitle: "The Return",
   returnBody:
     "The Return is DNA's name for the movement of the Diaspora back toward the continent, in every form it takes: visits, investment, building, relocation, advocacy. You don't have to be part of it to be part of DNA.",
@@ -615,11 +613,12 @@ export type RelationshipSubmit = (input: {
 
 function cardBleed(tier: Tier): CSSProperties {
   if (tier !== "expanded") return { display: "flex", flexDirection: "column", gap: 12 };
-  // Ruling 320: one row of five where all five fit, out of the 400 column to 1200 (40 inset each
-  // side of the 1280 frame); equal heights; no horizontal scroll at any width.
+  // Ruling 1860 (amending 320): two rows of three at expanded, read left to right, out of the 400
+  // column to 1200 (40 inset each side of the 1280 frame); equal heights within a row; no
+  // horizontal scroll and no scroll indicator at any width.
   return {
     display: "grid",
-    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 12,
     width: "min(1200px, calc(100vw - 80px))",
     marginLeft: "calc(50% - min(600px, 50vw - 40px))",
@@ -628,7 +627,8 @@ function cardBleed(tier: Tier): CSSProperties {
 }
 
 function StanceCard({
-  card,
+  option,
+  copy,
   checked,
   focusable,
   disabled,
@@ -636,7 +636,8 @@ function StanceCard({
   onKey,
   cardRef,
 }: {
-  card: (typeof STANCE_CARDS)[number];
+  option: StanceOption;
+  copy: { body: string; label: string } | undefined;
   checked: boolean;
   focusable: boolean;
   disabled: boolean;
@@ -650,9 +651,9 @@ function StanceCard({
       role="radio"
       aria-checked={checked}
       aria-disabled={disabled || undefined}
-      aria-label={card.title}
+      aria-label={option.label}
       tabIndex={focusable ? 0 : -1}
-      data-testid={"stance-card-" + card.value}
+      data-testid={"stance-card-" + option.value}
       data-checked={checked ? "1" : "0"}
       onClick={() => {
         if (!disabled) onSelect();
@@ -690,32 +691,43 @@ function StanceCard({
             color: "var(--ink)",
           }}
         >
-          {card.title}
+          {option.label}
         </span>
       </div>
-      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.65, color: "var(--ink-2)" }}>
-        {card.body}
-      </p>
-      <span
-        style={{
-          marginTop: "auto",
-          fontSize: 15,
-          fontWeight: checked ? 700 : 500,
-          color: checked ? "var(--ink)" : "var(--ink-3)",
-        }}
-      >
-        {card.label}
-      </span>
+      {copy && (
+        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.65, color: "var(--ink-2)" }}>
+          {copy.body}
+        </p>
+      )}
+      {copy && (
+        <span
+          style={{
+            marginTop: "auto",
+            fontSize: 15,
+            fontWeight: checked ? 700 : 500,
+            color: checked ? "var(--ink)" : "var(--ink-3)",
+          }}
+        >
+          {copy.label}
+        </span>
+      )}
     </div>
   );
 }
 
 export function RelationshipScreen({
   state,
+  stances,
   onSubmit,
   onBack,
 }: {
   state: OnboardingState;
+  /**
+   * Ruling 187, 1859: the cards, from vocabularies().stances in public.member_stances' position
+   * order; empty while it loads or if it did not (194), and then no card renders. Finish still
+   * writes the default.
+   */
+  stances: StanceOption[];
   onSubmit: RelationshipSubmit;
   onBack: () => void;
 }) {
@@ -732,7 +744,7 @@ export function RelationshipScreen({
   const mountedAt = useRef(Date.now());
 
   const select = (i: number, focus: boolean) => {
-    const card = STANCE_CARDS[i];
+    const card = stances[i];
     if (!card) return;
     setStance(card.value);
     setTouched(true);
@@ -740,7 +752,7 @@ export function RelationshipScreen({
   };
   const onKey = (i: number) => (e: KeyboardEvent<HTMLDivElement>) => {
     if (busy) return;
-    const n = STANCE_CARDS.length;
+    const n = stances.length;
     if (e.key === "ArrowRight" || e.key === "ArrowDown") {
       e.preventDefault();
       select((i + 1) % n, true);
@@ -766,7 +778,7 @@ export function RelationshipScreen({
     }
   };
 
-  const checkedIndex = STANCE_CARDS.findIndex((c) => c.value === stance);
+  const checkedIndex = stances.findIndex((c) => c.value === stance);
   return (
     <OnboardingFrame screen="relationship" heading={headingText} lead={COPY.relationship.lead}>
       {!touched && (
@@ -800,10 +812,11 @@ export function RelationshipScreen({
           data-testid="stance-cards"
           style={cardBleed(tier)}
         >
-          {STANCE_CARDS.map((card, i) => (
+          {stances.map((option, i) => (
             <StanceCard
-              key={card.value}
-              card={card}
+              key={option.value}
+              option={option}
+              copy={STANCE_CARD_COPY[option.value]}
               checked={i === checkedIndex}
               focusable={i === checkedIndex}
               disabled={busy}
@@ -851,6 +864,7 @@ export function RelationshipScreen({
       <ExplainerSheet
         open={explainer}
         tier={tier}
+        stances={stances}
         // Ruling 222's return to the link is the Sheet's, not a copy here: it restores to whatever
         // held focus when the sheet opened, and only once the top layer has actually gone.
         onClose={() => setExplainer(false)}
@@ -865,10 +879,13 @@ export function RelationshipScreen({
 export function ExplainerSheet({
   open,
   tier,
+  stances,
   onClose,
 }: {
   open: boolean;
   tier: Tier;
+  /** The what-changes rows follow the vocabulary's order and take its labels as their terms. */
+  stances: StanceOption[];
   onClose: () => void;
 }) {
   const compact = tier === "compact";
@@ -953,9 +970,9 @@ export function ExplainerSheet({
             </section>
             <section style={{ display: "flex", flexDirection: "column", gap: 0 }}>
               <p style={{ ...kicker, marginBottom: 4 }}>{EXPLAINER.changesKicker}</p>
-              {EXPLAINER.changes.map((row) => (
+              {stances.map((row) => (
                 <div
-                  key={row.term}
+                  key={row.value}
                   style={{
                     display: "grid",
                     gridTemplateColumns: compact ? "1fr" : "132px 1fr",
@@ -972,10 +989,10 @@ export function ExplainerSheet({
                       color: "var(--ink)",
                     }}
                   >
-                    {row.term}
+                    {row.label}
                   </span>
                   <span style={{ fontSize: 15, lineHeight: 1.55, color: "var(--ink-2)" }}>
-                    {row.body}
+                    {EXPLAINER.changes[row.value]}
                   </span>
                 </div>
               ))}

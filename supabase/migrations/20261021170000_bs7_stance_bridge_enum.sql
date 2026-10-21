@@ -1,0 +1,15 @@
+-- Handoff H-BS7-STANCE (Business Session 7), file 1 of 2: public.stance gains 'bridge' (ruling 1856).
+-- Committed before it is applied (225); applied through migrate.yml, rehearse then apply, each
+-- approved by the founder (1827), never by apply_migration (553) and never by db push.
+--
+-- Why this file stands alone. A value added by ALTER TYPE ... ADD VALUE cannot be used in the
+-- transaction that adds it, and migrate.sh runs the ledger row and the file in one transaction.
+-- 20261021170100 inserts the member_stances row for bridge, so this file is applied and committed in
+-- its own transaction first and 20261021170100 runs in a second, as 20260921140000 and
+-- 20261015120000 did before it. The handoff asked for one file and named this claim for Code to
+-- verify; verified, it is two.
+--
+-- Where the value sits in the enum is not where it sits on a surface: the order every surface shows
+-- is public.member_stances.position (1859), rewritten by the second file. No member row changes
+-- stance and 'exploring' stays the column default.
+alter type public.stance add value if not exists 'bridge';

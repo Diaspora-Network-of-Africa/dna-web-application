@@ -10,9 +10,10 @@ import { Input } from "@/components/strand/Input";
 import { Select } from "@/components/strand/Select";
 import { VocabularyPicker } from "./VocabularyPicker";
 
-// Brief 5 (ruling 300): the axis is stance, five values in the register's order. kin carries no
-// per-variant fields; a Kin member's block renders their label alone.
-export type Stance = "returnee" | "kin" | "anchor" | "ally" | "exploring";
+// Brief 5 (ruling 300): the axis is stance; the values are the enum's and their order is
+// public.member_stances.position (1859), never this union's. BS7 (1856) adds bridge. kin and bridge
+// carry no per-variant fields; a Kin or Bridge member's block renders their label alone.
+export type Stance = "returnee" | "kin" | "bridge" | "anchor" | "ally" | "exploring";
 
 export type StanceField =
   | { k: "timeline"; label: string; kind: "select" }
@@ -34,6 +35,8 @@ export const STANCE: Record<Stance, { fields: StanceField[] }> = {
     ],
   },
   kin: { fields: [] },
+  // H-BS7-STANCE names no per-variant fields for bridge; none until a ruling adds them.
+  bridge: { fields: [] },
   anchor: {
     fields: [
       { k: "base", label: "Continental base", kind: "text", short: true },

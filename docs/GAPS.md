@@ -9910,3 +9910,17 @@ run 608 on 16 October was green by a day). The arm's `when` field checks (`Thu 1
 still pass, because they read the typed text back. Closes when the fixture's date is computed from
 the run's own date with its weekday, or set far enough ahead and the expectation written from the
 same computation, never from a literal weekday. Owner: Chat, by brief.
+
+## G319. Connect's ranking reads `bridge` before launch (1863)
+
+**Severity: launch gate. Opened 18 October 2026 during H-BS7-STANCE, filed under ruling 1863. The number is assigned by this entry (ruling 638).**
+
+Ruling 1856 adds `bridge` to `public.stance` and 20261018150100 places it third in
+`public.member_stances` (1859). Connect's ranking, `connect_cards('suggested')` behind
+`connect-suggest`, and the rules stage DIA explains over it (rulings 111 to 116) were written for
+five stances and say nothing about a member who lives across both sides: a Bridge is suggested
+and filtered today on the axes every stance shares, and nothing yet reads the stance as what the
+explainer promises, reachable from both sides and suggested where a connection needs someone who
+knows both places (1862). H-BS7-STANCE shipped the gap entry only and no ranking change. Closes
+when Connect's ranking reads `bridge` with its own reasons, proven on the deployed preview, before
+the first real member invite. Owner: Chat, by brief.
