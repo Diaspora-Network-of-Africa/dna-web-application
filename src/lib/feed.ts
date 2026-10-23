@@ -6,9 +6,8 @@ import type { C } from "@/components/strand/cmeta";
 import type { FieldValues } from "@/components/strand/verb-schema";
 import type { Member } from "./auth";
 import type { Database, Tables, Views } from "./database.types";
-import { signedMediaUrl } from "./dia";
 import type { EventPerson, EventPresenter } from "./event-page";
-import { deliverImageUrl } from "./media";
+import { deliverImageUrls, signedUrls } from "./media";
 import { placeLine } from "./place";
 import type { LensId } from "./lens";
 import {
@@ -130,11 +129,18 @@ function presenterView(
   return { kind: "member", id: person.id, name: person.name, handle: person.handle, avatar };
 }
 
-/** Resolve the created objects, media and links for a page of posts and map them to PostViews. */
+/**
+ * Resolve the created objects, media and links for a page of posts and map them to PostViews.
+ * H64-FEED1 (1920): `deferMedia` returns each image with no `src` and its storage path, so the cards
+ * render their text while signPostMedia signs the page in one call; MediaBlock's single image draws
+ * its loading frame at the stored size meanwhile. A page that carries a gallery is signed here
+ * instead, because the gallery has no loading state and an unsigned one would render nothing.
+ */
 export async function hydratePosts(
   sb: Supabase,
   member: Member,
   posts: FeedPost[],
+  opts: { deferMedia?: boolean } = {},
 ): Promise<PostView[]> {
   if (posts.length === 0) return [];
   const ids = posts.map((p) => p.id);
@@ -250,14 +256,26 @@ export async function hydratePosts(
   const storyMap = new Map((stories.data ?? []).map((s) => [s.id, s]));
 
   // H60-MEDIA Work 3: each image keeps its stored size and its framing beside the signed URL. A
-  // null media_id or null framing reads as null, and MediaBlock renders its default.
+  // null media_id or null framing reads as null, and MediaBlock renders its default. H64-FEED1
+  // (1920): the page's images are signed in one call, or deferred to the caller with their paths.
+  const mediaRows = media.data ?? [];
+  const perPost = new Map<string, number>();
+  for (const m of mediaRows) perPost.set(m.post_id, (perPost.get(m.post_id) ?? 0) + 1);
+  const defer = !!opts.deferMedia && [...perPost.values()].every((n) => n === 1);
+  const signed = defer
+    ? new Map<string, string>()
+    : await signedUrls(
+        "post-media",
+        mediaRows.map((m) => m.storage_path),
+      );
   const mediaUrls = new Map<string, PostImage[]>();
-  for (const m of media.data ?? []) {
-    const url = await signedMediaUrl(m.storage_path);
-    if (!url) continue;
+  for (const m of mediaRows) {
+    const url = defer ? "" : signed.get(m.storage_path);
+    if (url === undefined) continue;
     const list = mediaUrls.get(m.post_id) ?? [];
     list.push({
       src: url,
+      ...(defer ? { path: m.storage_path } : {}),
       width: m.width,
       height: m.height,
       focalPoint: focalPointOf(m.media?.focal_point),
@@ -267,34 +285,33 @@ export async function hydratePosts(
   }
   const linkMap = new Map((links.data ?? []).map((l) => [l.post_id, l]));
   // Ruling 416: one signed delivery URL per author avatar the view admitted (never per post).
-  const avatarUrls = new Map<string, string | undefined>();
+  // Brief 10 (679): one per speaker photo, and Addendum 4 item 1 the presenter's photo as the pane
+  // draws it, all the same size. H64-FEED1 (1920): each set signs in parallel, one URL per path; the
+  // transform keeps them to one path a call.
   const NO_AUTHOR: FeedAuthor = { name: null, handle: null, avatar_path: null };
-  for (const p of posts) {
-    const path = (p.feed_author ?? NO_AUTHOR).avatar_path;
-    if (!path || avatarUrls.has(path)) continue;
-    avatarUrls.set(
-      path,
-      await deliverImageUrl("profile-media", path, { width: 80, height: 80, resize: "cover" }),
-    );
-  }
-  // Brief 10 (679): one delivery URL per speaker photo, the same size as the author avatar.
-  for (const sp of speakers.data ?? []) {
-    const path = sp.avatar_path;
-    if (!path || avatarUrls.has(path)) continue;
-    avatarUrls.set(
-      path,
-      await deliverImageUrl("profile-media", path, { width: 80, height: 80, resize: "cover" }),
-    );
-  }
-  // Addendum 4 item 1: the presenter's photo as the pane draws it, the same size again.
-  for (const rec of presenters.values()) {
-    const path = presenterPerson(rec)?.avatar_path;
-    if (!path || avatarUrls.has(path)) continue;
-    avatarUrls.set(
-      path,
-      await deliverImageUrl("profile-media", path, { width: 80, height: 80, resize: "cover" }),
-    );
-  }
+  const AVATAR = { width: 80, height: 80, resize: "cover" } as const;
+  const [authorUrls, speakerUrls, presenterUrls] = await Promise.all([
+    deliverImageUrls(
+      "profile-media",
+      posts.map((p) => (p.feed_author ?? NO_AUTHOR).avatar_path),
+      AVATAR,
+    ),
+    deliverImageUrls(
+      "profile-media",
+      (speakers.data ?? []).map((sp) => sp.avatar_path),
+      AVATAR,
+    ),
+    deliverImageUrls(
+      "profile-media",
+      [...presenters.values()].map((rec) => presenterPerson(rec)?.avatar_path),
+      AVATAR,
+    ),
+  ]);
+  const avatarUrls = new Map<string, string | undefined>([
+    ...presenterUrls,
+    ...speakerUrls,
+    ...authorUrls,
+  ]);
 
   return posts.map((p): PostView => {
     const verb = verbOf(p.created_object_kind);
@@ -552,7 +569,37 @@ export async function loadFeed(
     .order("id", { ascending: false })
     .limit(limit);
   const posts = (data ?? []).map(asPost).filter((p): p is PostRow => p !== null);
-  return hydratePosts(sb, member, posts);
+  return hydratePosts(sb, member, posts, { deferMedia: true });
+}
+
+/** H64-FEED1 (1920): the paths one signing call asked for, and the URLs it answered. */
+export type SignedMedia = { asked: ReadonlySet<string>; urls: ReadonlyMap<string, string> };
+
+/**
+ * H64-FEED1 (1920): the signed URL for every deferred image the views carry, in one
+ * createSignedUrls call, keyed by storage path. No deferred image, no call.
+ */
+export async function signPostMedia(views: PostView[]): Promise<SignedMedia> {
+  const asked = new Set(
+    views.flatMap((v) => v.media.flatMap((m) => (!m.src && m.path ? [m.path] : []))),
+  );
+  return { asked, urls: await signedUrls("post-media", asked) };
+}
+
+/**
+ * A view with its deferred images filled from signPostMedia's answer. A path the call asked for and
+ * could not sign drops its image, as the signing in hydratePosts does; a path it has not asked for
+ * yet keeps MediaBlock's loading frame.
+ */
+export function withSignedMedia(view: PostView, signed: SignedMedia | undefined): PostView {
+  if (!signed || !view.media.some((m) => !m.src && m.path)) return view;
+  const media: PostImage[] = [];
+  for (const m of view.media) {
+    if (m.src || !m.path) media.push(m);
+    else if (signed.urls.has(m.path)) media.push({ ...m, src: signed.urls.get(m.path) ?? "" });
+    else if (!signed.asked.has(m.path)) media.push(m);
+  }
+  return { ...view, media };
 }
 
 /** One post by id, under the caller's posts RLS. Null when it does not exist or is not visible. */

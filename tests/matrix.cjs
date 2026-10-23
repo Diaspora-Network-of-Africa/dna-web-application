@@ -4,7 +4,7 @@
 // layer, so the real client code paths run against a deterministic backend. Backend behaviour
 // (RLS, the feed view) is verified separately in SQL against the live project.
 // Usage: BASE=https://b2-shell-feed.dna-web-application.pages.dev WEBKIT=1 node tests/matrix.cjs
-// Env: ONLY='[390,844]' runs one viewport; SPECIAL=publish,guards,keyboard,fields,silence,shell,width,targeted,profile,connect,event,discovery,vocab,block,auth,onboarding,mount,sheet,gate,admin,media,messenger,theme,account,comments runs flows only.
+// Env: ONLY='[390,844]' runs one viewport; SPECIAL=publish,guards,keyboard,fields,silence,shell,width,targeted,profile,connect,event,discovery,vocab,block,auth,onboarding,mount,sheet,gate,admin,media,messenger,theme,account,comments,feed-signing runs flows only.
 // Ruling 1237: an arm that loses its web process is run again once, alone, in a fresh browser, by
 // `drive()` below; CRASH_PROBE=<arm tag> is the harness probe that proves it (off by default).
 // Brief 3 profile flows live in tests/profile.cjs and Brief 4 Connect flows in tests/connect.cjs; both share this mock.
@@ -1533,14 +1533,15 @@ async function mockSupabase(page, db, opts = {}) {
       });
     }
     if (p.startsWith("/storage/v1/object/sign/") && method === "POST") {
-      // Batch signing (createSignedUrls): a bucket path with {paths} in the body.
+      // Batch signing (createSignedUrls): a bucket path with {paths} in the body, answered under
+      // the bucket it names (H64-FEED1: post-media signs in batches too).
       const b = req.postDataJSON() || {};
       if (Array.isArray(b.paths))
         return json(
           b.paths.map((x) => ({
             error: null,
             path: x,
-            signedURL: "/object/sign/profile-media/" + x + "?token=t",
+            signedURL: "/object/sign/" + p.split("/object/sign/")[1] + "/" + x + "?token=t",
           })),
         );
       return json({ signedURL: "/object/sign/" + p.split("/object/sign/")[1] + "?token=t" });
@@ -8466,6 +8467,13 @@ function fullUnits(bt, bname, only = null) {
       unit(`comments-compose ${cell(vp)} ${theme}`, () =>
         drive(cm.runCommentsCompose, bt, bname, vp, theme),
       );
+  // H64-FEED1 (1920): one Feed load signs its images in one request and renders its text first
+  // (tests/feed-signing.cjs).
+  const fs1 = require("./feed-signing.cjs");
+  for (const [vp, theme] of fs1.CELLS)
+    unit(`feed-signing ${cell(vp)} ${theme}`, () =>
+      drive(fs1.runFeedSigning, bt, bname, vp, theme),
+    );
   // Brief 10 (handoff 30-C item 13): the member's event page at every cell, its flows on the
   // two representative layouts.
   const {
@@ -8892,6 +8900,12 @@ if (require.main === module)
           for (const vp of process.env.ONLY ? [JSON.parse(process.env.ONLY)] : cm.FLOW_CELLS)
             for (const theme of process.env.THEME ? [process.env.THEME] : THEMES)
               await drive(cm.runComments, bt, bname, vp, theme);
+        }
+        if (process.env.SPECIAL.includes("feed-signing")) {
+          const fs1 = require("./feed-signing.cjs");
+          for (const [vp, theme] of fs1.CELLS)
+            if (!only || (vp[0] === only[0] && vp[1] === only[1]))
+              await drive(fs1.runFeedSigning, bt, bname, vp, theme);
         }
         // Handoff 32-A item 5: the mount arms, one cell per tier (tests/mount.cjs).
         if (process.env.SPECIAL.includes("mount")) {

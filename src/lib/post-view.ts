@@ -7,7 +7,10 @@ import type { FocalPoint, MediaCrop } from "@/components/strand/MediaBlock";
 
 /** One post image as the Feed renders it (H60-MEDIA Work 3). */
 export type PostImage = {
+  /** Empty while the Feed's one signing call is in flight (H64-FEED1), and MediaBlock draws its loading frame. */
   src: string;
+  /** H64-FEED1: the storage path of an image the Feed signs after the cards render. */
+  path?: string | undefined;
   width?: number | null | undefined;
   height?: number | null | undefined;
   focalPoint?: FocalPoint | null | undefined;

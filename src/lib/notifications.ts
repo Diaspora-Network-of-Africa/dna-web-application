@@ -8,7 +8,7 @@
 import { hasSentence } from "@/components/strand/NotificationListItem";
 import { C_ORDER, type C } from "@/components/strand/cmeta";
 import type { Database, Tables } from "./database.types";
-import { deliverImageUrl } from "./media";
+import { deliverImageUrls } from "./media";
 import { getSupabase } from "./supabase";
 import { loadVocabularies, type NotificationKindRow } from "./vocabularies";
 import { whenLabel } from "./when";
@@ -168,16 +168,13 @@ export async function loadNotifications(memberId: string, limit = 50): Promise<N
   const postBody = new Map(
     (intentPosts.data ?? []).filter((p) => !!p.id).map((p) => [p.id as string, p.body ?? ""]),
   );
-  // 62-A (1820): one signed delivery URL per person photo the intent rows name.
-  const avatarUrls = new Map<string, string | undefined>();
-  for (const a of actors.data ?? []) {
-    const path = a.avatar_path;
-    if (!path || avatarUrls.has(path)) continue;
-    avatarUrls.set(
-      path,
-      await deliverImageUrl("profile-media", path, { width: 80, height: 80, resize: "cover" }),
-    );
-  }
+  // 62-A (1820): one signed delivery URL per person photo the intent rows name, in parallel
+  // (H64-FEED1, 1920).
+  const avatarUrls = await deliverImageUrls(
+    "profile-media",
+    (actors.data ?? []).map((a) => a.avatar_path),
+    { width: 80, height: 80, resize: "cover" },
+  );
   const personOf = (id: string): NotificationPerson | null => {
     const a = (actors.data ?? []).find((x) => x.id === id);
     if (!a) return null;

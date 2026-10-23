@@ -8,7 +8,7 @@
 // can open the profile (1820); the photo's delivery URL is signed here, once per path, as the Feed
 // signs an author's (416).
 import type { PostReactionKindRow } from "./vocabularies";
-import { deliverImageUrl } from "./media";
+import { deliverImageUrls } from "./media";
 import { getSupabase } from "./supabase";
 
 /** A person as every projection names them: id, name, handle and the signed photo URL. */
@@ -108,16 +108,9 @@ const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 const rec = (v: unknown): Record<string, unknown> | null =>
   v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
 
-async function signAvatars(paths: Iterable<string | null | undefined>) {
-  const urls = new Map<string, string | undefined>();
-  for (const p of paths) {
-    if (!p || urls.has(p)) continue;
-    urls.set(
-      p,
-      await deliverImageUrl("profile-media", p, { width: 80, height: 80, resize: "cover" }),
-    );
-  }
-  return urls;
+/** One delivery URL per avatar path, the signings in parallel (H64-FEED1, 1920). */
+function signAvatars(paths: Iterable<string | null | undefined>) {
+  return deliverImageUrls("profile-media", paths, { width: 80, height: 80, resize: "cover" });
 }
 
 function personOf(v: unknown, urls: Map<string, string | undefined>): ReactionPerson | null {
