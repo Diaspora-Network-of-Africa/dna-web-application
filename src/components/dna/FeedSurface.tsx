@@ -6,9 +6,9 @@
 // /posts/:id renders the expanded card as page content with "Back to Feed" (ruling 105). Strict
 // reverse-chronological posts through the one card router, three ghost cards while loading,
 // EmptyState per lens, Save and React as existence toggles (rulings 80 to 86).
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter, useSearch } from "@tanstack/react-router";
-import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Ghosts } from "@/components/dna/Ghosts";
 import { PostCardRouter } from "@/components/dna/PostCardRouter";
 import { Button } from "@/components/strand/Button";
@@ -22,7 +22,14 @@ import type { ComposerVerb } from "@/components/strand/cmeta";
 import type { Member } from "@/lib/auth";
 import { openComposer } from "@/lib/composer-store";
 import { loadLatestComments } from "@/lib/comments";
-import { loadFeed, loadMarks, loadPost, setSaved } from "@/lib/feed";
+import {
+  loadFeed,
+  loadMarks,
+  loadPost,
+  setSaved,
+  signPostMedia,
+  withSignedMedia,
+} from "@/lib/feed";
 import { CommentThread, LatestCommentLine } from "./CommentThread";
 import { useFeedReactions } from "./FeedReactions";
 import type { FeedView } from "@/lib/feed-view";
@@ -155,16 +162,16 @@ export function FeedSurface({ member, view }: { member: Member; view: FeedView }
     queryFn: () => loadFeed(member, lens),
     enabled: listMode,
   });
-  const posts = listMode ? feed.data : undefined;
+  const rawPosts = listMode ? feed.data : undefined;
   // 12C part 2: the Feed shows, and each lens change; a direct landing on /posts/:id is not the
   // Feed showing and records nothing. Keyed on the lens, so a refetch records nothing.
   useRecordOnChange("feed_viewed", listMode ? lens : null, { lens });
-  useEmptyStateSeen("feed.lens_empty", !!posts && posts.length === 0);
+  useEmptyStateSeen("feed.lens_empty", !!rawPosts && rawPosts.length === 0);
   // In-place expansion needs the post in this list; otherwise the direct view carries it.
   const directId =
     view.kind === "direct"
       ? view.id
-      : view.kind === "expanded" && posts && !posts.some((p) => p.id === view.id)
+      : view.kind === "expanded" && rawPosts && !rawPosts.some((p) => p.id === view.id)
         ? view.id
         : null;
   const expandedId = view.kind === "expanded" && !directId ? view.id : null;
@@ -181,6 +188,25 @@ export function FeedSurface({ member, view }: { member: Member; view: FeedView }
     initialData: cached,
     staleTime: cached ? 30_000 : 0,
   });
+  // H64-FEED1 (1920): the cards render from the feed read, and the page's images are signed in one
+  // call beside it; until it answers each single image draws MediaBlock's loading frame at its
+  // stored size. The previous answer stands while a new path is asked for, so a signed image never
+  // goes back to its frame.
+  const unsigned = [...(rawPosts ?? []), ...(single.data ? [single.data] : [])];
+  const unsignedKey = unsigned
+    .flatMap((v) => v.media.flatMap((m) => (!m.src && m.path ? [m.path] : [])))
+    .join(",");
+  const signed = useQuery({
+    queryKey: ["feed-media", member.id, unsignedKey],
+    queryFn: () => signPostMedia(unsigned),
+    enabled: unsignedKey.length > 0,
+    placeholderData: keepPreviousData,
+  });
+  const posts = useMemo(
+    () => rawPosts?.map((p) => withSignedMedia(p, signed.data)),
+    [rawPosts, signed.data],
+  );
+  const singlePost = single.data ? withSignedMedia(single.data, signed.data) : single.data;
 
   const ids = (directId ? [directId] : (posts ?? []).map((p) => p.id)).filter(
     (i): i is string => !!i,
@@ -218,7 +244,7 @@ export function FeedSurface({ member, view }: { member: Member; view: FeedView }
   };
   // Handoff 62-A: the reaction layer, one summary read per page beside the marks (SPEC 5), the
   // bar and the prompt in `below`, the sheets and the live region as overlays.
-  const shownPosts = [...(posts ?? []), ...(single.data ? [single.data] : [])];
+  const shownPosts = [...(posts ?? []), ...(singlePost ? [singlePost] : [])];
   const reactions = useFeedReactions({ member, ids, posts: shownPosts, tier, mode });
   // Handoff 62-G (SPEC 8.3): the newest comment per post, one read per page beside the marks; the
   // collapsed card's `below` shows it as one line, and the expanded card shows the thread instead.
@@ -530,8 +556,8 @@ export function FeedSurface({ member, view }: { member: Member; view: FeedView }
               Back to Feed
             </button>
           </div>
-          {single.data ? (
-            cardFor(single.data, { expanded: true, inPlace: false })
+          {singlePost ? (
+            cardFor(singlePost, { expanded: true, inPlace: false })
           ) : single.isPending ? (
             <p role="status" style={{ margin: "8px 4px", color: "var(--ink-3)", fontSize: 15 }}>
               Loading

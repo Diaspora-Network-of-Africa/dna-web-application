@@ -11,13 +11,13 @@
 // post's own folder, which the post's readers may already read, and comment_post names its media row.
 import type { CardC } from "@/components/strand/cmeta";
 import type { FocalPoint, MediaCrop } from "@/components/strand/MediaBlock";
-import { signedMediaUrl } from "./dia";
 import {
-  deliverImageUrl,
+  deliverImageUrls,
   extensionFor,
   IMAGE_MAX_BYTES,
   IMAGE_UPLOAD_TIMEOUT_MS,
   normalizeImage,
+  signedUrls,
 } from "./media";
 import { cropOf, focalPointOf } from "./post-view";
 import {
@@ -78,17 +78,20 @@ const EMPTY_SUMMARY: ReactionSummary = {
   intents: [],
 };
 
-/** The signed delivery URL per avatar path, once per path (416's shape). */
-async function signAvatars(paths: Iterable<string | null | undefined>) {
-  const urls = new Map<string, string | undefined>();
-  for (const p of paths) {
-    if (!p || urls.has(p)) continue;
-    urls.set(
-      p,
-      await deliverImageUrl("profile-media", p, { width: 80, height: 80, resize: "cover" }),
-    );
-  }
-  return urls;
+/** The signed delivery URL per avatar path, once per path (416's shape), in parallel (H64-FEED1). */
+function signAvatars(paths: Iterable<string | null | undefined>) {
+  return deliverImageUrls("profile-media", paths, { width: 80, height: 80, resize: "cover" });
+}
+
+/** A page of comments' URLs: the avatars, and every comment image in one call (H64-FEED1, 1920). */
+type Signed = { avatars: Map<string, string | undefined>; media: Map<string, string> };
+
+async function signRows(rows: unknown[]): Promise<Signed> {
+  const [avatars, media] = await Promise.all([
+    signAvatars(avatarPathsOf(rows)),
+    signedUrls("post-media", mediaPathsOf(rows)),
+  ]);
+  return { avatars, media };
 }
 
 function personOf(v: unknown, urls: Map<string, string | undefined>): ReactionPerson | null {
@@ -150,12 +153,27 @@ function avatarPathsOf(rows: unknown[]): string[] {
   return out;
 }
 
-async function imageOf(v: unknown): Promise<CommentImage | null> {
+/** Every image path a page of comments names, replies included; a deleted comment shows none. */
+function mediaPathsOf(rows: unknown[]): string[] {
+  const out: string[] = [];
+  const walk = (v: unknown) => {
+    const r = rec(v);
+    if (!r) return;
+    const m = r["deleted"] === true ? null : rec(r["media"]);
+    const path = m ? str(m["storage_path"]) : null;
+    if (path) out.push(path);
+    if (Array.isArray(r["replies"])) r["replies"].forEach(walk);
+  };
+  rows.forEach(walk);
+  return out;
+}
+
+function imageOf(v: unknown, media: Map<string, string>): CommentImage | null {
   const r = rec(v);
   const id = r ? str(r["id"]) : null;
   const path = r ? str(r["storage_path"]) : null;
   if (!r || !id || !path) return null;
-  const src = await signedMediaUrl(path);
+  const src = media.get(path);
   if (!src) return null;
   return {
     id,
@@ -167,10 +185,7 @@ async function imageOf(v: unknown): Promise<CommentImage | null> {
   };
 }
 
-async function commentOf(
-  v: unknown,
-  urls: Map<string, string | undefined>,
-): Promise<CommentView | null> {
+function commentOf(v: unknown, urls: Signed): CommentView | null {
   const r = rec(v);
   const id = r ? str(r["id"]) : null;
   const postId = r ? str(r["post_id"]) : null;
@@ -178,7 +193,7 @@ async function commentOf(
   const replies: CommentView[] = [];
   if (Array.isArray(r["replies"]))
     for (const x of r["replies"]) {
-      const c = await commentOf(x, urls);
+      const c = commentOf(x, urls);
       if (c) replies.push(c);
     }
   const deleted = r["deleted"] === true;
@@ -189,12 +204,12 @@ async function commentOf(
     deleted,
     you: r["you"] === true,
     isPostAuthor: r["is_post_author"] === true,
-    author: deleted ? null : personOf(r["author"], urls),
+    author: deleted ? null : personOf(r["author"], urls.avatars),
     body: deleted ? null : str(r["body"]),
-    media: deleted ? null : await imageOf(r["media"]),
+    media: deleted ? null : imageOf(r["media"], urls.media),
     createdAt: str(r["created_at"]) ?? "",
     editedAt: str(r["edited_at"]),
-    reactions: deleted ? null : summaryOf(r["reactions"], urls),
+    reactions: deleted ? null : summaryOf(r["reactions"], urls.avatars),
     replies,
   };
 }
@@ -221,10 +236,10 @@ export async function loadComments(
   if (error) throw error;
   const d = rec(data);
   const rows = d && Array.isArray(d["comments"]) ? (d["comments"] as unknown[]) : [];
-  const urls = await signAvatars(avatarPathsOf(rows));
+  const urls = await signRows(rows);
   const comments: CommentView[] = [];
   for (const v of rows) {
-    const c = await commentOf(v, urls);
+    const c = commentOf(v, urls);
     if (c) comments.push(c);
   }
   const next = d ? rec(d["next"]) : null;
@@ -250,9 +265,9 @@ export async function loadLatestComments(postIds: string[]): Promise<Map<string,
   if (error) throw error;
   const obj = rec(data);
   if (!obj) return out;
-  const urls = await signAvatars(avatarPathsOf(Object.values(obj)));
+  const urls = await signRows(Object.values(obj));
   for (const [id, v] of Object.entries(obj)) {
-    const c = await commentOf(v, urls);
+    const c = commentOf(v, urls);
     if (c) out.set(id, c);
   }
   return out;
@@ -313,8 +328,8 @@ export async function postComment(
     ...(opts.mediaId ? { p_media: opts.mediaId } : {}),
   });
   if (error) throw new CommentError(refusalOf(error.message), error.message);
-  const urls = await signAvatars(avatarPathsOf([data]));
-  const c = await commentOf(data, urls);
+  const urls = await signRows([data]);
+  const c = commentOf(data, urls);
   if (!c) throw new CommentError("failed", "no comment answered");
   return c;
 }

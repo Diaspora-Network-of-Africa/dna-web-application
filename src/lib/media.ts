@@ -178,6 +178,39 @@ export async function deliverImageUrl(
   return data?.signedUrl ?? undefined;
 }
 
+/**
+ * H64-FEED1 (1920): every path signed in one createSignedUrls call, keyed by path; a path the caller
+ * may not read is absent. The batch carries no transform (storage-js signs a transform one path at a
+ * time), so this serves the untransformed masters a card frames itself.
+ */
+export async function signedUrls(
+  bucket: StorageBucket,
+  paths: Iterable<string | null | undefined>,
+): Promise<Map<string, string>> {
+  const sb = getSupabase();
+  const unique = [...new Set([...paths].filter((p): p is string => !!p))];
+  const urls = new Map<string, string>();
+  if (!sb || !unique.length) return urls;
+  const { data } = await sb.storage.from(bucket).createSignedUrls(unique, SIGNED_URL_SECONDS);
+  for (const d of data ?? []) if (d.path && d.signedUrl && !d.error) urls.set(d.path, d.signedUrl);
+  return urls;
+}
+
+/**
+ * H64-FEED1 (1920): one delivery URL per distinct path at one transform, the signings in flight
+ * together rather than awaited one after another. Keyed by path, undefined where deliverImageUrl
+ * returned nothing.
+ */
+export async function deliverImageUrls(
+  bucket: StorageBucket,
+  paths: Iterable<string | null | undefined>,
+  transform: Transform,
+): Promise<Map<string, string | undefined>> {
+  const unique = [...new Set([...paths].filter((p): p is string => !!p))];
+  const urls = await Promise.all(unique.map((p) => deliverImageUrl(bucket, p, transform)));
+  return new Map(unique.map((p, i) => [p, urls[i]]));
+}
+
 // ---------------------------------------------------------------------------------------------------
 // Handoff 41-B (rulings 1346, 1374; 346, 347): the client half of Messenger media. The object lives on
 // a private R2 bucket behind the app's own routes, so nothing here signs a URL and nothing reads the
