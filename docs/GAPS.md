@@ -9924,3 +9924,112 @@ explainer promises, reachable from both sides and suggested where a connection n
 knows both places (1862). H-BS7-STANCE shipped the gap entry only and no ranking change. Closes
 when Connect's ranking reads `bridge` with its own reasons, proven on the deployed preview, before
 the first real member invite. Owner: Chat, by brief.
+
+## G320. The signed-out public profile applies no theme
+
+**Severity: low. Opened 21 October 2026 during H62-G2, filed under ruling 1912 from #125's "Pre-existing behaviour found, not changed", item 1. The number is assigned by this entry (ruling 638).**
+
+`/m/{handle}` signed out calls no `useTheme`, so it renders light with no `data-theme` on a dark
+device. H-BS7-RESKIN (#125) found it while reading the wordmark there: light `--ink` on a light
+ground, which is correct for the page as it renders, and `tests/brand.cjs` reads it that way and
+says so. Whether a signed-out public profile should follow the device is a behaviour change outside
+that PR. Closes when Chat rules whether the signed-out profile follows the device, and a `claude/*`
+PR applies the ruling with an arm at both themes. Owner: Chat, by ruling.
+
+## G321. `tests/brand.cjs` reads the admin brand on the console bar and the admin sign-in only
+
+**Severity: low (a proof's coverage, not a surface). Opened 21 October 2026 during H62-G2, filed under ruling 1912 from #125's "Pre-existing behaviour found, not changed", item 3. The number is assigned by this entry (ruling 638).**
+
+The `admin brand` arm (`SPECIAL=admin`, 390 light and 1280 dark) reads the wordmark, its mask and
+its colour on the admin sign-in and the console's Overview. The console's other routes
+(`/settings` and the rest) draw the same `ConsoleShell` and are not read separately, so a route
+that drew its own header would pass unread. Closes when the arm reads the bar on every console
+route, or Chat rules the shared shell is proof enough and the entry closes as answered. Owner:
+Chat, by brief or ruling.
+
+## G322. The member app's `theme-color` stays light in dark
+
+**Severity: low. Opened 21 October 2026 during H62-G2, filed under ruling 1912 from #125's "Pre-existing behaviour found, not changed", item 4. The number is assigned by this entry (ruling 638).**
+
+`src/routes/__root.tsx` declares `{ name: "theme-color", content: "#faf7f2" }` as a literal, so
+the browser chrome around the member app stays the light `--bg` when the member's theme is dark.
+Nothing on the member side follows `--bg`; the admin's theme script does, copying the resolved
+`--bg` into `theme-color` (Chat's reading at #125's `efba16b`). Closes when the member app's
+`theme-color` follows the applied theme, proven at both themes on the deployed preview. Owner:
+Chat, by brief.
+
+## G323. The control that closes a card's comment section reads "Show less"
+
+**Severity: none (a copy question, answered). Opened 21 October 2026 during H62-G2, filed from #126's "Gaps named here", item 1. The number is assigned by this entry (ruling 638).**
+
+**Closed 21 October 2026 as answered, on Chat's reading in HANDOFF-62-G2 Done Means 3.**
+
+H62-G1 (#126) put the control that closes the comment section in the comment box's foot and gave
+it the card's ratified collapse word, "Show less" (84, 105), because EXTRACTION-62-FEED-CARD is not
+in the tree and no string for it could be read. Chat's reading: neither extraction has a string for
+closing the comment section. B60's F11 is "Back to Feed", the expanded card's back act, and B62
+adds none. "Show less" stands as the card's ratified collapse word. Nothing changes.
+
+## G324. Two `scrollIntoView` calls scroll the window on iPhone
+
+**Severity: low. Opened 21 October 2026 during H62-G2, filed from #126's "Gaps named here", item 2. The number is assigned by this entry (ruling 638).**
+
+The Feed's rail reveal (`src/components/dna/FeedSurface.tsx:324`, `card?.scrollIntoView({ block:
+"nearest" })`) and a notification's comment destination (`src/components/dna/CommentThread.tsx:397`,
+`el.scrollIntoView({ block: "center" })`) scroll every ancestor, the window included on iPhone,
+where the shell owns one scroller per tier and the document never scrolls inside it (104). Neither
+runs from the comment control, which #126 moved to the least scroll of the shell's own scroller.
+Closes when both bring their target into view by the shell's scroller alone, with an arm that reads
+the window at the origin after each. Owner: Chat, by brief.
+
+## G325. The `comments` arm presses React and Reply with `click()` at the touch cells
+
+**Severity: low (a proof's coverage). Opened 21 October 2026 during H62-G2, filed from #126's "Gaps named here", item 3. The number is assigned by this entry (ruling 638).**
+
+H62-G's `comments` arm in `tests/comments.cjs` presses a comment's React and Reply with `click()`
+at every cell, so the touch path, the 500 ms hold and the tap, was never driven by it. #126's
+`comments-g1` arm drives it by tap and was left beside it; the H62-G arm is unchanged. Closes when
+the `comments` arm taps at its touch cells, or Chat rules `comments-g1` carries the touch proof and
+the entry closes as answered. Owner: Chat, by brief or ruling.
+
+## G326. The pointer reaction bar opens on hover, in flow, and moves the rows under the pointer
+
+**Severity: low (a design question). Opened 21 October 2026 during H62-G2, filed from #126's "Gaps named here", item 4. The number is assigned by this entry (ruling 638).**
+
+With a pointer, React opens its bar on hover and the bar renders in flow, under its row. Moving the
+pointer from one comment's React to another's switches the bar and moves the rows under the pointer
+as it enters. Since #126 ported 1739's close rule, the press itself lands; the hover switch is a
+question for the bar's placement (SPEC-62-FEED-CARD 3, 8.2). Closes when Design or Chat rules the
+pointer bar's placement and a `claude/*` PR builds it. Owner: Chat, by Design.
+
+## G327. After any scroll the Feed's content sits 18 px higher at compact and medium
+
+**Severity: none (ruled behaviour, recorded). Opened 21 October 2026 during H62-G2, filed from #126's "Gaps named here", item 5. The number is assigned by this entry (ruling 638).**
+
+The lens's scope line latches closed for the visit (405; `src/components/strand/LensBar.tsx:71`).
+After any scroll the Feed's content sits 18 px higher at compact and medium, so a card closed from
+its comment section returns to its place under the lens seat, not to its pixel row. This is ruled
+behaviour, recorded so nobody reads it as a defect in H62-G1's Done Means 2. Closes when Chat
+confirms the reading. Owner: Chat.
+
+## G328. WebKit shard 6's timing-sensitive reads: `mount-feed`'s LensBar and `sheet-focus`'s Tab
+
+**Severity: low (a proof's stability). Opened 21 October 2026 during H62-G2, filed from #126's "Gaps named here", item 6, and under 1909 for #128's run 689 (Chat's go of 22 October). The number is assigned by this entry (ruling 638).**
+
+Two WebKit compact arms on shard 6 read a state that settles on its own time, and each has failed
+alone on one attempt and passed on the other:
+
+- `webkit-390x844-light-mount-feed`, "header LensBar once scrolled: five tabs, no trailing seat, the
+  52 track" (`tests/mount.cjs:532`): 0 bars after its 10 s settle wait. Run 637 hit it on 19 October,
+  which `9c224db` answered with the wait it now times out in; #126's `5e20d4c` failed it on attempt 2
+  and passed it on attempt 1; #128's run 689 failed it on attempt 1 and passed it on attempt 2.
+- `webkit-390x844-light-sheet-focus`, "Tab from the title reaches a control that draws its ring
+  (1484)" (`tests/sheet.cjs`, `runSheetFocus`, the Notifications sheet): #128's run 689 failed it on
+  attempt 2 and passed it on attempt 1.
+
+On #126 the same shard also failed `webkit-1280x800-dark-messenger flows` once (the click on the
+picker's "Folded hands" timed out) and passed it on the other attempt. #128's diff was `CLAUDE.md`
+alone and #126's reached none of these paths, so none is a change's defect; each is a read that
+races the state it reads. Closes when each arm reads the state it waits for (the LensBar mounted
+once the scroller's latch has run; the ring once focus has moved) rather than a time, and holds on
+WebKit across repeated runs of the shard. Owner: Chat, by brief.
