@@ -15,7 +15,9 @@ const path = require("path");
 const BASE = process.env.BASE || "http://127.0.0.1:4173";
 const OUT = process.env.OUT || path.join(__dirname, "matrix-out");
 fs.mkdirSync(OUT, { recursive: true });
-const SB = "dgspjevjoblujcoljvkn.supabase.co";
+// Handoff 62-A2: the client speaks to the canonical project at its custom domain, so this is the
+// origin every mock intercepts; the supabase.co host is named nowhere in the suite.
+const SB = "auth.diasporanetwork.africa";
 const VIEWPORTS = [
   [360, 800],
   [390, 844],

@@ -27,6 +27,7 @@ import {
   COPY,
   MIN_PASSWORD,
   REVEAL_MS,
+  consumeExpiredLink,
   consumeProviderReturn,
   delay,
   isEmailShaped,
@@ -104,6 +105,16 @@ function SignIn() {
     // The hook's setters are stable for the life of the route; this runs once, on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Handoff 62-A2: an email link whose hash did not verify arrives here with the provider's marker
+  // set; the line is a status, not an alert, as a cancelled provider round trip is. Keyed on ready,
+  // because the marker is set by the auth provider's first read, which can land after this mount.
+  useEffect(() => {
+    if (!ready) return;
+    if (consumeExpiredLink()) setStatus(COPY.linkExpired);
+    // The hook's setter is stable for the life of the route.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
 
   // Ruling 240: a recovery session is held at /reset/new by the gate in the root route, so this
   // route must not race it to the Feed.

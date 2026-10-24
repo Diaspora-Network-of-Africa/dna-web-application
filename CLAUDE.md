@@ -430,6 +430,24 @@ host, and it is read only inside `event_page` and `event_public_page` through
 
 The event page renders host-written blocks only from `event_page.blocks` and `event_public_page.blocks`, grouped by kind under each block's own label, and renders no section or heading without content (1186, 1189).
 
+## Auth on our domain (handoff 62-A2, rulings 1829, 1830)
+
+The app's Supabase client speaks to the canonical project at `https://auth.diasporanetwork.africa`,
+the default in `src/lib/supabase.ts`; the CSP in `src/lib/csp.ts` and the admin's headers derive
+their Supabase sources from that one constant, and `public/_headers` and `admin/public/_headers`
+carry the same host written out. The supabase.co host keeps serving and is named by nothing in
+`src/`, `admin/src/` or `tests/` (G321 names the one applied migration that still does).
+
+An email link on our domain carries `?token_hash=<hash>&type=<type>` and the app exchanges it
+itself: `src/lib/email-link.ts` is the one place that reads a token hash, `getSupabase` starts the
+exchange the moment the client exists, and `AuthProvider` waits for its answer before publishing
+`ready`, so no route sees a signed-out visitor the link is about to sign in. A recovery hash lands
+on /reset/new's form under 240's gate, the flag set from the URL before the exchange answers; a
+used or expired recovery hash lands on the existing "This link no longer works"; every other type
+lands signed in on the route the link named, and unverified on sign-in with `COPY.linkExpired`
+(G320). The fragment landing is unchanged, because every email already sent uses it until the
+templates switch. No second auth path, no second reset page.
+
 ## Brand assets (ruling 184)
 
 A brand or logo change is its own change with its own ruling and never rides in another brief's PR.

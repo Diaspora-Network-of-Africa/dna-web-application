@@ -4,7 +4,7 @@
 # set, with the per-response nonce, on every SSR response in admin/src/server.ts. Nitro appends its
 # own asset cache rule below at build time (admin/dist/_headers).
 /*
-  Content-Security-Policy: default-src 'self'; connect-src 'self' https://dgspjevjoblujcoljvkn.supabase.co wss://dgspjevjoblujcoljvkn.supabase.co; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+  Content-Security-Policy: default-src 'self'; connect-src 'self' https://auth.diasporanetwork.africa wss://auth.diasporanetwork.africa; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
   Strict-Transport-Security: max-age=31536000; includeSubDomains
