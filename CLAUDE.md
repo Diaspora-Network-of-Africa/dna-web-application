@@ -438,14 +438,15 @@ Scope that enters through a build is scope nobody decided.
 The swap is a file replacement, never a code change. Every logo and icon resolves by path from this
 contract, so the next wordmark lands by overwriting files in one directory plus a cache bust:
 
-| Path                                         | Use                                                                 |
-| -------------------------------------------- | ------------------------------------------------------------------- |
-| `public/strand/logo.png`                     | wordmark: `AppHeader`, public profile chrome, sign-in (660 wide)    |
-| `public/strand/logo-dark.png`                | dark-theme wordmark, if the redesign needs one                      |
-| `public/favicon.png`                         | browser tab, and the square master every other icon derives from    |
-| `public/favicon.ico`                         | browser tab, legacy, 32 and 16 (arrives with the wordmark redesign) |
-| `public/apple-touch-icon.png`                | iOS home screen, 180                                                |
-| `public/icon-192.png`, `public/icon-512.png` | PWA manifest, maskable safe area                                    |
+| Path                                         | Use                                                                                |
+| -------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `public/strand/wordmark-mono.svg`            | the wordmark every component draws, masked in `--ink` in both themes (1892, 1902)  |
+| `public/strand/logo.png`                     | the email lockup, 205 × 64; no component draws it (1892)                           |
+| `public/favicon.png`                         | browser tab, and the square master every other icon derives from                   |
+| `public/favicon-dark.png`                    | dark browser tabs, linked with `media="(prefers-color-scheme: dark)"` (1885, 1903) |
+| `public/favicon.ico`                         | browser tab, legacy, 32 and 16 (arrives with the wordmark redesign)                |
+| `public/apple-touch-icon.png`                | iOS home screen, 180                                                               |
+| `public/icon-192.png`, `public/icon-512.png` | PWA manifest, maskable on `--bg` (1903)                                            |
 
 No component may import a logo as a module, inline it as SVG, or hardcode a dimension that assumes
 the current wordmark's aspect ratio. Size by height, width auto.
